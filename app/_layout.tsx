@@ -1,59 +1,62 @@
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
+import { Stack, router } from "expo-router";
+import { useEffect } from "react";
 
-import { useColorScheme } from '@/components/useColorScheme';
+import "./globals.css";
 
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from 'expo-router';
+import { getRoleRouteGroup } from "@/constants/navigation";
+import { QueryProvider } from "@/providers";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { useSyncProcessor } from "@/hooks/useSyncProcessor";
+
+export { ErrorBoundary } from "expo-router";
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
+  initialRouteName: "(auth)",
 };
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
-
 export default function RootLayout() {
-  const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-    ...FontAwesome.font,
-  });
-
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
+  const restoreToken = useAuthStore((s) => s.restoreToken);
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
+    restoreToken();
+  }, []);
 
-  if (!loaded) {
-    return null;
-  }
-
-  return <RootLayoutNav />;
+  return (
+    <QueryProvider>
+      <RootLayoutNav />
+    </QueryProvider>
+  );
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const roles = useAuthStore((s) => s.roles);
+
+  // Process offline sync queue when authenticated and online
+  useSyncProcessor();
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (!isAuthenticated) {
+      router.replace("/(auth)/login");
+      return;
+    }
+
+    const primaryRole = roles[0]?.nama ?? "pemanen";
+    const routeGroup = getRoleRouteGroup(primaryRole);
+    router.replace(`/${routeGroup}` as never);
+  }, [isAuthenticated, isLoading, roles]);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-    </ThemeProvider>
+    <Stack screenOptions={{ headerShown: false, animation: "fade" }}>
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(pemanen)" />
+      <Stack.Screen name="(mandor)" />
+      <Stack.Screen name="(krani)" />
+      <Stack.Screen name="(asisten)" />
+      <Stack.Screen name="(admin)" />
+    </Stack>
   );
 }

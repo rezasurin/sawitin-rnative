@@ -30,7 +30,15 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-secure-store",
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermissionText": "Aplikasi memerlukan izin kamera untuk memindai kode QR SPB."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
