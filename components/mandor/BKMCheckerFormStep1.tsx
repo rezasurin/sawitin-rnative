@@ -1,7 +1,7 @@
 import { FormField, FormSelect } from '@/components/form';
 import { Text, View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
-import { blokApi, tphApi } from '@/services';
+import { blokApi, lahanApi, tphApi } from '@/services';
 import { bkmPanenApi } from '@/services/bkm-panen.service';
 import { useBkmCheckerStore } from '@/stores/useBkmCheckerStore';
 import { useQuery } from '@tanstack/react-query';
@@ -27,6 +27,11 @@ export function BKMCheckerFormStep1({ onNext }: Props) {
     queryFn: () => tphApi.getAll({ limit: 200 }),
   });
 
+  const { data: lahanData } = useQuery({
+    queryKey: ['lahan', 'all'],
+    queryFn: () => lahanApi.getAll({ limit: 200 }),
+  });
+
   const { data: panenData } = useQuery({
     queryKey: ['bkmPanen', 'approved'],
     queryFn: () => bkmPanenApi.getAll({ limit: 100 }),
@@ -37,8 +42,11 @@ export function BKMCheckerFormStep1({ onNext }: Props) {
     value: b.id,
   }));
 
+  const lahanBlokMap = new Map<string, string | null>();
+  (lahanData?.data ?? []).forEach((l) => lahanBlokMap.set(l.id, l.blok_id));
+
   const tphOptions = (tphData?.data ?? [])
-    .filter((t) => !header.blok_id || t.blok_id === header.blok_id)
+    .filter((t) => !header.blok_id || lahanBlokMap.get(t.lahan_id) === header.blok_id)
     .map((t) => ({ label: t.nama, value: t.id }));
 
   const panenOptions = (panenData?.data ?? []).map((p) => ({

@@ -57,7 +57,7 @@ export interface Lahan extends TimestampFields {
   org_id: string;
   user_pic_id: string;
   member_id: string;
-  kelompok_lahan_id: string;
+  blok_id: string | null;
   nama: string;
   deskripsi: string | null;
   luas_lahan: number;
@@ -70,14 +70,14 @@ export interface Lahan extends TimestampFields {
   status_pemilik: string;
   koordinat_lokasi: number;
   status: GlobalStatus;
-  kelompok_lahan?: KelompokLahan;
+  blok?: Blok;
   member?: Member;
 }
 
 export interface CreateLahanPayload {
   user_pic_id: string;
   member_id: string;
-  kelompok_lahan_id: string;
+  blok_id: string;
   nama: string;
   deskripsi?: string;
   luas_lahan: number;
@@ -97,8 +97,7 @@ export type UpdateLahanPayload = Partial<CreateLahanPayload>;
 export interface Blok extends TimestampFields {
   id: string;
   org_id: string;
-  kelompok_lahan_id?: string;
-  lahan_id: string;
+  kelompok_lahan_id: string;
   nama: string;
   deskripsi: string | null;
   luas_blok: number;
@@ -108,11 +107,11 @@ export interface Blok extends TimestampFields {
   tahun_tanam: number;
   tahun_panen: number;
   status: GlobalStatus;
-  lahan?: Lahan;
+  kelompok_lahan?: KelompokLahan;
 }
 
 export interface CreateBlokPayload {
-  lahan_id: string;
+  kelompok_lahan_id: string;
   nama: string;
   deskripsi?: string;
   luas_blok: number;
@@ -129,17 +128,17 @@ export type UpdateBlokPayload = Partial<CreateBlokPayload>;
 export interface Tph extends TimestampFields {
   id: string;
   org_id: string;
-  blok_id: string;
+  lahan_id: string;
   nama: string;
   deskripsi: string | null;
   status: GlobalStatus;
   basis_jjg_perbulan: number;
   basis_jjg_perhari: number;
-  blok?: Blok;
+  lahan?: Lahan;
 }
 
 export interface CreateTphPayload {
-  blok_id: string;
+  lahan_id: string;
   nama: string;
   deskripsi?: string;
   basis_jjg_perbulan: number;

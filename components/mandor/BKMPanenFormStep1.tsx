@@ -41,10 +41,8 @@ export function BKMPanenFormStep1({ onNext }: Props) {
     value: b.id,
   }));
 
-  const selectedBlok = (blokData?.data ?? []).find((b) => b.id === header.blok_id);
-
   const lahanOptions = (lahanData?.data ?? [])
-    .filter((l) => !header.blok_id || l.id === selectedBlok?.lahan_id)
+    .filter((l) => !header.blok_id || l.blok_id === header.blok_id)
     .map((l) => ({
       label: l.nama,
       value: l.id,
@@ -92,10 +90,9 @@ export function BKMPanenFormStep1({ onNext }: Props) {
         value={header.blok_id ?? ""}
         options={blokOptions}
         onSelect={(val) => {
-          const blok = (blokData?.data ?? []).find((b) => b.id === val);
           setHeader({
             blok_id: val,
-            lahan_id: blok?.lahan_id ?? '',
+            lahan_id: '',
           });
         }}
         placeholder="Pilih Blok"

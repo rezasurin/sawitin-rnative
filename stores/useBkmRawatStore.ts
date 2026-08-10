@@ -32,6 +32,7 @@ interface BkmRawatStore extends BkmRawatDraftState {
 
 const initialHeader: CreateBkmRawatPayload = {
   kelompok_lahan_id: '',
+  blok_id: '',
   lahan_id: '',
   tanggal: '',
   nama_pengawas: '',

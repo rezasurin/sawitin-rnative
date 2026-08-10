@@ -5,8 +5,8 @@ export interface BkmRawat extends TimestampFields {
   id: string;
   org_id: string;
   kelompok_lahan_id: string;
-  lahan_id: string;
-  blok_id: string | null;
+  lahan_id: string | null;
+  blok_id: string;
   tanggal: string;
   nama_pengawas: string;
   status: DocumentStatus;
@@ -23,8 +23,8 @@ export interface BkmRawat extends TimestampFields {
 
 export interface CreateBkmRawatPayload {
   kelompok_lahan_id: string;
-  lahan_id: string;
-  blok_id?: string;
+  lahan_id?: string;
+  blok_id: string;
   tanggal: string;
   nama_pengawas: string;
 }

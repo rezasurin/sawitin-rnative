@@ -26,6 +26,7 @@ interface Props {
 
 interface FormErrors {
   kelompok_lahan_id?: string;
+  blok_id?: string;
   lahan_id?: string;
   tanggal?: string;
   nama_pengawas?: string;
@@ -46,13 +47,13 @@ export function BKMRawatForm({ onSuccess }: Props) {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const { data: kelompokLahanList } = useKelompokLahanList({ limit: 200 });
-  const { data: lahanList, isFetching: isFetchingLahan } = useLahanList({
+  const { data: blokList, isFetching: isFetchingBlok } = useBlokList({
     limit: 200,
     kelompok_lahan_id: kelompokLahanId || undefined,
   });
-  const { data: blokList, isFetching: isFetchingBlok } = useBlokList({
+  const { data: lahanList, isFetching: isFetchingLahan } = useLahanList({
     limit: 200,
-    lahan_id: lahanId || undefined,
+    blok_id: blokId || undefined,
   });
 
   const kelompokLahanOptions = useMemo(
@@ -64,24 +65,24 @@ export function BKMRawatForm({ onSuccess }: Props) {
     [kelompokLahanList],
   );
 
-  const lahanOptions = useMemo(
-    () =>
-      (lahanList?.data ?? []).map((l) => ({
-        label: l.nama,
-        value: l.id,
-      })),
-    [lahanList],
-  );
-
   const blokOptions = useMemo(
-    () => [
-      { label: 'Tanpa Blok', value: '' },
-      ...(blokList?.data ?? []).map((b) => ({
+    () =>
+      (blokList?.data ?? []).map((b) => ({
         label: b.nama,
         value: b.id,
       })),
-    ],
     [blokList],
+  );
+
+  const lahanOptions = useMemo(
+    () => [
+      { label: 'Tanpa Lahan', value: '' },
+      ...(lahanList?.data ?? []).map((l) => ({
+        label: l.nama,
+        value: l.id,
+      })),
+    ],
+    [lahanList],
   );
 
   const validate = useCallback((): boolean => {
@@ -90,8 +91,8 @@ export function BKMRawatForm({ onSuccess }: Props) {
     if (!kelompokLahanId) {
       nextErrors.kelompok_lahan_id = 'Kelompok lahan wajib dipilih';
     }
-    if (!lahanId) {
-      nextErrors.lahan_id = 'Lahan wajib dipilih';
+    if (!blokId) {
+      nextErrors.blok_id = 'Blok wajib dipilih';
     }
     if (!tanggal) {
       nextErrors.tanggal = 'Tanggal pelaksanaan wajib diisi';
@@ -103,20 +104,21 @@ export function BKMRawatForm({ onSuccess }: Props) {
     setErrors(nextErrors);
     setTouched({
       kelompok_lahan_id: true,
-      lahan_id: true,
+      blok_id: true,
       tanggal: true,
       nama_pengawas: true,
     });
     return Object.keys(nextErrors).length === 0;
-  }, [kelompokLahanId, lahanId, tanggal, namaPengawas]);
+  }, [kelompokLahanId, blokId, tanggal, namaPengawas]);
 
   const handleKelompokChange = useCallback((value: string) => {
     setKelompokLahanId(value);
-    setLahanId('');
     setBlokId('');
+    setLahanId('');
     setErrors((prev) => ({
       ...prev,
       kelompok_lahan_id: undefined,
+      blok_id: undefined,
       lahan_id: undefined,
     }));
     if (value) {
@@ -124,20 +126,21 @@ export function BKMRawatForm({ onSuccess }: Props) {
     }
   }, []);
 
-  const handleLahanChange = useCallback((value: string) => {
-    setLahanId(value);
-    setBlokId('');
+  const handleBlokChange = useCallback((value: string) => {
+    setBlokId(value);
+    setLahanId('');
     setErrors((prev) => ({
       ...prev,
+      blok_id: undefined,
       lahan_id: undefined,
     }));
     if (value) {
-      setTouched((prev) => ({ ...prev, lahan_id: true }));
+      setTouched((prev) => ({ ...prev, blok_id: true }));
     }
   }, []);
 
-  const handleBlokChange = useCallback((value: string) => {
-    setBlokId(value);
+  const handleLahanChange = useCallback((value: string) => {
+    setLahanId(value);
   }, []);
 
   const handleSubmit = useCallback(() => {
@@ -145,8 +148,8 @@ export function BKMRawatForm({ onSuccess }: Props) {
 
     const payload = {
       kelompok_lahan_id: kelompokLahanId,
-      lahan_id: lahanId,
-      blok_id: blokId || undefined,
+      blok_id: blokId,
+      lahan_id: lahanId || undefined,
       tanggal: new Date(tanggal).toISOString(),
       nama_pengawas: namaPengawas.trim(),
     };
@@ -177,7 +180,7 @@ export function BKMRawatForm({ onSuccess }: Props) {
   ]);
 
   const isValid =
-    !!kelompokLahanId && !!lahanId && !!tanggal && !!namaPengawas.trim();
+    !!kelompokLahanId && !!blokId && !!tanggal && !!namaPengawas.trim();
 
   return (
     <KeyboardAvoidingView
@@ -205,36 +208,37 @@ export function BKMRawatForm({ onSuccess }: Props) {
         />
 
         <FormSelect
-          label="Lahan (Field)"
+          label="Blok"
           placeholder={
             kelompokLahanId
+              ? isFetchingBlok
+                ? 'Memuat blok...'
+                : 'Pilih blok kebun'
+              : 'Pilih kelompok lahan terlebih dahulu'
+          }
+          value={blokId}
+          options={blokOptions}
+          onSelect={handleBlokChange}
+          error={touched.blok_id ? errors.blok_id : undefined}
+          searchable
+          disabled={!kelompokLahanId || isFetchingBlok}
+        />
+
+        <FormSelect
+          label="Lahan (Opsional)"
+          placeholder={
+            blokId
               ? isFetchingLahan
                 ? 'Memuat lahan...'
-                : 'Pilih lahan perkebunan'
-              : 'Pilih kelompok lahan terlebih dahulu'
+                : 'Pilih lahan (opsional)'
+              : 'Pilih blok terlebih dahulu'
           }
           value={lahanId}
           options={lahanOptions}
           onSelect={handleLahanChange}
           error={touched.lahan_id ? errors.lahan_id : undefined}
           searchable
-          disabled={!kelompokLahanId || isFetchingLahan}
-        />
-
-        <FormSelect
-          label="Blok Kebun (Opsional)"
-          placeholder={
-            lahanId
-              ? isFetchingBlok
-                ? 'Memuat blok...'
-                : 'Pilih blok (opsional)'
-              : 'Pilih lahan terlebih dahulu'
-          }
-          value={blokId}
-          options={blokOptions}
-          onSelect={handleBlokChange}
-          searchable
-          disabled={!lahanId || isFetchingBlok}
+          disabled={!blokId || isFetchingLahan}
         />
 
         <FormDateField
