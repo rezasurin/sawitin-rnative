@@ -35,6 +35,13 @@ export interface CreateKraniTimbangPayload {
   netto?: number;
   keterangan?: string;
   origin_source?: OriginSource;
+  source_checker_ids?: string[];
+  details?: {
+    kelompok_lahan_id: string;
+    tph_id: string;
+    jumlah_janjang: number;
+    jumlah_brondol: number;
+  }[];
 }
 
 export type UpdateKraniTimbangPayload = Partial<CreateKraniTimbangPayload>;

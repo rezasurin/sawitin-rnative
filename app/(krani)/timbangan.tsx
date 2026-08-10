@@ -59,8 +59,17 @@ export default function TimbanganScreen() {
       timbang_isi: isiVal,
       timbang_kosong: kosongVal,
       netto: nettoVal,
-      origin_source: 'QR_SCAN' as const,
+      origin_source: 'BKM_CHECKER' as const,
       keterangan: keterangan || undefined,
+      source_checker_ids: [checkerId],
+      details: [
+        {
+          kelompok_lahan_id: checker.blok?.kelompok_lahan_id || '',
+          tph_id: checker.tph_id || '',
+          jumlah_janjang: totalJanjang,
+          jumlah_brondol: totalBrondol,
+        }
+      ],
     };
 
     createMutation.mutate(payload, {
@@ -69,6 +78,7 @@ export default function TimbanganScreen() {
           {
             text: 'OK',
             onPress: () => {
+              router.setParams({ checkerId: undefined });
               router.replace('/(krani)');
             },
           },
@@ -83,12 +93,38 @@ export default function TimbanganScreen() {
   const totalJanjang = checker?.details?.reduce((acc, curr) => acc + curr.jumlah_janjang, 0) ?? 0;
   const totalBrondol = checker?.details?.reduce((acc, curr) => acc + curr.jumlah_brondol, 0) ?? 0;
 
+  const BackButton = (
+    <Pressable
+      onPress={() => {
+        router.setParams({ checkerId: undefined });
+        router.replace('/(krani)');
+      }}
+      style={({ pressed }) => [
+        {
+          opacity: pressed ? 0.7 : 1,
+          width: 40,
+          height: 40,
+          borderRadius: 12,
+          backgroundColor: 'rgba(255,255,255,0.15)',
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+      ]}
+    >
+      <FontAwesome name="arrow-left" size={20} color={BrandColors.white} />
+    </Pressable>
+  );
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <PageHeader title="Timbangan" showMenuButton={false} />
+      <PageHeader
+        title="Timbangan"
+        showMenuButton={!checkerId}
+        actionBtn={checkerId ? BackButton : undefined}
+      />
       
       {!checkerId ? (
         <View style={styles.centerContent}>

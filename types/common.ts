@@ -1,7 +1,7 @@
 export type GlobalStatus = 'ACTIVE' | 'INACTIVE';
 export type DocumentStatus = 'DRAFT' | 'SUBMITTED' | 'REVISION_REQUESTED' | 'APPROVED' | 'CANCELLED';
 export type TipePengiriman = 'LANGSUNG' | 'TITIP' | 'RESTAN';
-export type OriginSource = 'MANUAL' | 'QR_SCAN';
+export type OriginSource = 'MANUAL' | 'BKM_CHECKER' | 'STAGING' | 'RESTAN';
 export type PendingStatus = 'PENDING' | 'MATCHED' | 'FAILED';
 export type TransactionType = 'IN' | 'OUT';
 export type LogActionType = 'CREATE' | 'UPDATE' | 'DELETE';

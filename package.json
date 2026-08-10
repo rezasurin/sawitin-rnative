@@ -16,6 +16,7 @@
     "@react-navigation/native": "^7.1.8",
     "@tanstack/react-query": "^5.99.1",
     "axios": "^1.13.2",
+    "crypto-js": "^4.2.0",
     "expo": "~54.0.31",
     "expo-brightness": "~14.0.8",
     "expo-camera": "~17.0.10",
@@ -50,6 +51,7 @@
     "zustand": "^5.0.10"
   },
   "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
     "@types/react": "~19.1.0",
     "react-test-renderer": "19.1.0",
     "typescript": "~5.9.2"

@@ -6,6 +6,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { BrandColors } from '@/constants/Colors';
 import { PageHeader } from '@/components/home';
+import { verifyQrPayload, isQrFresh } from '@/utils/qr';
 
 export default function ScanQrScreen() {
   const router = useRouter();
@@ -73,8 +74,8 @@ export default function ScanQrScreen() {
     setHasScanned(true);
     isAlerting.current = true;
 
-    const parts = value.split('|');
-    if (parts.length !== 4) {
+    const parsed = verifyQrPayload(value);
+    if (!parsed) {
       Alert.alert(
         'Format Tidak Valid',
         'QR Code yang dipindai bukan merupakan Surat Pengantar Buah (SPB) Sawitin.',
@@ -91,16 +92,10 @@ export default function ScanQrScreen() {
       return;
     }
 
-    const [checkerId, quantityStr, timestampStr, signature] = parts;
-    const quantity = parseInt(quantityStr, 10);
-    const timestamp = parseInt(timestampStr, 10);
-
-    // Verify cryptographic signature locally
-    const expectedSignature = `${checkerId.slice(0, 6)}${quantity}${timestamp}`.slice(0, 12);
-    if (signature !== expectedSignature) {
+    if (!isQrFresh(parsed.timestamp)) {
       Alert.alert(
-        'Tanda Tangan Tidak Valid',
-        'Keamanan QR Code SPB gagal diverifikasi. Data kemungkinan telah dimanipulasi.',
+        'QR Kadaluarsa',
+        'SPB ini sudah melewati masa berlaku (48 jam). Silakan minta SPB baru dari Mandor.',
         [
           {
             text: 'Coba Lagi',
@@ -117,7 +112,7 @@ export default function ScanQrScreen() {
     // Success dialog
     Alert.alert(
       'SPB Terverifikasi',
-      `SPB berhasil divalidasi.\n\nID Checker: ${checkerId}\nTotal Janjang: ${quantity} janjang`,
+      `SPB berhasil divalidasi.\n\nID Checker: ${parsed.checkerId}\nTotal Janjang: ${parsed.qty} janjang`,
       [
         {
           text: 'Lanjutkan Timbangan',
@@ -125,7 +120,7 @@ export default function ScanQrScreen() {
             isAlerting.current = false;
             router.push({
               pathname: '/(krani)/timbangan',
-              params: { checkerId },
+              params: { checkerId: parsed.checkerId },
             });
           },
         },

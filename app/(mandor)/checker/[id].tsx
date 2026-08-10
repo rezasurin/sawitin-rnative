@@ -62,7 +62,7 @@ export default function CheckerDetailScreen() {
 
   const totalJanjang = data.details?.reduce((acc, curr) => acc + curr.jumlah_janjang, 0) ?? 0;
   const timestamp = Date.parse(data.tanggal_laporan) || Date.now();
-  const qrPayload = buildQrPayload(data.id, totalJanjang, timestamp);
+  const qrPayload = buildQrPayload(data.id, data.tph_id, totalJanjang, timestamp);
 
   return (
     <View style={styles.container}>

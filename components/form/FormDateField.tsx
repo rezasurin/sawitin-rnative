@@ -1,16 +1,17 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 import {
   Modal,
   Pressable,
   StyleSheet,
   TouchableOpacity,
   View,
+  Text,
   type ViewStyle,
   Platform,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { Text } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 
 interface FormDateFieldProps {
@@ -32,11 +33,13 @@ function formatDate(d: Date): string {
 function formatDisplay(dateStr: string): string {
   if (!dateStr) return '';
   try {
-    return new Date(dateStr).toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
   } catch {
     return dateStr;
   }
@@ -52,6 +55,8 @@ export function FormDateField({
 }: FormDateFieldProps) {
   const [showPicker, setShowPicker] = useState(false);
   const [tempDate, setTempDate] = useState<Date>(new Date());
+  
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
   const displayDate = formatDisplay(value);
   const currentDate = value ? new Date(value) : new Date();
@@ -59,6 +64,11 @@ export function FormDateField({
   const handleOpen = () => {
     setTempDate(currentDate);
     setShowPicker(true);
+    Animated.timing(slideAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
   };
 
   const handleChange = useCallback(
@@ -79,11 +89,21 @@ export function FormDateField({
 
   const handleConfirm = () => {
     onChange(formatDate(tempDate));
-    setShowPicker(false);
+    closeModal();
   };
 
   const handleCancel = () => {
-    setShowPicker(false);
+    closeModal();
+  };
+
+  const closeModal = () => {
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowPicker(false);
+    });
   };
 
   return (
@@ -107,12 +127,42 @@ export function FormDateField({
       {Platform.OS === 'ios' && (
         <Modal
           visible={showPicker}
-          animationType="slide"
+          animationType="none"
           transparent
           onRequestClose={handleCancel}
         >
-          <Pressable style={styles.modalOverlay} onPress={handleCancel}>
-            <View style={styles.modalContent}>
+          <Animated.View
+            style={[
+              styles.modalOverlay,
+              {
+                opacity: slideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 1],
+                }),
+              },
+            ]}
+          >
+            <Pressable style={StyleSheet.absoluteFill} onPress={handleCancel} />
+          </Animated.View>
+          <Animated.View
+            style={[
+              styles.modalContent,
+              {
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                transform: [
+                  {
+                    translateY: slideAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [400, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>{label}</Text>
                 <Pressable onPress={handleCancel} hitSlop={8}>
@@ -127,18 +177,19 @@ export function FormDateField({
                   display="spinner"
                   onChange={handleChange}
                   locale="id-ID"
+                  themeVariant="light"
+                  textColor="#000000"
                 />
               </View>
 
-              <TouchableOpacity
-                style={styles.confirmButton}
-                onPress={handleConfirm}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.confirmButtonText}>Konfirmasi</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
+                <TouchableOpacity
+                  style={styles.confirmButton}
+                  onPress={handleConfirm}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.confirmButtonText}>Konfirmasi</Text>
+                </TouchableOpacity>
+            </Animated.View>
         </Modal>
       )}
 

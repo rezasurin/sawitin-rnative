@@ -77,6 +77,7 @@ export default function KraniLayout() {
             tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
           }}
         />
+
       </Tabs>
       <DrawerOverlay />
       <DrawerMenu />

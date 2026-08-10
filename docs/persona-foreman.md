@@ -33,7 +33,7 @@ The `Foreman` (Mandor) is the core operational user in the field. Foremen regist
    - Automatically computes `jumlah_janjang` by aggregating grading items (`janjang_normal`, `buah_mentah`, `over_ripe`, `tangkai_panjang`, `buah_abnormal`, `janjang_kosong`).
 2. **`useBkmCheckerStore`**:
    - Manages checker documents and FFB cargo validation parameters.
-   - **Flat Payload Generator (`buildQrPayload`)**: Outputs an efficient flat string payload (`${tphId}|${quantity}|${timestamp}|${signature}`) with a simple security checksum slice to fit low-density QR images.
+   - **Flat Payload Generator (`buildQrPayload`)**: Outputs a signed flat string payload (`V2|<checkerId>|<tphId>|<quantity>|<timestamp>|<signature>`) where signature is HMAC-SHA256 of the first five fields using `EXPO_PUBLIC_QR_SECRET_KEY` (base64url).
 3. **`useSyncQueueStore`**:
    - Holds pending offline mutation actions (CREATE/UPDATE/DELETE) with endpoints and payloads.
 

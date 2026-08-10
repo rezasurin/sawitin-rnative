@@ -1,0 +1,33 @@
+{
+  "skill_name": "sawitin-backend",
+  "evals": [
+    {
+      "id": 0,
+      "name": "qr-staging-flow",
+      "prompt": "We're building the krani timbang weighbridge screen in the saweed-rnative mobile app. The krani scans a QR code printed by the checker and submits the weighbridge entry. What endpoint should the mobile app hit, what should the request body contain, and what are all the possible responses (including status codes and their shapes)? Also, the checker side generates the QR in our app: what does a valid payload look like, and how is the signature computed and verified?",
+      "expected_output": "Identifies POST /staging/krani-timbang (not POST /kraniTimbang); body includes qr_payload (+ nama_supir/nomor_kendaraan/tujuan_kirim); describes 201 fast-path envelope {message, reconciled:true, discrepancy_pct, data}, 202 slow path {message, reconciled:false, staging_id, data}, 400/403 QR errors, 409 duplicate; describes QR format V2|<checkerId>|<tphId>|<qty>|<ts>|<sig> with HMAC-SHA256 base64url signed with QR_SECRET_KEY, timestamp window -5min/+48h; mentions worker requirement.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "checker-list-screen",
+      "prompt": "In the Saweed-Reactjs web app I need to build the BKM Checker list page: a table with pagination, a status filter, and a detail view. Which backend endpoints do I call, what query params are supported, what is the response envelope, and which permission actions does the logged-in user need for each call? The web app also fetches GET /bkmChecker/detail — what does that endpoint return exactly?",
+      "expected_output": "GET /bkmChecker/ with queryParser params (page, limit, sort, filters) returning {data, meta:{page,limit,total,pages}}; permission checkPermission(mod_bkm_checker, read) for list and read for by-id/detail; GET /bkmChecker/detail requires ?bkm_checker_id= and returns a bare array (no meta); GET /bkmChecker/:id returns raw record; POST requires write, PUT update, DELETE delete; error shapes 401/403/404.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "krani-403-debug",
+      "prompt": "Bug report from the field: the Krani Timbang user can open the krani timbang document list, but when they try to EDIT a detail row (PUT /kraniTimbang/detail/:id) they get HTTP 403. They definitely have the update permission on mod_krani_timbang in their role. Why is it failing, and what are the options to fix it?",
+      "expected_output": "Identifies the known quirk: kraniTimbang PUT /:id, PUT /detail/:id, and DELETE /detail/:id all require checkPermission(mod_krani_timbang, 'write') — not 'update' — so a role with only update permission gets 403. Fix options: grant the write action on mod_krani_timbang to the role, or change the route. Also mentions parent PUT uses write too, and update-to-APPROVED requires approve permission inline.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "harga-tbs-port",
+      "prompt": "I'm porting the 'Harga TBS' screen from the web app to the saweed-rnative mobile app. The web screen loads the price list and the latest price, and admins can create and update prices. What endpoints exist for harga TBS (list, latest, create, update), which permission module gates them, and what does each return? Also — can prices be deleted? I don't see a delete button in the web UI and want to confirm whether the backend supports it.",
+      "expected_output": "POST /hargaTbs/list ({data, meta}, body filters), GET /hargaTbs/latest (raw single record, 404 if none), POST /hargaTbs/ (201 raw), PUT /hargaTbs/:id (200 raw); all gated on mod_keuangan (read/write/update); no GET by id and no DELETE route exists; @@unique([org_id, tanggal]).",
+      "files": []
+    }
+  ]
+}
