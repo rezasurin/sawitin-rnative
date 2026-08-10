@@ -1,6 +1,7 @@
 import { Text, View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { useSubmitBkmPanen } from '@/hooks/useBkmPanen';
+import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { blokApi, lahanApi, grupPekerjaApi, pekerjaApi, tphApi } from '@/services';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
@@ -35,6 +36,8 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
   const { data: grupData } = useQuery({ queryKey: ['grupPekerja', 'all'], queryFn: () => grupPekerjaApi.getAll({ limit: 200 }) });
   const { data: pekerjaData } = useQuery({ queryKey: ['pekerja', 'all'], queryFn: () => pekerjaApi.getAll({ limit: 200 }) });
   const { data: tphData } = useQuery({ queryKey: ['tph', 'all'], queryFn: () => tphApi.getAll({ limit: 200 }) });
+  const { data: orgConfig } = useOrgConfig();
+  const bjr = orgConfig?.bjr ?? 15;
 
   const blokName = useMemo(() => blokData?.data?.find((b) => b.id === header.blok_id)?.nama ?? header.blok_id, [blokData, header.blok_id]);
   const lahanName = useMemo(() => lahanData?.data?.find((l) => l.id === header.lahan_id)?.nama ?? header.lahan_id, [lahanData, header.lahan_id]);
@@ -66,6 +69,8 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
     (sum, d) => sum + (Number(d.jumlah_brondol) || 0),
     0,
   );
+
+  const estimatedTons = (totalJanjang * bjr) / 1000;
 
   const handleSubmit = () => {
     if (!confirmed) return;
@@ -195,6 +200,10 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
           <MetricCard
             label="Brondolan"
             value={`${totalBrondol} kg`}
+          />
+          <MetricCard
+            label="Estimasi Tonase"
+            value={`${estimatedTons.toFixed(2)} t`}
           />
           <MetricCard
             label="TPH"
