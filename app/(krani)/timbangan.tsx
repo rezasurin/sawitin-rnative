@@ -7,6 +7,7 @@ import { BrandColors } from '@/constants/Colors';
 import { PageHeader } from '@/components/home';
 import { bkmCheckerApi } from '@/services/bkm-checker.service';
 import { useCreateKraniTimbang } from '@/hooks/useKraniTimbang';
+import { useOrgConfig } from '@/hooks/useOrgConfig';
 
 export default function TimbanganScreen() {
   const router = useRouter();
@@ -25,6 +26,9 @@ export default function TimbanganScreen() {
   });
 
   const createMutation = useCreateKraniTimbang();
+
+  const { data: orgConfig } = useOrgConfig();
+  const bjr = orgConfig?.bjr ?? 15;
 
   // Reset form when checkerId changes
   useEffect(() => {
@@ -92,6 +96,7 @@ export default function TimbanganScreen() {
 
   const totalJanjang = checker?.details?.reduce((acc, curr) => acc + curr.jumlah_janjang, 0) ?? 0;
   const totalBrondol = checker?.details?.reduce((acc, curr) => acc + curr.jumlah_brondol, 0) ?? 0;
+  const estimatedKg = (totalJanjang * bjr);
 
   const BackButton = (
     <Pressable
@@ -231,6 +236,11 @@ export default function TimbanganScreen() {
               <Text style={styles.nettoValue}>
                 {nettoVal.toLocaleString('id-ID')} <Text style={styles.kg}>kg</Text>
               </Text>
+              {totalJanjang > 0 && (
+                <Text style={styles.estimateText}>
+                  Estimasi dari janjang: {estimatedKg.toLocaleString('id-ID')} kg ({totalJanjang} jjg × {bjr} kg)
+                </Text>
+              )}
             </View>
 
             {/* Keterangan */}
@@ -449,6 +459,13 @@ const styles = StyleSheet.create({
   },
   kg: {
     fontSize: 18,
+    fontWeight: '600',
+  },
+  estimateText: {
+    fontSize: 13,
+    color: '#558B2F',
+    marginTop: 8,
+    textAlign: 'center',
     fontWeight: '600',
   },
   submitBtn: {
