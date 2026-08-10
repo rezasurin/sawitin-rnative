@@ -17,6 +17,8 @@ import {
   TouchableOpacity,
 } from 'react-native';
 
+const DISCREPANCY_TOLERANCE_PCT = 2;
+
 interface Props {
   onBack: () => void;
   onSuccess: () => void;
@@ -55,9 +57,13 @@ export function BKMCheckerFormStep3({ onBack, onSuccess }: Props) {
   const discrepancyPct =
     panenJanjangForTph > 0
       ? (Math.abs(totalJanjang - panenJanjangForTph) / panenJanjangForTph) * 100
-      : 0;
+      : totalJanjang > 0
+        ? 100
+        : 0;
 
-  const mismatchExceedsTolerance = panenJanjangForTph > 0 && discrepancyPct > 2;
+  const mismatchExceedsTolerance =
+    !!header.bkm_panen_id &&
+    (panenJanjangForTph > 0 ? discrepancyPct > DISCREPANCY_TOLERANCE_PCT : totalJanjang > 0);
   const estimatedTons = (totalJanjang * bjr) / 1000;
 
   const handleSubmit = () => {
@@ -150,7 +156,7 @@ export function BKMCheckerFormStep3({ onBack, onSuccess }: Props) {
           <MetricCard label="Brondolan" value={`${totalBrondol} kg`} />
         </View>
 
-        {header.bkm_panen_id && panenJanjangForTph > 0 && (
+        {header.bkm_panen_id && linkedPanen && (
           <View
             style={[
               styles.warningCard,
