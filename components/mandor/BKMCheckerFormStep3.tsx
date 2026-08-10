@@ -63,6 +63,7 @@ export function BKMCheckerFormStep3({ onBack, onSuccess }: Props) {
 
   const mismatchExceedsTolerance =
     !!header.bkm_panen_id &&
+    !!linkedPanen &&
     (panenJanjangForTph > 0 ? discrepancyPct > DISCREPANCY_TOLERANCE_PCT : totalJanjang > 0);
   const estimatedTons = (totalJanjang * bjr) / 1000;
 
