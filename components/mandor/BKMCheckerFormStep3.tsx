@@ -1,7 +1,9 @@
 import { Text, View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { useSubmitBkmChecker } from '@/hooks/useBkmChecker';
+import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { blokApi, tphApi } from '@/services';
+import { bkmPanenApi } from '@/services/bkm-panen.service';
 import { useBkmCheckerStore } from '@/stores/useBkmCheckerStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
@@ -30,14 +32,44 @@ export function BKMCheckerFormStep3({ onBack, onSuccess }: Props) {
   const { data: blokData } = useQuery({ queryKey: ['blok', 'all'], queryFn: () => blokApi.getAll({ limit: 200 }) });
   const { data: tphData } = useQuery({ queryKey: ['tph', 'all'], queryFn: () => tphApi.getAll({ limit: 200 }) });
 
+  const { data: orgConfig } = useOrgConfig();
+  const bjr = orgConfig?.bjr ?? 15;
+
+  const { data: linkedPanen } = useQuery({
+    queryKey: ['bkmPanen', 'byId', header.bkm_panen_id],
+    queryFn: () => bkmPanenApi.getById(header.bkm_panen_id!),
+    enabled: !!header.bkm_panen_id,
+  });
+
   const blokName = useMemo(() => blokData?.data?.find((b) => b.id === header.blok_id)?.nama ?? header.blok_id, [blokData, header.blok_id]);
   const tphName = useMemo(() => tphData?.data?.find((t) => t.id === header.tph_id)?.nama ?? header.tph_id, [tphData, header.tph_id]);
 
   const totalJanjang = details.reduce((sum, d) => sum + d.jumlah_janjang, 0);
   const totalBrondol = details.reduce((sum, d) => sum + d.jumlah_brondol, 0);
 
+  const panenJanjangForTph =
+    linkedPanen?.details
+      ?.filter((pd) => pd.tph_id === header.tph_id)
+      .reduce((sum, pd) => sum + pd.jumlah_janjang, 0) ?? 0;
+
+  const discrepancyPct =
+    panenJanjangForTph > 0
+      ? (Math.abs(totalJanjang - panenJanjangForTph) / panenJanjangForTph) * 100
+      : 0;
+
+  const mismatchExceedsTolerance = panenJanjangForTph > 0 && discrepancyPct > 2;
+  const estimatedTons = (totalJanjang * bjr) / 1000;
+
   const handleSubmit = () => {
     if (!confirmed) return;
+
+    if (mismatchExceedsTolerance) {
+      Alert.alert(
+        'Tidak Sesuai BKM Panen',
+        `Selisih ${discrepancyPct.toFixed(1)}% dari BKM Panen. Periksa kembali jumlah janjang sebelum submit.`
+      );
+      return;
+    }
 
     const headerPayload = {
       blok_id: header.blok_id,
@@ -118,6 +150,24 @@ export function BKMCheckerFormStep3({ onBack, onSuccess }: Props) {
           <MetricCard label="Brondolan" value={`${totalBrondol} kg`} />
         </View>
 
+        {header.bkm_panen_id && panenJanjangForTph > 0 && (
+          <View
+            style={[
+              styles.warningCard,
+              mismatchExceedsTolerance && styles.warningCardBad,
+            ]}
+          >
+            <Text style={styles.warningText}>
+              {mismatchExceedsTolerance
+                ? `⚠️ Jumlah janjang tidak sesuai BKM Panen (selisih ${discrepancyPct.toFixed(1)}%). Checker: ${totalJanjang}, Panen: ${panenJanjangForTph}. Submit akan ditolak.`
+                : `✓ Sesuai BKM Panen (selisih ${discrepancyPct.toFixed(1)}%)`}
+            </Text>
+            <Text style={styles.warningEstimate}>
+              Estimasi Tonase: {estimatedTons.toFixed(2)} t ({bjr} kg/janjang)
+            </Text>
+          </View>
+        )}
+
         <Text style={styles.sectionTitle}>Detail per Truk</Text>
         {details.map((d) => (
           <View key={d._tempId} style={styles.detailCard}>
@@ -156,9 +206,9 @@ export function BKMCheckerFormStep3({ onBack, onSuccess }: Props) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.submitButton, (!confirmed || submitMutation.isPending) && styles.submitButtonDisabled]}
+          style={[styles.submitButton, (!confirmed || mismatchExceedsTolerance || submitMutation.isPending) && styles.submitButtonDisabled]}
           onPress={handleSubmit}
-          disabled={!confirmed || submitMutation.isPending}
+          disabled={!confirmed || mismatchExceedsTolerance || submitMutation.isPending}
           activeOpacity={0.7}
         >
           {submitMutation.isPending ? (
@@ -328,6 +378,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   submitButtonDisabled: { opacity: 0.5 },
+  warningCard: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#2E7D32',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+  },
+  warningCardBad: {
+    backgroundColor: '#FFF3E0',
+    borderColor: '#E65100',
+  },
+  warningText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: BrandColors.textPrimary,
+  },
+  warningEstimate: {
+    fontSize: 12,
+    color: BrandColors.textSecondary,
+    marginTop: 4,
+  },
   submitButtonText: {
     color: BrandColors.white,
     fontSize: 16,
