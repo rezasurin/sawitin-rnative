@@ -18,6 +18,7 @@
 - Create: `src/controllers/orgConfigController.ts` — returns `{ bjr }` from org settings (default 15)
 - Create: `src/routes/orgConfigRoute.ts` — `GET /orgConfig`
 - Modify: `src/routes/index.ts` — mount `orgConfigRoute`
+- Modify: `src/middleware/permissionMiddleware.ts` — map `/orgConfig` in `routeToModId` + bypass guard (mirrors `mod_notification` precedent)
 - Modify: `src/controllers/bkmCheckerController.ts` — add panen reconciliation check on submit
 
 **Mobile (`saweed-rnative/sawitin/`):**
@@ -131,7 +132,26 @@ And register it — use the same `permissionGuard` pattern as the other protecte
 router.use("/orgConfig", permissionGuard, orgConfigRoute);
 ```
 
-- [ ] **Step 4: Verify the backend compiles**
+- [ ] **Step 4: Register the route in `permissionGuard` (required for reachability)**
+
+`permissionGuard` 400s any `req.baseUrl` not present in `routeToModId` (`src/middleware/permissionMiddleware.ts:253`). `/orgConfig` is not mapped. Mirror the existing `mod_notification` precedent (line 45 mapping + line 270 bypass):
+
+In `src/middleware/permissionMiddleware.ts`, add to `routeToModId` (after the `"/notification"` line):
+
+```ts
+  "/orgConfig": "mod_org_config",
+```
+
+And in `permissionGuard`, extend the existing bypass special-case (currently `if (modAppId === "mod_notification")`) to:
+
+```ts
+    if (modAppId === "mod_notification" || modAppId === "mod_org_config") {
+      next();
+      return;
+    }
+```
+
+- [ ] **Step 5: Verify the backend compiles**
 
 Run (from `sawitin/sawitin-backend/`):
 
@@ -141,7 +161,7 @@ yarn build
 
 Expected: `tsc` exits 0, no type errors.
 
-- [ ] **Step 5: Smoke test the endpoint**
+- [ ] **Step 6: Smoke test the endpoint**
 
 With server + worker running (`yarn dev:server`), and a valid token (login as `asisten1` / `password123` from the manual-testing-playbook):
 
@@ -151,10 +171,10 @@ curl -s http://localhost:3000/orgConfig -H "Authorization: Bearer <TOKEN>"
 
 Expected: `{"bjr":15}` (no org settings yet) or `{"bjr":<configured>}`.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add src/controllers/orgConfigController.ts src/routes/orgConfigRoute.ts src/routes/index.ts
+git add src/controllers/orgConfigController.ts src/routes/orgConfigRoute.ts src/routes/index.ts src/middleware/permissionMiddleware.ts
 git commit -m "feat(backend): add orgConfig endpoint exposing BJR harvest config"
 ```
 
