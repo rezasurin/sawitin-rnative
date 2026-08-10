@@ -4,7 +4,7 @@ import { Lahan, Blok, Tph, Pekerja } from './master-data';
 export interface BkmChecker extends TimestampFields {
   id: string;
   org_id: string;
-  lahan_id: string;
+  lahan_id: string | null;
   tph_id: string;
   blok_id: string;
   bkm_panen_id: string | null;
@@ -23,7 +23,7 @@ export interface BkmChecker extends TimestampFields {
 }
 
 export interface CreateBkmCheckerPayload {
-  lahan_id: string;
+  lahan_id?: string;
   tph_id: string;
   blok_id: string;
   bkm_panen_id?: string;
