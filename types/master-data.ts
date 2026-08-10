@@ -97,6 +97,7 @@ export type UpdateLahanPayload = Partial<CreateLahanPayload>;
 export interface Blok extends TimestampFields {
   id: string;
   org_id: string;
+  kelompok_lahan_id?: string;
   lahan_id: string;
   nama: string;
   deskripsi: string | null;
