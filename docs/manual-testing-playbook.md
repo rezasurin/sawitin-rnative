@@ -1,6 +1,8 @@
 # Sawitin Mobile App - Manual & E2E Testing Playbook
 
-Buku panduan ini dirancang untuk memandu proses pengujian manual dan *end-to-end* (E2E) pada aplikasi mobile **Sawitin** (React Native Expo). Panduan ini mencakup seluruh fitur yang baru ditambahkan/diperbarui, termasuk geofencing absensi, pemindaian Vision Camera, kalkulasi jembatan timbang, persetujuan asisten, dan simulasi sinkronisasi luring (offline) menggunakan SQLite.
+Buku panduan ini dirancang untuk memandu proses pengujian manual dan *end-to-end* (E2E) pada aplikasi mobile **Sawitin** (React Native Expo). Panduan ini mencakup seluruh fitur utama: wizard BKM Panen 4-langkah, BKM Checker + QR SPB, jembatan timbang (krani), persetujuan asisten, **estimasi tonase BJR**, **rekonsiliasi janjang Checker↔Panen**, absensi geofence, BKM Rawat, dan sinkronisasi luring SQLite.
+
+> **Catatan versi:** Playbook ini sudah diselaraskan dengan seed data terbaru dan perubahan data-model mobile (lahan → `blok_id`, blok → `kelompok_lahan_id`, tph → `lahan_id`).
 
 ---
 
@@ -8,7 +10,7 @@ Buku panduan ini dirancang untuk memandu proses pengujian manual dan *end-to-end
 1. [Prasyarat & Persiapan Lingkungan](#1-prasyarat--persiapan-lingkungan)
 2. [Matriks Akun Uji Coba](#2-matriks-akun-uji-coba)
 3. [Modul 1: Wizard BKM Panen 4-Langkah (Mandor)](#modul-1-wizard-bkm-panen-4-langkah-mandor)
-4. [Modul 2: BKM Checker & Pembuatan Kode QR (Mandor)](#modul-2-bkm-checker--pembuatan-kode-qr-mandor)
+4. [Modul 2: BKM Checker, QR SPB & Rekonsiliasi Janjang (Mandor)](#modul-2-bkm-checker-qr-spb--rekonsiliasi-janjang-mandor)
 5. [Modul 3: Pemindaian Kamera & Jembatan Timbang (Krani Timbang)](#modul-3-pemindaian-kamera--jembatan-timbang-krani-timbang)
 6. [Modul 4: Aksi Persetujuan & Penolakan BKM (Asisten)](#modul-4-aksi-persetujuan--penolakan-bkm-asisten)
 7. [Modul 5: Absensi Mandiri & Validasi Geofence GPS (Mandor / Pemanen)](#modul-5-absensi-mandiri--validasi-geofence-gps-mandor--pemanen)
@@ -20,7 +22,7 @@ Buku panduan ini dirancang untuk memandu proses pengujian manual dan *end-to-end
 ## 1. Prasyarat & Persiapan Lingkungan
 
 ### Jalankan Backend & Workers
-Pastikan API backend aktif di port `:3000` dan worker antrean antrean BullMQ berjalan (agar jembatan timbang/staging sinkron):
+Pastikan API backend aktif di port `:3000` dan worker antrean BullMQ berjalan (agar jembatan timbang/staging sinkron):
 ```bash
 # Terminal 1 - API Backend
 cd ../sawitin/sawitin-backend
@@ -29,6 +31,16 @@ yarn dev:server
 # Terminal 2 - BullMQ Worker (Penting untuk pencocokan timbangan)
 yarn dev:worker
 ```
+
+### Seeder (Wajib jika DB sudah pernah dipakai)
+Seeder terbaru menambahkan user `pemanen1`, role `Pemanen`, PIC lahan untuk user uji, dan permission `approve` untuk Asisten. Jalankan ulang agar data uji lengkap:
+
+```bash
+cd ../sawitin/sawitin-backend
+yarn prisma db seed
+```
+
+> ⚠️ Jika user yang login sebelumnya masih mendapat "Akses ditolak" / 403 setelah seed, hapus cache permission di Redis: `redis-cli KEYS "permissions:*" | xargs redis-cli DEL`.
 
 ### Jalankan Aplikasi Mobile (Expo)
 ```bash
@@ -42,74 +54,105 @@ npm run android # Untuk Android Emulator/Device
 
 ## 2. Matriks Akun Uji Coba
 
-Gunakan kredensial berikut untuk login sesuai dengan skenario peran:
+Gunakan kredensial berikut untuk login sesuai dengan skenario peran. Password semua akun uji: `password123` (kecuali admin: `admin`).
 
-| Peran (Role) | Username | Password | Modul Utama yang Diuji |
-| :--- | :--- | :--- | :--- |
-| **Mandor Panen** | `mandor1` | `password123` | BKM Panen, BKM Checker, Absensi, BKM Rawat |
-| **Krani Timbang** | `krani1` | `password123` | Pemindai QR SPB, Form Jembatan Timbang |
-| **Asisten Afdeling**| `asisten1`| `password123` | Persetujuan (Approve/Reject) BKM Panen |
-| **Pemanen** | `pemanen1`| `password123` | Absensi Harian |
+| Peran (Role) | Username | Password | Lahan PIC (Blok) | Modul Utama yang Diuji |
+| :--- | :--- | :--- | :--- | :--- |
+| **Administrator** | `admin` | `admin` | Semua | Setup, fallback approve, pembersihan data |
+| **Mandor Panen** | `mandor1` | `password123` | Lahan Blok A (Blok A1) | BKM Panen, BKM Checker, Absensi, BKM Rawat |
+| **Mandor Panen 2** | `mandor2` | `password123` | Lahan Blok B (Blok A2) | (opsional) |
+| **Asisten Afdeling** | `asisten1` | `password123` | Lahan Blok C (Blok B1) | Persetujuan (Approve/Reject) BKM Panen |
+| **Krani Timbang** | `krani1` | `password123` | – | Pemindai QR SPB, Form Jembatan Timbang |
+| **Pemanen** | `pemanen1` | `password123` | – | Absensi Harian |
+
+### Master Data Tersedia (dari seed)
+| Entitas | Nilai |
+| :--- | :--- |
+| Kelompok Lahan | `Kelompok Tani Maju`, `Koperasi Sawit Sejahtera`, dll. |
+| Blok | `Blok A1`, `Blok A2`, `Blok B1` |
+| Lahan | `Lahan Blok A` (→ Blok A1), `Lahan Blok B` (→ Blok A2), `Lahan Blok C` (→ Blok B1) |
+| TPH | `TPH 01`, `TPH 02`, `TPH 03` (semua di Lahan Blok A) |
+| Pekerja | `Budi Santoso`, `Siti Aminah`, `Ahmad Dahlan`, `Dewi Sartika`, `Joko Widodo` |
 
 ---
 
 ## Modul 1: Wizard BKM Panen 4-Langkah (Mandor)
 
-*Tujuan: Memastikan alur pengisian log panen harian berjalan tanpa kendala.*
+*Tujuan: Memastikan alur pengisian log panen harian berjalan tanpa kendala, termasuk estimasi tonase BJR.*
 
 *   **Aktor Uji Coba**: Login sebagai Mandor Panen (`username: mandor1`, `password: password123`).
 *   **Pilihan Data Valid (Happy Path)**:
-    *   **Langkah 2 (Step 1)**: Pilih Blok = `Blok A1`, Lahan = `Lahan A1-1`. Isikan Tanggal Laporan = hari ini, Keterangan = "Uji coba panen happy path".
-    *   **Langkah 3 (Step 2)**: Pilih Pekerja = `Budi Santoso` atau `Siti Aminah`. Pilih TPH = `TPH 01`. Pilih Jenis Pekerjaan = `Pemanen`. Klik **Tambah Detail**.
-    *   **Langkah 4 (Step 3)**: Atur janjang normal = `50`, buah mentah = `2`, over ripe = `3`, buah abnormal = `1`. Total janjang otomatis terhitung `56` janjang.
-    *   **Langkah 5 (Step 4)**: Centang kotak persetujuan, lalu ketuk **Kirim BKM**. Status dokumen di daftar BKM Panen harus berubah menjadi `SUBMITTED`.
+    *   **Step 1**: Pilih Blok = `Blok A1`. Verifikasi dropdown Lahan hanya menampilkan `Lahan Blok A` (filter by blok bekerja). Pilih `Lahan Blok A`. Isikan Tanggal Laporan = hari ini, Keterangan = "Uji coba panen happy path".
+    *   **Step 2**: Pilih Pekerja = `Budi Santoso` atau `Siti Aminah`. Pilih TPH = `TPH 01`. Pilih Jenis Pekerjaan = `Pemanen`. Klik **Tambah Detail**. (Opsional: ambil GPS.)
+    *   **Step 3**: Atur janjang normal = `50`, buah mentah = `2`, over ripe = `3`, buah abnormal = `1`. Total janjang otomatis terhitung `56` janjang.
+    *   **Step 4 (BARU: Estimasi Tonase BJR)**: Verifikasi kartu **Estimasi Tonase** menampilkan `(56 × 15 kg) / 1000 = 0.84 t` (BJR default 15 kg/janjang, diambil dari `GET /orgConfig`). Centang kotak persetujuan, lalu ketuk **Kirim BKM**. Status dokumen di daftar BKM Panen harus berubah menjadi `SUBMITTED`.
 *   **Pilihan Data Tidak Valid (Unhappy Path)**:
-    *   **Langkah 2 (Step 1)**: Kosongkan dropdown Blok atau Tanggal Laporan. Verifikasi tombol "Lanjutkan ke Pekerja & TPH" terkunci (disabled).
-    *   **Langkah 3 (Step 2)**: Ketuk "Tambah Detail" tanpa memilih Pekerja atau nomor TPH. Verifikasi aplikasi memunculkan dialog peringatan pengisian.
-    *   **Langkah 5 (Step 4)**: Coba kirim data tanpa mencentang kotak persetujuan. Verifikasi tombol "Kirim BKM" tidak dapat ditekan.
+    *   **Step 1**: Kosongkan dropdown Blok atau Tanggal Laporan. Verifikasi tombol "Lanjutkan ke Pekerja & TPH" terkunci (disabled).
+    *   **Step 2**: Ketuk "Tambah Detail" tanpa memilih Pekerja atau nomor TPH. Verifikasi aplikasi memunculkan dialog peringatan pengisian.
+    *   **Step 4**: Coba kirim data tanpa mencentang kotak persetujuan. Verifikasi tombol "Kirim BKM" tidak dapat ditekan.
 
 ---
 
-## Modul 2: BKM Checker & Pembuatan Kode QR (Mandor)
+## Modul 2: BKM Checker, QR SPB & Rekonsiliasi Janjang (Mandor)
 
-*Tujuan: Membuat Surat Pengantar Barang (SPB) muatan TBS dan menghasilkan Kode QR.*
+*Tujuan: Membuat Surat Pengantar Barang (SPB) muatan TBS, menghasilkan Kode QR, dan memastikan rekonsiliasi janjang Checker↔Panen berjalan.*
 
-*   **Aktor Uji Coba**: Login sebagai Mandor Panen (`username: mandor1`, `password: password123`).
-*   **Pilihan Data Valid (Happy Path)**:
-    *   Pilih Blok = `Blok A1`, Lahan = `Lahan A1-1`, TPH = `TPH 01`, Tanggal = hari ini.
-    *   Detail Pengiriman: Pilih Kendaraan/No Plat = `B 5678 CD`, Nama Sopir = `Ahmad Dahlan`, Tujuan Kirim = `PKS Sumber Makmur`, Jumlah Janjang = `150` janjang.
-    *   Ketuk **Kirim/Ajukan**. Setelah status berubah menjadi `SUBMITTED`, buka detail dokumen tersebut dan ketuk **Setujui Checker** untuk mengubah statusnya menjadi `APPROVED` dan memunculkan kode QR SPB.
-*   **Pilihan Data Tidak Valid (Unhappy Path)**:
-    *   Coba kirim formulir dengan mengosongkan plat nomor kendaraan, nama sopir, atau dengan mengisi Jumlah Janjang = `0`. Verifikasi sistem memunculkan kesalahan validasi.
-    *   Buka dokumen Checker yang masih berstatus `DRAFT`. Verifikasi kode QR tidak digenerasikan di dalam kartu detail.
+### Prasyarat
+Pastikan sudah ada **BKM Panen berstatus `APPROVED`** yang dibuat di Modul 1 dan disetujui via Modul 4 (atau gunakan panen seeded `2026-08-08 / Blok A1` yang sudah APPROVED). Catat jumlah janjang panen tersebut untuk TPH yang dipakai.
+
+### Happy Path (Janjang Sesuai)
+*   **Aktor Uji Coba**: Login sebagai Mandor Panen (`mandor1`).
+*   **Step 1**: Pilih **BKM Panen** yang sudah disetujui (dropdown "BKM Panen (Opsional)"). Pilih Blok = `Blok A1`, TPH = `TPH 01`, Tanggal = hari ini.
+*   **Step 2**: Tambah Detail Pengiriman: Tipe Pengiriman = `Langsung`, No Plat = `B 5678 CD`, Nama Sopir = `Ahmad Dahlan`, Tujuan Kirim = `PKS Sumber Makmur`. Isi grading janjang **sama persis dengan jumlah janjang panen** untuk TPH 01 (misal 56 janjang normal).
+*   **Step 3 (BARU: Rekonsiliasi & Estimasi)**:
+    *   Verifikasi banner hijau **"✓ Sesuai BKM Panen (selisih 0.0%)"**.
+    *   Verifikasi **Estimasi Tonase** menampilkan `(56 × 15 kg)/1000 = 0.84 t (15 kg/janjang)`.
+    *   Centang konfirmasi, ketuk **Submit Checker** → status `SUBMITTED`. Buka detail dan ketuk **Setujui Checker** → status `APPROVED`, QR SPB muncul.
+
+### Unhappy Path (Janjang Tidak Sesuai > 2%)
+*   **Step 3**: Buat checker baru yang menautkan panen yang sama tetapi isi jumlah janjang **lebih banyak/lebih sedikit >2%** dari janjang panen (misal panen 56 → checker 60).
+    *   Verifikasi banner oranye **"⚠️ Jumlah janjang tidak sesuai BKM Panen (selisih X.X%). Checker: 60, Panen: 56. Submit akan ditolak."**
+    *   Verifikasi tombol **Submit Checker nonaktif** dan muncul alert saat dipaksa.
+*   **Verifikasi sisi backend (otoritas)**: coba submit mismatch langsung via API:
+    ```bash
+    curl -s -X PUT http://localhost:3000/bkmChecker/<checkerId> \
+      -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
+      -d '{"status":"SUBMITTED"}'
+    ```
+    Harap muncul `400` dengan pesan `Jumlah janjang tidak sesuai BKM Panen (selisih ...%)`.
+*   **Uji lain**:
+    *   Coba kirim dengan mengosongkan plat nomor / nama sopir / jumlah janjang `0` → validasi gagal.
+    *   Buka checker berstatus `DRAFT` → QR tidak digenerasikan.
 
 ---
 
 ## Modul 3: Pemindaian Kamera & Jembatan Timbang (Krani Timbang)
 
-*Tujuan: Memindai QR SPB milik mandor di jembatan timbang menggunakan kamera aktif.*
+*Tujuan: Memindai QR SPB milik mandor di jembatan timbang, mencatat berat, dan membandingkan estimasi BJR dengan netto aktual.*
 
 *   **Aktor Uji Coba**: Login sebagai Krani Timbang (`username: krani1`, `password: password123`).
 *   **Pilihan Data Valid (Happy Path)**:
     *   Arahkan kamera scanner ke kode QR SPB yang berstatus `APPROVED` milik Mandor dari Modul 2.
     *   Setelah pemindaian sukses, isi formulir timbangan: Berat Isi = `8500` kg, Berat Kosong = `3200` kg.
-    *   Verifikasi bahwa Netto otomatis terhitung `5300` kg secara instan (`8500 - 3200`). Ketuk **Simpan Hasil Timbang**.
+    *   Verifikasi bahwa Netto otomatis terhitung `5300` kg secara instan (`8500 - 3200`).
+    *   **(BARU)** Verifikasi teks **"Estimasi dari janjang: X kg (56 jjg × 15 kg)"** tampil di bawah Netto. Contoh: jika checker 56 janjang → estimasi `840 kg`; bandingkan dengan netto aktual `5300 kg` (selisih wajar karena estimasi hanya dari janjang).
+    *   Ketuk **Simpan Hasil Timbang**.
 *   **Pilihan Data Tidak Valid (Unhappy Path)**:
-    *   **Scan Barcode Acak**: Arahkan pemindai ke barcode barang belanjaan atau QR code eksternal yang bukan SPB Sawitin. Verifikasi muncul error: "QR Code tidak valid" atau "Signature gagal diverifikasi".
-    *   **Validasi Berat Timbangan**: Pada formulir pencatatan timbangan, masukkan Berat Isi = `3000` kg dan Berat Kosong = `3500` kg (berat kosong lebih besar). Ketuk simpan. Verifikasi sistem menolak dengan peringatan "Timbang isi harus lebih besar daripada timbang kosong".
+    *   **Scan Barcode Acak**: Arahkan pemindai ke barcode barang belanjaan / QR eksternal yang bukan SPB Sawitin. Verifikasi error "Format Tidak Valid" / "QR Code tidak valid".
+    *   **Validasi Berat**: Masukkan Berat Isi = `3000` kg dan Berat Kosong = `3500` kg. Ketuk simpan. Verifikasi sistem menolak dengan peringatan "Timbang isi harus lebih besar daripada timbang kosong".
 
 ---
 
 ## Modul 4: Aksi Persetujuan & Penolakan BKM (Asisten)
 
-*Tujuan: Menguji alur verifikasi berkas oleh Asisten Afdeling/Kebun.*
+*Tujuan: Menguji alur verifikasi berkas oleh Asisten Afdeling/Kebun. Pastikan role Asisten kini memiliki permission `approve`.*
 
 *   **Aktor Uji Coba**: Login sebagai Asisten Afdeling (`username: asisten1`, `password: password123`).
 *   **Pilihan Data Valid (Happy Path)**:
-    *   **Skenario Penolakan**: Cari dokumen BKM Panen milik Mandor yang berstatus `SUBMITTED`. Buka detailnya, ketuk **Minta Revisi** (Reject), ketik catatan alasan revisi: "Jumlah janjang di TPH 01 tidak akurat". Kirim revisi. Verifikasi status dokumen berubah menjadi `REVISION_REQUESTED`.
-    *   **Skenario Persetujuan**: Pilih dokumen BKM Panen `SUBMITTED` lainnya. Ketuk **Setujui** (Approve). Konfirmasi pada modal pop-up. Verifikasi status dokumen berubah secara *real-time* menjadi `APPROVED` dan tombol persetujuan menghilang.
+    *   **Skenario Penolakan**: Cari dokumen BKM Panen `SUBMITTED`. Buka detail, ketuk **Minta Revisi** (Reject), isi catatan "Jumlah janjang di TPH 01 tidak akurat". Kirim revisi → status `REVISION_REQUESTED` (atau `DRAFT` sesuai status machine).
+    *   **Skenario Persetujuan**: Pilih dokumen BKM Panen `SUBMITTED` lain. Ketuk **Setujui** (Approve), konfirmasi modal → status berubah real-time menjadi `APPROVED` dan tombol persetujuan menghilang.
 *   **Pilihan Data Tidak Valid (Unhappy Path)**:
-    *   Coba ketuk tombol persetujuan pada dokumen yang statusnya sudah `APPROVED` atau `CANCELLED`. Verifikasi backend menolak aksi tersebut dan memunculkan error.
+    *   Ketuk tombol persetujuan pada dokumen berstatus `APPROVED`/`CANCELLED` → backend menolak dan memunculkan error.
 
 ---
 
@@ -117,31 +160,32 @@ Gunakan kredensial berikut untuk login sesuai dengan skenario peran:
 
 *Tujuan: Memvalidasi verifikasi wilayah kerja (GPS Geofencing) saat absen masuk.*
 
-*   **Aktor Uji Coba**: Login sebagai Mandor Panen (`username: mandor1`, `password: password123`) atau Pemanen (`username: pemanen1`, `password: password123`).
+*   **Aktor Uji Coba**: Login sebagai Mandor Panen (`mandor1`) atau Pemanen (`pemanen1`, akun baru tersedia).
 *   **Pilihan Data Valid (Happy Path)**:
-    *   **Data Pilihan**: Pilih **Blok pertama** di daftar lokasi (biasanya *Blok A1*).
+    *   Pilih **Blok pertama** di daftar lokasi (biasanya *Blok A1*).
     *   Ketuk tombol lingkaran besar **CLOCK IN**.
-    *   **Hasil**: Koordinat *Blok A1* disimulasikan sama dengan koordinat GPS Anda (Jarak 0m / dalam batas 100m). Absen berhasil disimpan dengan badge hijau bertuliskan **"Sesuai"**.
+    *   **Hasil**: Koordinat *Blok A1* disimulasikan sama dengan koordinat GPS (Jarak 0m / dalam batas 100m). Absen berhasil dengan badge hijau **"Sesuai"**.
 *   **Pilihan Data Tidak Valid (Unhappy Path / Peringatan)**:
-    *   **Data Pilihan**: Pilih **Blok kedua atau blok lainnya** (seperti *Blok A2* atau *Blok B1*).
-    *   Ketuk tombol lingkaran besar **CLOCK IN**.
-    *   **Hasil**: Koordinat blok lain disimulasikan berjarak ~160m dari GPS Anda (di luar batas 100m). Sistem akan memunculkan modal dialog **⚠️ Peringatan Geofencing**.
-    *   Ketik alasan absensi (misal: "Absen di pos afdeling dekat gerbang") dan ketuk **Kirim Absen**. Verifikasi data absen berhasil disimpan dengan badge jingga bertuliskan **"Luar Blok"**.
+    *   Pilih **Blok kedua atau lainnya** (*Blok A2* / *Blok B1*).
+    *   Ketuk **CLOCK IN** → koordinat blok lain disimulasikan ~160m dari GPS (di luar 100m) → muncul modal **⚠️ Peringatan Geofencing**.
+    *   Ketik alasan (misal "Absen di pos afdeling dekat gerbang") dan ketuk **Kirim Absen** → tersimpan dengan badge jingga **"Luar Blok"**.
+
+> ⚠️ Catatan: geofencing saat ini masih memakai koordinat simulasi (`MOCK_BLOCK_COORDINATES`) karena master blok belum memiliki polygon batas. Ini disengaja untuk demo.
 
 ---
 
 ## Modul 6: Pencatatan Log Perawatan Kebun / BKM Rawat (Mandor)
 
-*Tujuan: Memastikan log perawatan (pemupukan/semprot kimia) dapat diinput.*
+*Tujuan: Memastikan log perawatan dapat diinput dengan kaskade kelompok → blok → lahan (sesuai data-model backend).*
 
-*   **Aktor Uji Coba**: Login sebagai Mandor Panen (`username: mandor1`, `password: password123`).
+*   **Aktor Uji Coba**: Login sebagai Mandor Panen (`mandor1`, `password: password123`).
 *   **Pilihan Data Valid (Happy Path)**:
     *   Ketuk tombol bulat `+` di pojok kanan bawah.
-    *   Di modal pop-up yang muncul (sekarang tampil penuh tanpa terpotong), pilih Kelompok Lahan = `Kelompok Tani Maju`, Lahan = `Lahan A1-1`, dan Blok = `Blok A1 (Opsional)`.
-    *   Masukkan Nama Pengawas = "Mandor Anto" dan tentukan tanggal pelaksanaan hari ini.
-    *   Ketuk **Buat BKM Rawat**. Verifikasi data log tersimpan dan muncul paling atas pada daftar.
+    *   **Kelompok Lahan** = `Kelompok Tani Maju` → dropdown **Blok** menampilkan blok pada kelompok tersebut (misal `Blok A1`). Pilih `Blok A1` → dropdown **Lahan (Opsional)** menampilkan `Lahan Blok A`.
+    *   Masukkan Nama Pengawas = "Mandor Anto", Tanggal Pelaksanaan = hari ini.
+    *   Ketuk **Buat BKM Rawat**. Verifikasi data tersimpan dan muncul paling atas pada daftar.
 *   **Pilihan Data Tidak Valid (Unhappy Path)**:
-    *   Coba kirim formulir BKM Rawat baru dengan mengosongkan pilihan Kelompok Lahan, Lahan, atau Nama Pengawas. Verifikasi sistem menampilkan peringatan "Form Belum Lengkap".
+    *   Kirim tanpa Kelompok Lahan atau Blok → peringatan "Kelompok lahan wajib dipilih" / "Blok wajib dipilih".
 
 ---
 
@@ -151,10 +195,28 @@ Gunakan kredensial berikut untuk login sesuai dengan skenario peran:
 
 *   **Aktor Uji Coba**: Dapat menggunakan akun Mandor (`mandor1`) atau Pemanen (`pemanen1`).
 *   **Pilihan Data Valid (Happy Path)**:
-    *   Saat perangkat online, buka menu **Panen** dan **Absensi** untuk memastikan data ter-cache.
-    *   Aktifkan **Mode Pesawat (Airplane Mode)** pada emulator/HP untuk memutus internet.
-    *   Buka kembali daftar **Panen**. Pastikan data BKM Panen yang ter-cache tetap bisa dibaca secara luring (offline fallback).
-    *   Lakukan Absen Masuk (Modul 5) saat offline. Transaksi akan langsung disimpan ke database SQLite lokal (`sync_queue`).
-    *   Aktifkan kembali internet. Verifikasi antrean offline otomatis tersinkronisasi kembali ke backend API dan daftar histori absen ter-update.
+    *   Saat online, buka menu **Panen** dan **Absensi** untuk memastikan data ter-cache.
+    *   Aktifkan **Mode Pesawat (Airplane Mode)**.
+    *   Buka kembali daftar **Panen**. Pastikan data BKM Panen ter-cache tetap bisa dibaca (offline fallback).
+    *   Lakukan Absen Masuk (Modul 5) saat offline → transaksi disimpan ke SQLite lokal (`sync_queue`).
+    *   Aktifkan kembali internet → antrean offline otomatis tersinkronisasi ke backend dan histori absen ter-update.
 *   **Pilihan Data Tidak Valid (Unhappy Path)**:
-    *   Coba lakukan sinkronisasi paksa saat jaringan internet Anda masih mati atau bermasalah. Verifikasi sistem tidak crash dan mempertahankan data antrean luring di SQLite dengan aman hingga koneksi pulih kembali.
+    *   Lakukan sinkronisasi paksa saat jaringan masih mati → sistem tidak crash dan mempertahankan data antrean luring dengan aman hingga koneksi pulih.
+
+---
+
+## Lampiran A: Referensi Endpoint Baru
+
+| Endpoint | Deskripsi |
+| :--- | :--- |
+| `GET /orgConfig` | Mengembalikan `{ "bjr": 15 }` — BJR (Berat Janjang Rata-rata) organisasi. Sumber estimasi tonase di mobile. |
+| `PUT /bkmChecker/:id` `{status:"SUBMITTED"}` | Saat `bkm_panen_id` tertaut, backend menolak (400) bila selisih janjang > `DISCREPANCY_TOLERANCE_PCT` (2%). |
+
+## Lampiran B: Perubahan Data-Model Mobile (per rilis ini)
+
+Agar sesuai backend, field mobile diselaraskan:
+
+- `Lahan.blok_id` (bukan `kelompok_lahan_id`) — lahan milik blok
+- `Blok.kelompok_lahan_id` (bukan `lahan_id`) — blok milik kelompok lahan
+- `Tph.lahan_id` (bukan `blok_id`) — TPH milik lahan
+- Filter BKM Panen Step 1 (lahan by blok), BKM Checker Step 1 (TPH by blok via lahan), dan kaskade BKM Rawat (kelompok → blok → lahan) diperbaiki mengikuti model ini.
