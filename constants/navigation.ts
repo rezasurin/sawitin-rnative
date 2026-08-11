@@ -39,8 +39,10 @@ const ROLE_ROUTE_MAP: Record<string, RoleRouteGroup> = {
   'krani timbang': '(krani)',
   krani: '(krani)',
   asisten: '(asisten)',
+  'asisten afdeling': '(asisten)',
   manajer: '(asisten)',
   manager: '(asisten)',
+  'manajer kebun': '(asisten)',
   admin: '(admin)',
   administrator: '(admin)',
 };
