@@ -33,5 +33,6 @@ System configurations dashboard: manages master data settings and the materials 
 Explore design frameworks and planned development specs:
 
 * **[Design Brief: BKM Panen Digital](bkm-panen-guides.md)**: Color tokens (Olive Green, Gold), Inter typography, padding guidelines, and 4-step wizard UI specifications.
+* **[Panduan Uji Kasus Nyata (Real-Case E2E)](real-case-testing-guide.md)**: Palm-oil agronomic test scenarios with the `SCENARIO-REAL` seed chain, per-role workflows, and an agronomic validation matrix (Fraksi 2+3 ≥ 85%, BJR estimate accuracy, reconciliation tolerance).
 * **[Technical Specifications: Upcoming Features](upcoming-features.md)**: Details upcoming implementations of offline database caching (SQLite), Vision Camera QR scanners, GPS Geofencing boundaries, and Bluetooth ESC/POS printing.
 * **[General Frontend Guides](guides.md)**: Original developer brief covering router gates and local sync queues.
