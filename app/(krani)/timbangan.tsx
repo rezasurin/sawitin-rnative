@@ -1,29 +1,77 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { BrandColors } from '@/constants/Colors';
-import { PageHeader } from '@/components/home';
-import { bkmCheckerApi } from '@/services/bkm-checker.service';
-import { useCreateKraniTimbang } from '@/hooks/useKraniTimbang';
-import { useOrgConfig } from '@/hooks/useOrgConfig';
+import { Button } from "@/components/core/Button";
+import { FormField } from "@/components/form";
+import { KraniTimbangHistory } from "@/components/krani/KraniTimbangHistory";
+import { PageHeader } from "@/components/home";
+import { BrandColors } from "@/constants/Colors";
+import { useCreateKraniTimbang } from "@/hooks/useKraniTimbang";
+import { useKraniTimbangDetail } from "@/hooks/useKraniTimbang";
+import { useOrgConfig } from "@/hooks/useOrgConfig";
+import { bkmCheckerApi } from "@/services/bkm-checker.service";
+import type { KraniTimbang } from "@/types";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { useQuery } from "@tanstack/react-query";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TimbanganScreen() {
   const router = useRouter();
-  const { checkerId } = useLocalSearchParams<{ checkerId: string }>();
+  const insets = useSafeAreaInsets();
+  const { checkerId, detailId } = useLocalSearchParams<{
+    checkerId?: string;
+    detailId?: string;
+  }>();
 
   // Form states
-  const [timbangIsi, setTimbangIsi] = useState('');
-  const [timbangKosong, setTimbangKosong] = useState('');
-  const [keterangan, setKeterangan] = useState('');
+  const [timbangIsi, setTimbangIsi] = useState("");
+  const [timbangKosong, setTimbangKosong] = useState("");
+  const [keterangan, setKeterangan] = useState("");
+
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", () =>
+      setKeyboardVisible(true),
+    );
+    const hideSub = Keyboard.addListener("keyboardDidHide", () =>
+      setKeyboardVisible(false),
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Query BKM Checker details
-  const { data: checker, isLoading, isError, refetch } = useQuery({
-    queryKey: ['bkmChecker', checkerId],
+  const {
+    data: checker,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ["bkmChecker", checkerId],
     queryFn: () => bkmCheckerApi.getById(checkerId!),
     enabled: !!checkerId,
   });
+
+  const {
+    data: detail,
+    isLoading: isDetailLoading,
+    isError: isDetailError,
+    refetch: refetchDetail,
+  } = useKraniTimbangDetail(detailId ?? "");
 
   const createMutation = useCreateKraniTimbang();
 
@@ -32,122 +80,131 @@ export default function TimbanganScreen() {
 
   // Reset form when checkerId changes
   useEffect(() => {
-    setTimbangIsi('');
-    setTimbangKosong('');
-    setKeterangan('');
+    setTimbangIsi("");
+    setTimbangKosong("");
+    setKeterangan("");
   }, [checkerId]);
 
-  // Calculate Netto in real-time
-  const isiVal = parseFloat(timbangIsi) || 0;
-  const kosongVal = parseFloat(timbangKosong) || 0;
-  const nettoVal = Math.max(0, isiVal - kosongVal);
+  // Helper to parse weight input cleanly (handles Indonesian dot thousand separator e.g. 5.000 -> 5000)
+  const parseWeight = (val: string): number => {
+    if (!val) return 0;
+    const cleaned = val.trim().replace(/\./g, '').replace(',', '.');
+    return parseFloat(cleaned) || 0;
+  };
+
+  // Calculate Netto & validation in real-time
+  const isiVal = parseWeight(timbangIsi);
+  const kosongVal = parseWeight(timbangKosong);
+  const hasIsi = timbangIsi.trim() !== "";
+  const hasKosong = timbangKosong.trim() !== "";
+  const isWeightInvalid = hasIsi && hasKosong && isiVal <= kosongVal;
+  const nettoVal = isWeightInvalid ? 0 : Math.max(0, isiVal - kosongVal);
+
+  const totalJanjang =
+    checker?.details?.reduce((acc, curr) => acc + curr.jumlah_janjang, 0) ?? 0;
+  const totalBrondol =
+    checker?.details?.reduce((acc, curr) => acc + curr.jumlah_brondol, 0) ?? 0;
+  const estimatedKg = totalJanjang * bjr;
+
+  const diffKg = Math.abs(nettoVal - estimatedKg);
+  const diffPct = estimatedKg > 0 ? (diffKg / estimatedKg) * 100 : 0;
+  const hasDiscrepancy = nettoVal > 0 && estimatedKg > 0 && diffPct > 20;
 
   const handleSubmit = () => {
     if (!checker) return;
-    if (!timbangIsi || !timbangKosong) {
-      Alert.alert('Form Belum Lengkap', 'Silakan isi timbang isi dan timbang kosong.');
+    if (!hasIsi || !hasKosong) {
+      Alert.alert(
+        "Form Belum Lengkap",
+        "Silakan isi timbang isi dan timbang kosong.",
+      );
       return;
     }
 
-    if (isiVal <= kosongVal) {
-      Alert.alert('Validasi Berat', 'Timbang isi harus lebih besar daripada timbang kosong.');
+    if (isWeightInvalid || isiVal <= kosongVal) {
+      Alert.alert(
+        "Validasi Berat",
+        "Timbang isi harus lebih besar daripada timbang kosong.",
+      );
       return;
     }
 
     const firstDetail = checker.details?.[0];
     const payload = {
-      nama_supir: firstDetail?.nama_sopir || 'Sopir SPB',
-      nomor_kendaraan: firstDetail?.nomor_truk || 'Kendaraan SPB',
-      tujuan_kirim: firstDetail?.tujuan_kirim || 'Pabrik',
-      tanggal: new Date().toISOString().split('T')[0],
+      nama_supir: firstDetail?.nama_sopir || "Sopir SPB",
+      nomor_kendaraan: firstDetail?.nomor_truk || "Kendaraan SPB",
+      tujuan_kirim: firstDetail?.tujuan_kirim || "Pabrik",
+      tanggal: new Date().toISOString().split("T")[0],
       timbang_isi: isiVal,
       timbang_kosong: kosongVal,
       netto: nettoVal,
-      origin_source: 'BKM_CHECKER' as const,
+      origin_source: "BKM_CHECKER" as const,
       keterangan: keterangan || undefined,
-      source_checker_ids: [checkerId],
+      source_checker_ids: checkerId ? [checkerId] : [],
       details: [
         {
-          kelompok_lahan_id: checker.blok?.kelompok_lahan_id || '',
-          tph_id: checker.tph_id || '',
+          kelompok_lahan_id: checker.blok?.kelompok_lahan_id || "",
+          tph_id: checker.tph_id || "",
           jumlah_janjang: totalJanjang,
           jumlah_brondol: totalBrondol,
-        }
+        },
       ],
     };
 
     createMutation.mutate(payload, {
       onSuccess: () => {
-        Alert.alert('Berhasil', 'Data timbangan berhasil disimpan.', [
+        Alert.alert("Berhasil", "Data timbangan berhasil disimpan.", [
           {
-            text: 'OK',
+            text: "OK",
             onPress: () => {
-              router.setParams({ checkerId: undefined });
-              router.replace('/(krani)');
+              router.setParams({ checkerId: undefined, detailId: undefined });
             },
           },
         ]);
       },
       onError: (err) => {
-        Alert.alert('Gagal', err instanceof Error ? err.message : 'Terjadi kesalahan saat menyimpan data timbangan.');
+        Alert.alert(
+          "Gagal",
+          err instanceof Error
+            ? err.message
+            : "Terjadi kesalahan saat menyimpan data timbangan.",
+        );
       },
     });
   };
 
-  const totalJanjang = checker?.details?.reduce((acc, curr) => acc + curr.jumlah_janjang, 0) ?? 0;
-  const totalBrondol = checker?.details?.reduce((acc, curr) => acc + curr.jumlah_brondol, 0) ?? 0;
-  const estimatedKg = (totalJanjang * bjr);
-
-  const BackButton = (
-    <Pressable
-      onPress={() => {
-        router.setParams({ checkerId: undefined });
-        router.replace('/(krani)');
-      }}
-      style={({ pressed }) => [
-        {
-          opacity: pressed ? 0.7 : 1,
-          width: 40,
-          height: 40,
-          borderRadius: 12,
-          backgroundColor: 'rgba(255,255,255,0.15)',
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-      ]}
-    >
-      <FontAwesome name="arrow-left" size={20} color={BrandColors.white} />
-    </Pressable>
-  );
+  const handleBack = () => {
+    router.setParams({ checkerId: undefined, detailId: undefined });
+  };
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
       <PageHeader
-        title="Timbangan"
-        showMenuButton={!checkerId}
-        actionBtn={checkerId ? BackButton : undefined}
+        title={detailId ? "Detail Timbangan" : "Timbangan"}
+        showMenuButton={!checkerId && !detailId}
+        showBackButton={!!checkerId || !!detailId}
+        onBack={handleBack}
       />
-      
-      {!checkerId ? (
-        <View style={styles.centerContent}>
-          <View style={styles.promptCard}>
-            <FontAwesome name="balance-scale" size={64} color={BrandColors.primary} style={styles.promptIcon} />
-            <Text style={styles.promptTitle}>Pindai QR SPB</Text>
-            <Text style={styles.promptText}>
-              Silakan pindai kode QR Surat Pengantar Buah (SPB) terlebih dahulu untuk memuat data supir, kendaraan, dan muatan secara otomatis.
-            </Text>
-            <Pressable
-              style={styles.scanBtn}
-              onPress={() => router.push('/(krani)/scan')}
-            >
-              <FontAwesome name="qrcode" size={18} color={BrandColors.white} />
-              <Text style={styles.scanBtnText}>Buka Kamera Scanner</Text>
-            </Pressable>
-          </View>
-        </View>
+
+      {detailId ? (
+        <DetailTimbanganView
+          detail={detail}
+          isLoading={isDetailLoading}
+          isError={isDetailError}
+          onRetry={() => refetchDetail()}
+        />
+      ) : !checkerId ? (
+        <KraniTimbangHistory
+          onCardPress={(id) =>
+            router.push({
+              pathname: "/(krani)/timbangan",
+              params: { detailId: id },
+            })
+          }
+          onScanPress={() => router.push("/(krani)/scan")}
+        />
       ) : isLoading ? (
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color={BrandColors.primary} />
@@ -155,131 +212,274 @@ export default function TimbanganScreen() {
         </View>
       ) : isError || !checker ? (
         <View style={styles.centerContent}>
-          <FontAwesome name="exclamation-triangle" size={48} color={BrandColors.error} />
+          <FontAwesome
+            name="exclamation-triangle"
+            size={48}
+            color={BrandColors.error}
+          />
           <Text style={styles.errorText}>Gagal mengambil data SPB</Text>
           <Pressable style={styles.retryBtn} onPress={() => refetch()}>
             <Text style={styles.retryBtnText}>Coba Lagi</Text>
           </Pressable>
         </View>
       ) : (
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Section: SPB Summary Card */}
-          <View style={styles.infoCard}>
-            <Text style={styles.cardHeaderTitle}>Informasi Dokumen SPB</Text>
-            
-            <View style={styles.divider} />
-            
-            <View style={styles.row}>
-              <Text style={styles.label}>Nama Sopir</Text>
-              <Text style={styles.value}>{checker.details?.[0]?.nama_sopir || '-'}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Nomor Kendaraan</Text>
-              <Text style={styles.value}>{checker.details?.[0]?.nomor_truk || '-'}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Tujuan Kirim</Text>
-              <Text style={styles.value}>{checker.details?.[0]?.tujuan_kirim || '-'}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Blok / TPH Asal</Text>
-              <Text style={styles.value}>
-                {checker.blok?.nama ?? '-'} / {checker.tph?.nama ?? '-'}
-              </Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Total Janjang / Brondol</Text>
-              <Text style={styles.value}>
-                {totalJanjang} Janjang / {totalBrondol} kg
-              </Text>
-            </View>
-          </View>
+        <View style={styles.formContainer}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Section: SPB Summary Card */}
+            <View style={styles.infoCard}>
+              <Text style={styles.cardHeaderTitle}>Informasi Dokumen SPB</Text>
 
-          {/* Section: Weighing Form Inputs */}
-          <View style={styles.formCard}>
-            <Text style={styles.cardHeaderTitle}>Input Timbangan Jembatan</Text>
-            <View style={styles.divider} />
+              <View style={styles.divider} />
 
-            {/* Input 1: Gross Weight */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Timbang Isi (Gross) - kg</Text>
-              <TextInput
-                style={styles.input}
+              <View style={styles.row}>
+                <Text style={styles.label}>Nama Sopir</Text>
+                <Text style={styles.value}>
+                  {checker.details?.[0]?.nama_sopir || "-"}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Nomor Kendaraan</Text>
+                <Text style={styles.value}>
+                  {checker.details?.[0]?.nomor_truk || "-"}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Tujuan Kirim</Text>
+                <Text style={styles.value}>
+                  {checker.details?.[0]?.tujuan_kirim || "-"}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Blok / TPH Asal</Text>
+                <Text style={styles.value}>
+                  {checker.blok?.nama ?? "-"} / {checker.tph?.nama ?? "-"}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Total Janjang / Brondol</Text>
+                <Text style={styles.value}>
+                  {totalJanjang} Janjang / {totalBrondol} kg
+                </Text>
+              </View>
+            </View>
+
+            {/* Section: Weighing Form Inputs */}
+            <View style={styles.formCard}>
+              <Text style={styles.cardHeaderTitle}>
+                Input Timbangan Jembatan
+              </Text>
+              <View style={styles.divider} />
+
+              {/* Input 1: Gross Weight */}
+              <FormField
+                label="Timbang Isi (Gross) - kg"
                 value={timbangIsi}
                 onChangeText={setTimbangIsi}
-                placeholder="Masukkan berat isi kendaraan"
+                placeholder="Masukkan berat isi kendaraan (misal: 6355)"
                 keyboardType="numeric"
-                placeholderTextColor={BrandColors.textMuted}
+                error={isWeightInvalid ? "Timbang isi harus lebih besar daripada timbang kosong" : undefined}
               />
-            </View>
 
-            {/* Input 2: Tare Weight */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Timbang Kosong (Tare) - kg</Text>
-              <TextInput
-                style={styles.input}
+              {/* Input 2: Tare Weight */}
+              <FormField
+                label="Timbang Kosong (Tare) - kg"
                 value={timbangKosong}
                 onChangeText={setTimbangKosong}
-                placeholder="Masukkan berat kosong kendaraan"
+                placeholder="Masukkan berat kosong kendaraan (misal: 5200)"
                 keyboardType="numeric"
-                placeholderTextColor={BrandColors.textMuted}
               />
-            </View>
 
-            {/* Output: Netto Weight */}
-            <View style={styles.nettoContainer}>
-              <Text style={styles.nettoLabel}>Berat Bersih (Netto)</Text>
-              <Text style={styles.nettoValue}>
-                {nettoVal.toLocaleString('id-ID')} <Text style={styles.kg}>kg</Text>
-              </Text>
-              {totalJanjang > 0 && (
-                <Text style={styles.estimateText}>
-                  Estimasi dari janjang: {estimatedKg.toLocaleString('id-ID')} kg ({totalJanjang} jjg × {bjr} kg)
+              {/* Output: Netto Weight */}
+              <View style={styles.nettoContainer}>
+                <Text style={styles.nettoLabel}>Berat Bersih (Netto)</Text>
+                <Text style={styles.nettoValue}>
+                  {nettoVal.toLocaleString("id-ID")}{" "}
+                  <Text style={styles.kg}>kg</Text>
                 </Text>
-              )}
-            </View>
+                {totalJanjang > 0 && (
+                  <Text style={styles.estimateText}>
+                    Estimasi dari janjang: {estimatedKg.toLocaleString("id-ID")}{" "}
+                    kg ({totalJanjang} jjg × {bjr} kg)
+                  </Text>
+                )}
+                {hasDiscrepancy && (
+                  <View style={styles.discrepancyCard}>
+                    <Text style={styles.discrepancyText}>
+                      ⚠️ Selisih {diffPct.toFixed(0)}% dari estimasi janjang ({estimatedKg.toLocaleString("id-ID")} kg). Periksa kembali kemungkinan kesalahan input atau muatan berlebih.
+                    </Text>
+                  </View>
+                )}
+              </View>
 
-            {/* Keterangan */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Keterangan (Opsional)</Text>
-              <TextInput
-                style={[styles.input, styles.multilineInput]}
+              {/* Keterangan */}
+              <FormField
+                label="Keterangan (Opsional)"
                 value={keterangan}
                 onChangeText={setKeterangan}
                 placeholder="Tambahkan catatan jika diperlukan..."
                 multiline
                 numberOfLines={3}
-                placeholderTextColor={BrandColors.textMuted}
               />
             </View>
+          </ScrollView>
 
-            {/* Submit Button */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.submitBtn,
-                pressed && styles.submitBtnPressed,
-                createMutation.isPending && styles.submitBtnDisabled,
-              ]}
+          <View
+            style={[
+              styles.footer,
+              {
+                paddingBottom: keyboardVisible
+                  ? Math.max(insets.bottom, 16)
+                  : Math.max(insets.bottom + 88, 96),
+              },
+            ]}
+          >
+            <Button
+              title="Simpan Timbangan"
               onPress={handleSubmit}
-              disabled={createMutation.isPending}
-            >
-              {createMutation.isPending ? (
-                <ActivityIndicator color={BrandColors.white} />
-              ) : (
-                <>
-                  <FontAwesome name="check-circle" size={18} color={BrandColors.white} />
-                  <Text style={styles.submitBtnText}>Simpan Timbangan</Text>
-                </>
-              )}
-            </Pressable>
+              variant="primary"
+              disabled={!hasIsi || !hasKosong || isWeightInvalid || createMutation.isPending}
+              loading={createMutation.isPending}
+              style={{ flex: 1 }}
+            />
           </View>
-        </ScrollView>
+        </View>
       )}
     </KeyboardAvoidingView>
+  );
+}
+
+function DetailTimbanganView({
+  detail,
+  isLoading,
+  isError,
+  onRetry,
+}: {
+  detail?: KraniTimbang;
+  isLoading: boolean;
+  isError: boolean;
+  onRetry: () => void;
+}) {
+  if (isLoading) {
+    return (
+      <View style={styles.centerContent}>
+        <ActivityIndicator size="large" color={BrandColors.primary} />
+        <Text style={styles.loadingText}>Memuat detail...</Text>
+      </View>
+    );
+  }
+
+  if (isError || !detail) {
+    return (
+      <View style={styles.centerContent}>
+        <FontAwesome
+          name="exclamation-triangle"
+          size={48}
+          color={BrandColors.error}
+        />
+        <Text style={styles.errorText}>Gagal memuat detail</Text>
+        <Pressable style={styles.retryBtn} onPress={onRetry}>
+          <Text style={styles.retryBtnText}>Coba Lagi</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const details = detail.details ?? [];
+  const totalJanjang = details.reduce(
+    (acc, d) => acc + (Number(d.jumlah_janjang) || 0),
+    0,
+  );
+  const totalBrondol = details.reduce(
+    (acc, d) => acc + (Number(d.jumlah_brondol) || 0),
+    0,
+  );
+
+  return (
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.detailScrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.infoCard}>
+        <Text style={styles.cardHeaderTitle}>Informasi Dokumen</Text>
+        <View style={styles.divider} />
+        <View style={styles.row}>
+          <Text style={styles.label}>Nama Sopir</Text>
+          <Text style={styles.value}>{detail.nama_supir || "-"}</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Nomor Kendaraan</Text>
+          <Text style={styles.value}>{detail.nomor_kendaraan || "-"}</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Tujuan Kirim</Text>
+          <Text style={styles.value}>{detail.tujuan_kirim || "-"}</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Tanggal</Text>
+          <Text style={styles.value}>{detail.tanggal || "-"}</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Total Janjang / Brondol</Text>
+          <Text style={styles.value}>
+            {totalJanjang} Janjang / {totalBrondol} kg
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.formCard}>
+        <Text style={styles.cardHeaderTitle}>Hasil Timbangan</Text>
+        <View style={styles.divider} />
+        <View style={styles.row}>
+          <Text style={styles.label}>Timbang Isi (Gross)</Text>
+          <Text style={styles.value}>
+            {detail.timbang_isi?.toLocaleString("id-ID") ?? 0} kg
+          </Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Timbang Kosong (Tare)</Text>
+          <Text style={styles.value}>
+            {detail.timbang_kosong?.toLocaleString("id-ID") ?? 0} kg
+          </Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Berat Bersih (Netto)</Text>
+          <Text
+            style={[
+              styles.value,
+              { color: BrandColors.primary, fontWeight: "800" },
+            ]}
+          >
+            {detail.netto?.toLocaleString("id-ID") ?? 0} kg
+          </Text>
+        </View>
+        {detail.keterangan ? (
+          <Text style={styles.detailNote}>Catatan: {detail.keterangan}</Text>
+        ) : null}
+      </View>
+
+      {details.length > 0 ? (
+        <View style={styles.formCard}>
+          <Text style={styles.cardHeaderTitle}>Detail Muatan</Text>
+          <View style={styles.divider} />
+          {details.map((d) => (
+            <View key={d.id} style={styles.detailMuatanRow}>
+              <Text style={styles.detailMuatanText}>
+                {d.kelompok_lahan?.nama ?? d.kelompok_lahan_id} /{" "}
+                {d.tph?.nama ?? d.tph_id}
+              </Text>
+              <Text style={styles.detailMuatanText}>
+                {d.jumlah_janjang} jjg / {d.jumlah_brondol} kg
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </ScrollView>
   );
 }
 
@@ -290,52 +490,9 @@ const styles = StyleSheet.create({
   },
   centerContent: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 24,
-  },
-  promptCard: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 24,
-    padding: 32,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E9ECEF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
-    shadowRadius: 16,
-    elevation: 4,
-  },
-  promptIcon: {
-    marginBottom: 20,
-  },
-  promptTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: BrandColors.textPrimary,
-    marginBottom: 12,
-  },
-  promptText: {
-    fontSize: 14,
-    color: BrandColors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 28,
-  },
-  scanBtn: {
-    backgroundColor: BrandColors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 16,
-  },
-  scanBtnText: {
-    color: BrandColors.white,
-    fontWeight: '700',
-    fontSize: 15,
   },
   loadingText: {
     marginTop: 16,
@@ -345,7 +502,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: BrandColors.error,
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: 16,
     marginBottom: 16,
   },
@@ -357,21 +514,52 @@ const styles = StyleSheet.create({
   },
   retryBtnText: {
     color: BrandColors.white,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   scrollView: {
     flex: 1,
   },
+  formContainer: {
+    flex: 1,
+  },
+  footer: {
+    flexDirection: "row",
+    gap: 12,
+    padding: 16,
+    backgroundColor: BrandColors.background,
+    borderTopWidth: 1,
+    borderTopColor: BrandColors.inputBorder,
+  },
   scrollContent: {
     padding: 16,
-    paddingBottom: 120,
+    paddingBottom: 24,
+  },
+  detailScrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  detailNote: {
+    fontSize: 13,
+    color: BrandColors.textSecondary,
+    fontStyle: "italic",
+    marginTop: 12,
+  },
+  detailMuatanRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+  },
+  detailMuatanText: {
+    fontSize: 14,
+    color: BrandColors.textPrimary,
+    flex: 1,
   },
   infoCard: {
-    backgroundColor: '#F9FBF7',
+    backgroundColor: "#F9FBF7",
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#EAEFE6',
+    borderColor: "#EAEFE6",
     marginBottom: 16,
   },
   formCard: {
@@ -379,8 +567,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#EDEDED',
-    shadowColor: '#000',
+    borderColor: "#EDEDED",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
@@ -388,17 +576,17 @@ const styles = StyleSheet.create({
   },
   cardHeaderTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
     color: BrandColors.textPrimary,
   },
   divider: {
     height: 1,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: "#E0E0E0",
     marginVertical: 12,
   },
   row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingVertical: 8,
   },
   label: {
@@ -407,16 +595,16 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: BrandColors.textPrimary,
-    textAlign: 'right',
+    textAlign: "right",
   },
   inputContainer: {
     marginBottom: 16,
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: BrandColors.textPrimary,
     marginBottom: 8,
   },
@@ -428,65 +616,60 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
     color: BrandColors.textPrimary,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: "#FAFAFA",
   },
   multilineInput: {
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
     height: 80,
   },
   nettoContainer: {
-    backgroundColor: '#F1F8E9',
-    borderColor: '#DCEDC8',
+    backgroundColor: "#F1F8E9",
+    borderColor: "#DCEDC8",
     borderWidth: 1,
     borderRadius: 12,
     padding: 16,
-    alignItems: 'center',
+    alignItems: "center",
     marginVertical: 8,
     marginBottom: 20,
   },
   nettoLabel: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#558B2F',
-    textTransform: 'uppercase',
+    fontWeight: "600",
+    color: "#558B2F",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   nettoValue: {
     fontSize: 32,
-    fontWeight: '900',
-    color: '#33691E',
+    fontWeight: "900",
+    color: "#33691E",
   },
   kg: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   estimateText: {
     fontSize: 13,
-    color: '#558B2F',
+    color: "#558B2F",
     marginTop: 8,
-    textAlign: 'center',
-    fontWeight: '600',
+    textAlign: "center",
+    fontWeight: "600",
   },
-  submitBtn: {
-    backgroundColor: BrandColors.primary,
-    flexDirection: 'row',
-    height: 52,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 12,
+  discrepancyCard: {
+    backgroundColor: "#FFF3E0",
+    borderColor: "#E65100",
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+    width: "100%",
   },
-  submitBtnPressed: {
-    backgroundColor: BrandColors.primaryDark,
-  },
-  submitBtnDisabled: {
-    opacity: 0.6,
-  },
-  submitBtnText: {
-    color: BrandColors.white,
-    fontSize: 16,
-    fontWeight: '700',
+  discrepancyText: {
+    fontSize: 12,
+    color: "#E65100",
+    fontWeight: "600",
+    textAlign: "center",
+    lineHeight: 18,
   },
 });
