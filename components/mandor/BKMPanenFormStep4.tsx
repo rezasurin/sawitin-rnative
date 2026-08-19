@@ -1,4 +1,5 @@
 import { Text, View } from '@/components/Themed';
+import { Button } from '@/components/core/Button';
 import { BrandColors } from '@/constants/Colors';
 import { useSubmitBkmPanen } from '@/hooks/useBkmPanen';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
@@ -10,7 +11,6 @@ import { useQuery } from '@tanstack/react-query';
 import React, { useMemo, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -261,22 +261,14 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
           <Text style={styles.editButtonText}>Edit Data</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.submitButton,
-            (!confirmed || submitMutation.isPending) &&
-              styles.submitButtonDisabled,
-          ]}
+        <Button
+          title="Submit BKM"
           onPress={handleSubmit}
-          disabled={!confirmed || submitMutation.isPending}
-          activeOpacity={0.7}
-        >
-          {submitMutation.isPending ? (
-            <ActivityIndicator color={BrandColors.white} />
-          ) : (
-            <Text style={styles.submitButtonText}>Submit BKM</Text>
-          )}
-        </TouchableOpacity>
+          variant="primary"
+          disabled={!confirmed}
+          loading={submitMutation.isPending}
+          style={{ flex: 2 }}
+        />
       </View>
     </View>
   );
@@ -437,19 +429,5 @@ const styles = StyleSheet.create({
     color: BrandColors.textSecondary,
     fontSize: 16,
     fontWeight: '500',
-  },
-  submitButton: {
-    flex: 2,
-    backgroundColor: BrandColors.button,
-    height: 48,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButtonDisabled: { opacity: 0.5 },
-  submitButtonText: {
-    color: BrandColors.white,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

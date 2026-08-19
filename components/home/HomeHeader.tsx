@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { BrandColors } from '@/constants/Colors';
@@ -15,20 +15,40 @@ export function HomeHeader() {
 
   return (
     <View
-      className="flex-row items-center justify-between px-4 pb-4"
-      style={{
-        backgroundColor: BrandColors.primary,
-        paddingTop: insets.top + 12,
-      }}
+      style={[
+        styles.header,
+        {
+          backgroundColor: BrandColors.primary,
+          paddingTop: insets.top + 12,
+        },
+      ]}
     >
-      <Text className="text-white text-2xl font-bold">SAWITIN</Text>
+      <Text style={styles.title}>SAWITIN</Text>
       <Pressable
         onPress={openDrawer}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        className="p-2"
+        style={styles.menuButton}
       >
         <FontAwesome name="bars" size={24} color={BrandColors.white} />
       </Pressable>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  title: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  menuButton: {
+    padding: 8,
+  },
+});

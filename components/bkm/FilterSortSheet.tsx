@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Button } from '@/components/core/Button';
 import { BrandColors } from '@/constants/Colors';
 import { useQuery } from '@tanstack/react-query';
 import { blokApi, lahanApi } from '@/services';
@@ -272,9 +273,7 @@ export function FilterSortSheet({
         </ScrollView>
 
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.applyButton} onPress={handleApply} activeOpacity={0.8}>
-            <Text style={styles.applyButtonText}>Terapkan</Text>
-          </TouchableOpacity>
+          <Button title="Terapkan" onPress={handleApply} variant="primary" />
         </View>
       </Animated.View>
     </Modal>
@@ -375,17 +374,5 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: BrandColors.inputBorder,
-  },
-  applyButton: {
-    backgroundColor: BrandColors.button,
-    height: 48,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  applyButtonText: {
-    color: BrandColors.white,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

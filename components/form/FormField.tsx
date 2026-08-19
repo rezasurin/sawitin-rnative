@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   TextInput,
   View,
@@ -7,6 +7,7 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { BrandColors } from '@/constants/Colors';
 
 interface FormFieldProps extends TextInputProps {
@@ -19,17 +20,46 @@ export function FormField({
   label,
   error,
   containerStyle,
+  onFocus,
+  onBlur,
+  multiline,
   ...props
 }: FormFieldProps) {
+  const [focused, setFocused] = useState(false);
+
   return (
     <View style={[styles.container, containerStyle]}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
-        style={[styles.input, error && styles.inputError]}
+        style={[
+          styles.input,
+          multiline && styles.inputMultiline,
+          focused && styles.inputFocused,
+          error && styles.inputError,
+        ]}
         placeholderTextColor={BrandColors.textMuted}
+        accessibilityLabel={label}
+        multiline={multiline}
+        onFocus={(e) => {
+          setFocused(true);
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          onBlur?.(e);
+        }}
         {...props}
       />
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? (
+        <View
+          style={styles.errorContainer}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+        >
+          <Ionicons name="alert-circle" size={14} color={BrandColors.error} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -54,12 +84,29 @@ const styles = StyleSheet.create({
     color: BrandColors.textPrimary,
     backgroundColor: BrandColors.white,
   },
+  inputMultiline: {
+    height: undefined,
+    minHeight: 96,
+    paddingTop: 12,
+    paddingBottom: 12,
+    textAlignVertical: 'top',
+  },
+  inputFocused: {
+    borderColor: BrandColors.inputFocus,
+    borderWidth: 1.5,
+  },
   inputError: {
     borderColor: BrandColors.error,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
+    marginTop: 6,
   },
   errorText: {
     fontSize: 12,
     color: BrandColors.error,
-    marginTop: 4,
+    flex: 1,
   },
 });

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { bkmCheckerApi } from '@/services/bkm-checker.service';
 import { bkmCheckerKeys } from '@/services/queryKeys';
 import type { ApiListParams } from '@/types/common';
@@ -15,6 +15,26 @@ export function useBkmCheckerList(params?: ApiListParams) {
   return useQuery({
     queryKey: bkmCheckerKeys.list(params),
     queryFn: () => bkmCheckerApi.getAll(params),
+  });
+}
+
+export function useBkmCheckerInfinite(params?: ApiListParams) {
+  return useInfiniteQuery({
+    queryKey: bkmCheckerKeys.list(params),
+    queryFn: ({ pageParam = 1 }) =>
+      bkmCheckerApi.getAll({
+        ...params,
+        page: pageParam,
+        limit: params?.limit ?? 20,
+      }),
+    getNextPageParam: (lastPage) => {
+      if (!lastPage?.pagination) return undefined;
+      if (lastPage.pagination.page < lastPage.pagination.totalPages) {
+        return lastPage.pagination.page + 1;
+      }
+      return undefined;
+    },
+    initialPageParam: 1,
   });
 }
 

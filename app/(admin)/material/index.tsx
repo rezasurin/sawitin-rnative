@@ -1,13 +1,16 @@
+import { Badge } from '@/components/core/Badge';
+import { Card } from '@/components/core/Card';
 import { FAB } from '@/components/core/FAB';
+import { ListEmptyState } from '@/components/core/ListEmptyState';
+import { PageHeader } from '@/components/home';
 import { View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { useMaterialList, useDeleteMaterial } from '@/hooks/useMaterial';
 import type { Material, GlobalStatus } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   RefreshControl,
@@ -23,24 +26,8 @@ const STATUS_CONFIG: Record<GlobalStatus, { color: string; bg: string; label: st
 
 function StatusBadge({ status }: { status: GlobalStatus }) {
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.INACTIVE;
-  return (
-    <View style={[badgeStyles.badge, { backgroundColor: cfg.bg }]}>
-      <Text style={[badgeStyles.text, { color: cfg.color }]}>{cfg.label}</Text>
-    </View>
-  );
+  return <Badge label={cfg.label} color={cfg.color} bg={cfg.bg} />;
 }
-
-const badgeStyles = StyleSheet.create({
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  text: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-});
 
 function MaterialCard({
   item,
@@ -52,31 +39,33 @@ function MaterialCard({
   onDelete: () => void;
 }) {
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
-      <View style={styles.cardHeader}>
-        <View style={styles.cardTitleRow}>
-          <Ionicons name="cube" size={18} color={BrandColors.primary} />
-          <Text style={styles.cardTitle}>{item.nama}</Text>
+    <Card>
+      <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+        <View style={styles.cardHeader}>
+          <View style={styles.cardTitleRow}>
+            <Ionicons name="cube" size={18} color={BrandColors.primary} />
+            <Text style={styles.cardTitle}>{item.nama}</Text>
+          </View>
+          <StatusBadge status={item.status} />
         </View>
-        <StatusBadge status={item.status} />
-      </View>
-      <View style={styles.cardBody}>
-        <Text style={styles.cardMeta}>Kode: {item.kode}</Text>
-        <Text style={styles.cardMeta}>Kategori: {item.kategori}</Text>
-        <Text style={styles.cardMeta}>Satuan: {item.satuan}</Text>
-        {item.harga_satuan !== null && (
-          <Text style={styles.cardMeta}>
-            Harga: Rp {item.harga_satuan.toLocaleString('id-ID')}
-          </Text>
-        )}
-        {item.stok !== null && (
-          <Text style={styles.cardMeta}>Stok: {item.stok}</Text>
-        )}
-      </View>
+        <View style={styles.cardBody}>
+          <Text style={styles.cardMeta}>Kode: {item.kode}</Text>
+          <Text style={styles.cardMeta}>Kategori: {item.kategori}</Text>
+          <Text style={styles.cardMeta}>Satuan: {item.satuan}</Text>
+          {item.harga_satuan !== null && (
+            <Text style={styles.cardMeta}>
+              Harga: Rp {item.harga_satuan.toLocaleString('id-ID')}
+            </Text>
+          )}
+          {item.stok !== null && (
+            <Text style={styles.cardMeta}>Stok: {item.stok}</Text>
+          )}
+        </View>
+      </TouchableOpacity>
       <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} activeOpacity={0.7}>
         <Ionicons name="trash-outline" size={18} color={BrandColors.error} />
       </TouchableOpacity>
-    </TouchableOpacity>
+    </Card>
   );
 }
 
@@ -84,7 +73,6 @@ export default function MaterialScreen() {
   const router = useRouter();
   const { data, isLoading, isError, refetch, isRefetching } = useMaterialList();
   const deleteMutation = useDeleteMaterial();
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const materialList = data?.data ?? [];
 
@@ -106,12 +94,7 @@ export default function MaterialScreen() {
             text: 'Hapus',
             style: 'destructive',
             onPress: async () => {
-              setDeletingId(item.id);
-              try {
-                await deleteMutation.mutateAsync(item.id);
-              } finally {
-                setDeletingId(null);
-              }
+              await deleteMutation.mutateAsync(item.id);
             },
           },
         ]
@@ -122,6 +105,7 @@ export default function MaterialScreen() {
 
   return (
     <View style={styles.container}>
+      <PageHeader title="Material" />
       <FlatList
         data={materialList}
         keyExtractor={(item) => item.id}
@@ -133,44 +117,16 @@ export default function MaterialScreen() {
           />
         )}
         contentContainerStyle={styles.listContent}
-        ListHeaderComponent={
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Material</Text>
-            <Text style={styles.headerSubtitle}>
-              {materialList.length} item material
-            </Text>
-          </View>
-        }
         ListEmptyComponent={
-          isLoading ? (
-            <View style={styles.centered}>
-              <ActivityIndicator size="large" color={BrandColors.primary} />
-            </View>
-          ) : isError ? (
-            <View style={styles.centered}>
-              <Ionicons
-                name="alert-circle-outline"
-                size={40}
-                color={BrandColors.error}
-              />
-              <Text style={styles.errorText}>Gagal memuat data</Text>
-              <TouchableOpacity onPress={() => refetch()}>
-                <Text style={styles.retryText}>Coba lagi</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.centered}>
-              <Ionicons
-                name="cube-outline"
-                size={48}
-                color={BrandColors.textMuted}
-              />
-              <Text style={styles.emptyText}>Belum ada data material</Text>
-              <Text style={styles.emptySubtext}>
-                Tambahkan material baru dengan menekan tombol +
-              </Text>
-            </View>
-          )
+          <ListEmptyState
+            isLoading={isLoading}
+            isError={isError}
+            isEmpty={!isLoading && !isError}
+            onRetry={() => refetch()}
+            emptyIcon="cube-outline"
+            emptyText="Belum ada data material"
+            emptySubtext="Tambahkan material baru dengan menekan tombol +"
+          />
         }
         refreshControl={
           <RefreshControl
@@ -189,55 +145,6 @@ export default function MaterialScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BrandColors.background },
   listContent: { paddingBottom: 120 },
-  header: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: BrandColors.inputBorder,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: BrandColors.textPrimary,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: BrandColors.textSecondary,
-    marginTop: 4,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    color: BrandColors.textMuted,
-    fontSize: 15,
-    marginTop: 12,
-  },
-  emptySubtext: {
-    color: BrandColors.textMuted,
-    fontSize: 13,
-    marginTop: 4,
-  },
-  errorText: {
-    color: BrandColors.error,
-    fontSize: 15,
-    marginTop: 12,
-  },
-  retryText: {
-    color: BrandColors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 8,
-  },
-  card: {
-    backgroundColor: BrandColors.cardBg,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 8,
-    padding: 16,
-  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

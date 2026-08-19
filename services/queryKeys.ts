@@ -1,5 +1,10 @@
 import type { ApiListParams } from '@/types/common';
 
+export const hargaTbsKeys = {
+  all: ['hargaTbs'] as const,
+  latest: () => [...hargaTbsKeys.all, 'latest'] as const,
+};
+
 export const bkmPanenKeys = {
   all: ['bkmPanen'] as const,
   lists: () => [...bkmPanenKeys.all, 'list'] as const,

@@ -4,10 +4,9 @@ import { View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { useBkmPanenDetail } from '@/hooks/useBkmPanen';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, StyleSheet } from 'react-native';
 
 export default function EditBkmScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -48,32 +47,14 @@ export default function EditBkmScreen() {
     }
   }, [panen, id, startEditing]);
 
-  const BackButton = (
-    <Pressable
-      onPress={() => router.back()}
-      style={({ pressed }) => [
-        {
-          opacity: pressed ? 0.7 : 1,
-          width: 40,
-          height: 40,
-          borderRadius: 12,
-          backgroundColor: 'rgba(255,255,255,0.15)',
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-      ]}
-    >
-      <FontAwesome name="arrow-left" size={20} color={BrandColors.white} />
-    </Pressable>
-  );
-
   if (!id || isLoading || !panen) {
     return (
       <View style={styles.container}>
         <PageHeader
           title="Edit BKM"
           showMenuButton={false}
-          actionBtn={BackButton}
+          showBackButton
+          onBack={() => router.back()}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={BrandColors.primary} />
@@ -87,7 +68,8 @@ export default function EditBkmScreen() {
       <PageHeader
         title="Edit BKM"
         showMenuButton={false}
-        actionBtn={BackButton}
+        showBackButton
+        onBack={() => router.back()}
       />
       <BKMPanenForm onSuccess={() => router.back()} />
     </View>

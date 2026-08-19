@@ -1,4 +1,5 @@
 import { FAB } from '@/components/core/FAB';
+import { ListEmptyState } from '@/components/core/ListEmptyState';
 import { PageHeader } from '@/components/home';
 import { View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
@@ -24,6 +25,7 @@ interface BkmPanenListProps {
   onCardPress: (id: string) => void;
   onCreatePress?: () => void;
   emptyHint?: string;
+  initialStatus?: string | null;
 }
 
 /**
@@ -32,11 +34,11 @@ interface BkmPanenListProps {
  *  - onCreatePress renders the FAB (mandor creates, asisten reviews)
  *  - long-press delete of DRAFT is mandor-only (asisten has no delete permission)
  */
-export function BkmPanenList({ onCardPress, onCreatePress, emptyHint }: BkmPanenListProps) {
+export function BkmPanenList({ onCardPress, onCreatePress, emptyHint, initialStatus = null }: BkmPanenListProps) {
   const [showFilter, setShowFilter] = useState(false);
   const [filterState, setFilterState] = useState<FilterSortState>({
     sort: 'tanggal_laporan:desc',
-    status: null,
+    status: initialStatus,
     blok_id: null,
     lahan_id: null,
   });
@@ -154,35 +156,15 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint }: BkmPanen
           ) : null
         }
         ListEmptyComponent={
-          isLoading ? (
-            <View style={styles.centered}>
-              <ActivityIndicator size="large" color={BrandColors.primary} />
-            </View>
-          ) : isError ? (
-            <View style={styles.centered}>
-              <Ionicons
-                name="alert-circle-outline"
-                size={40}
-                color={BrandColors.error}
-              />
-              <Text style={styles.errorText}>Gagal memuat data</Text>
-              <TouchableOpacity onPress={() => refetch()}>
-                <Text style={styles.retryText}>Coba lagi</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.centered}>
-              <Ionicons
-                name="document-text-outline"
-                size={48}
-                color={BrandColors.textMuted}
-              />
-              <Text style={styles.emptyText}>Belum ada data BKM Panen</Text>
-              {emptyHint ? (
-                <Text style={styles.emptySubtext}>{emptyHint}</Text>
-              ) : null}
-            </View>
-          )
+          <ListEmptyState
+            isLoading={isLoading}
+            isError={isError}
+            isEmpty={!isLoading && !isError}
+            onRetry={() => refetch()}
+            emptyIcon="document-text-outline"
+            emptyText="Belum ada data BKM Panen"
+            emptySubtext={emptyHint}
+          />
         }
         refreshControl={
           <RefreshControl
@@ -246,32 +228,5 @@ const styles = StyleSheet.create({
   footerLoader: {
     paddingVertical: 16,
     alignItems: 'center',
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    color: BrandColors.textMuted,
-    fontSize: 15,
-    marginTop: 12,
-  },
-  emptySubtext: {
-    color: BrandColors.textMuted,
-    fontSize: 13,
-    marginTop: 4,
-  },
-  errorText: {
-    color: BrandColors.error,
-    fontSize: 15,
-    marginTop: 12,
-  },
-  retryText: {
-    color: BrandColors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 8,
   },
 });

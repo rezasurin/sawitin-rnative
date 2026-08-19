@@ -1,3 +1,4 @@
+import { Button } from '@/components/core/Button';
 import { Text, View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { useSubmitBkmChecker } from '@/hooks/useBkmChecker';
@@ -10,7 +11,6 @@ import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { useQuery } from '@tanstack/react-query';
 import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -74,6 +74,19 @@ export function BKMCheckerFormStep3({ onBack, onSuccess }: Props) {
       Alert.alert(
         'Tidak Sesuai BKM Panen',
         `Selisih ${discrepancyPct.toFixed(1)}% dari BKM Panen. Periksa kembali jumlah janjang sebelum submit.`
+      );
+      return;
+    }
+
+    const incompleteDetail = details.find(
+      (d) =>
+        d.tipe_pengiriman !== 'RESTAN' &&
+        (!d.nomor_truk?.trim() || !d.nama_sopir?.trim() || !d.tujuan_kirim?.trim()),
+    );
+    if (incompleteDetail) {
+      Alert.alert(
+        'Data Belum Lengkap',
+        'Nomor Truk, Nama Sopir, dan Tujuan Kirim wajib diisi untuk pengiriman Langsung/Titip. Periksa kembali detail truk.'
       );
       return;
     }
@@ -208,22 +221,15 @@ export function BKMCheckerFormStep3({ onBack, onSuccess }: Props) {
       </ScrollView>
 
       <View style={styles.navButtons}>
-        <TouchableOpacity style={styles.editButton} onPress={onBack} activeOpacity={0.7}>
-          <Text style={styles.editButtonText}>Edit Data</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.submitButton, (!confirmed || mismatchExceedsTolerance || submitMutation.isPending) && styles.submitButtonDisabled]}
+        <Button title="Edit Data" onPress={onBack} variant="secondary" style={{ flex: 1 }} />
+        <Button
+          title="Submit Checker"
           onPress={handleSubmit}
-          disabled={!confirmed || mismatchExceedsTolerance || submitMutation.isPending}
-          activeOpacity={0.7}
-        >
-          {submitMutation.isPending ? (
-            <ActivityIndicator color={BrandColors.white} />
-          ) : (
-            <Text style={styles.submitButtonText}>Submit Checker</Text>
-          )}
-        </TouchableOpacity>
+          disabled={!confirmed || mismatchExceedsTolerance}
+          loading={submitMutation.isPending}
+          variant="primary"
+          style={{ flex: 2 }}
+        />
       </View>
     </View>
   );
@@ -362,29 +368,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: BrandColors.inputBorder,
   },
-  editButton: {
-    flex: 1,
-    height: 48,
-    borderWidth: 1,
-    borderColor: BrandColors.inputBorder,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editButtonText: {
-    color: BrandColors.textSecondary,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  submitButton: {
-    flex: 2,
-    backgroundColor: BrandColors.button,
-    height: 48,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButtonDisabled: { opacity: 0.5 },
   warningCard: {
     backgroundColor: '#E8F5E9',
     borderColor: '#2E7D32',
@@ -406,10 +389,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: BrandColors.textSecondary,
     marginTop: 4,
-  },
-  submitButtonText: {
-    color: BrandColors.white,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

@@ -1,3 +1,4 @@
+import { Button } from '@/components/core/Button';
 import { FormSelect } from '@/components/form';
 import { Text, View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
@@ -306,25 +307,20 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
       </ScrollView>
 
       <View style={[styles.navButtons, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity
-          style={styles.backButton}
+        <Button
+          title="Kembali"
           onPress={onBack}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.backButtonText}>Kembali</Text>
-        </TouchableOpacity>
+          variant="secondary"
+          style={{ flex: 1 }}
+        />
 
-        <TouchableOpacity
-          style={[
-            styles.nextButton,
-            details.length === 0 && styles.nextButtonDisabled,
-          ]}
+        <Button
+          title="Lanjutkan ke Grading"
           onPress={onNext}
           disabled={details.length === 0}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.nextButtonText}>Lanjutkan ke Grading</Text>
-        </TouchableOpacity>
+          variant="primary"
+          style={{ flex: 2 }}
+        />
       </View>
     </View>
   );
@@ -459,33 +455,5 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.background,
     borderTopWidth: 1,
     borderTopColor: BrandColors.inputBorder,
-  },
-  backButton: {
-    flex: 1,
-    height: 48,
-    borderWidth: 1,
-    borderColor: BrandColors.inputBorder,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backButtonText: {
-    color: BrandColors.textSecondary,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  nextButton: {
-    flex: 2,
-    backgroundColor: BrandColors.button,
-    height: 48,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nextButtonDisabled: { opacity: 0.5 },
-  nextButtonText: {
-    color: BrandColors.white,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

@@ -34,7 +34,7 @@ interface BkmCheckerUpdatePayload {
   data: UpdateBkmCheckerPayload;
 }
 
-async function uploadLocalImages<T extends { foto_url?: string }>(details: T[]): Promise<T[]> {
+export async function uploadLocalImages<T extends { foto_url?: string }>(details: T[]): Promise<T[]> {
   return Promise.all(
     details.map(async (d) => {
       if (d.foto_url && d.foto_url.startsWith('file://')) {
@@ -51,7 +51,7 @@ async function uploadLocalImages<T extends { foto_url?: string }>(details: T[]):
   );
 }
 
-async function processItem(item: { module: string; action: string; payload: Record<string, unknown> | null }) {
+export async function processItem(item: { module: string; action: string; payload: Record<string, unknown> | null }) {
   if (!item.payload) return;
 
   if (item.module === 'bkm_panen') {

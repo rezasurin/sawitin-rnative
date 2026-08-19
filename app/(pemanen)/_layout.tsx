@@ -1,19 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from 'expo-router';
 import { BrandColors } from '@/constants/Colors';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { FLOATING_TAB_BAR_STYLE, TAB_BAR_LABEL_STYLE, TAB_BAR_ITEM_STYLE } from '@/constants/navigation';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
 import { DrawerOverlay, DrawerMenu } from '@/components/home';
-
-function TabBarIcon(props: {
-  name: React.ComponentProps<typeof FontAwesome>['name'];
-  color: string;
-}) {
-  return <FontAwesome size={22} style={{ marginBottom: -2 }} {...props} />;
-}
+import { TabBarIcon } from '@/components/core';
 
 export default function PemanenLayout() {
   const { hasPermission } = useAuthStore();
@@ -46,14 +39,6 @@ export default function PemanenLayout() {
           }}
         />
         <Tabs.Screen
-          name="absensi"
-          options={{
-            title: 'Absensi',
-            headerShown: false,
-            tabBarIcon: ({ color }) => <TabBarIcon name="calendar-check-o" color={color} />,
-          }}
-        />
-        <Tabs.Screen
           name="profile"
           options={{
             title: 'Profil',
@@ -61,6 +46,7 @@ export default function PemanenLayout() {
             tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
           }}
         />
+        <Tabs.Screen name="absensi" options={{ href: null }} />
       </Tabs>
       <DrawerOverlay />
       <DrawerMenu />

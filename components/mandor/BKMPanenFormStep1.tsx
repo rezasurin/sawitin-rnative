@@ -1,15 +1,11 @@
-import { FormField, FormSelect } from "@/components/form";
-import { Text, View } from "@/components/Themed";
-import { BrandColors } from "@/constants/Colors";
+import { Button } from "@/components/core/Button";
+import { FormDateField, FormField, FormSelect } from "@/components/form";
 import { blokApi, lahanApi, grupPekerjaApi } from "@/services";
 import { useBkmPanenStore } from "@/stores/useBkmPanenStore";
 import { useQuery } from "@tanstack/react-query";
-import React, { useState } from "react";
+import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Platform, ScrollView, StyleSheet, TouchableOpacity } from "react-native";
-import DateTimePicker, {
-  type DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
+import { ScrollView, StyleSheet } from "react-native";
 
 interface Props {
   onNext: () => void;
@@ -18,8 +14,6 @@ interface Props {
 export function BKMPanenFormStep1({ onNext }: Props) {
   const { header, setHeader } = useBkmPanenStore();
   const insets = useSafeAreaInsets();
-
-  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const { data: blokData } = useQuery({
     queryKey: ["blok", "all"],
@@ -55,29 +49,6 @@ export function BKMPanenFormStep1({ onNext }: Props) {
 
   const isValid = !!header.blok_id && !!header.tanggal_laporan;
 
-  const parsedDate = header.tanggal_laporan
-    ? new Date(header.tanggal_laporan)
-    : new Date();
-
-  const handleDateChange = (
-    _event: DateTimePickerEvent,
-    selectedDate?: Date,
-  ) => {
-    if (Platform.OS === "android") {
-      setShowDatePicker(false);
-    }
-    if (selectedDate) {
-      setHeader({ tanggal_laporan: formatTanggal(selectedDate) });
-    }
-  };
-
-  const formatTanggal = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  };
-
   return (
     <ScrollView
       style={styles.container}
@@ -109,43 +80,11 @@ export function BKMPanenFormStep1({ onNext }: Props) {
         disabled={!header.blok_id}
       />
 
-      <View style={styles.fieldWrapper}>
-        <Text style={styles.label}>Tanggal Laporan</Text>
-        <TouchableOpacity
-          style={styles.dateButton}
-          onPress={() => setShowDatePicker(true)}
-          activeOpacity={0.7}
-        >
-          <Text
-            style={[
-              styles.dateText,
-              !header.tanggal_laporan && styles.placeholder,
-            ]}
-          >
-            {header.tanggal_laporan ? header.tanggal_laporan : "Pilih Tanggal"}
-          </Text>
-        </TouchableOpacity>
-
-        {showDatePicker && (
-          <View style={styles.datePickerContainer}>
-            <DateTimePicker
-              value={parsedDate}
-              mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={handleDateChange}
-              themeVariant="light"
-            />
-            {Platform.OS === "ios" && (
-              <TouchableOpacity
-                style={styles.datePickerDone}
-                onPress={() => setShowDatePicker(false)}
-              >
-                <Text style={styles.datePickerDoneText}>Selesai</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </View>
+      <FormDateField
+        label="Tanggal Laporan"
+        value={header.tanggal_laporan ?? ""}
+        onChange={(val) => setHeader({ tanggal_laporan: val })}
+      />
 
       <FormField
         label="Keterangan (Opsional)"
@@ -165,14 +104,13 @@ export function BKMPanenFormStep1({ onNext }: Props) {
         searchable
       />
 
-      <TouchableOpacity
-        style={[styles.nextButton, !isValid && styles.nextButtonDisabled]}
+      <Button
+        title="Lanjutkan ke Pekerja & TPH"
         onPress={onNext}
         disabled={!isValid}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.nextButtonText}>Lanjutkan ke Pekerja & TPH</Text>
-      </TouchableOpacity>
+        variant="primary"
+        style={styles.nextButton}
+      />
     </ScrollView>
   );
 }
@@ -180,56 +118,5 @@ export function BKMPanenFormStep1({ onNext }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "transparent" },
   scrollContent: { padding: 16 },
-  fieldWrapper: { marginBottom: 16 },
-  label: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: BrandColors.textPrimary,
-    marginBottom: 8,
-  },
-  dateButton: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: BrandColors.inputBorder,
-    borderRadius: 4,
-    paddingHorizontal: 16,
-    justifyContent: "center",
-    backgroundColor: BrandColors.white,
-  },
-  dateText: { fontSize: 16, color: BrandColors.textPrimary },
-  placeholder: { color: BrandColors.textMuted },
-  nextButton: {
-    backgroundColor: BrandColors.button,
-    height: 48,
-    borderRadius: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 24,
-  },
-  nextButtonDisabled: { opacity: 0.5 },
-  nextButtonText: {
-    color: BrandColors.white,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  datePickerContainer: {
-    backgroundColor: BrandColors.white,
-    borderRadius: 8,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: BrandColors.inputBorder,
-    overflow: 'hidden',
-  },
-  datePickerDone: {
-    alignSelf: 'flex-end',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  datePickerDoneText: {
-    color: BrandColors.primary,
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  nextButton: { marginTop: 24 },
 });

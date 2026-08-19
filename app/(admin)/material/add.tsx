@@ -1,23 +1,15 @@
 import { FormField } from '@/components/form/FormField';
 import { FormSelect } from '@/components/form/FormSelect';
+import { Button } from '@/components/core/Button';
 import { PageHeader } from '@/components/home';
 import { View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { useCreateMaterial } from '@/hooks/useMaterial';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { useForm, Controller } from 'react-hook-form';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { Alert, ScrollView, StyleSheet } from 'react-native';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -61,31 +53,13 @@ export default function AddMaterialScreen() {
     }
   };
 
-  const BackButton = (
-    <Pressable
-      onPress={() => router.back()}
-      style={({ pressed }) => [
-        {
-          opacity: pressed ? 0.7 : 1,
-          width: 40,
-          height: 40,
-          borderRadius: 12,
-          backgroundColor: 'rgba(255,255,255,0.15)',
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-      ]}
-    >
-      <FontAwesome name="arrow-left" size={20} color={BrandColors.white} />
-    </Pressable>
-  );
-
   return (
     <View style={styles.container}>
       <PageHeader
         title="Tambah Material"
         showMenuButton={false}
-        actionBtn={BackButton}
+        showBackButton
+        onBack={() => router.back()}
       />
       <ScrollView
         style={styles.scrollView}
@@ -198,18 +172,13 @@ export default function AddMaterialScreen() {
           )}
         />
 
-        <TouchableOpacity
-          style={[styles.submitBtn, mutation.isPending && styles.submitBtnDisabled]}
-          onPress={handleSubmit(onSubmit as any)}
+        <Button
+          title="Simpan"
+          loading={mutation.isPending}
           disabled={mutation.isPending}
-          activeOpacity={0.8}
-        >
-          {mutation.isPending ? (
-            <ActivityIndicator color={BrandColors.white} />
-          ) : (
-            <Text style={styles.submitBtnText}>Simpan</Text>
-          )}
-        </TouchableOpacity>
+          onPress={handleSubmit(onSubmit as any)}
+          style={styles.submitBtn}
+        />
       </ScrollView>
     </View>
   );
@@ -220,19 +189,6 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 40 },
   submitBtn: {
-    backgroundColor: BrandColors.primary,
-    height: 48,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginTop: 8,
-  },
-  submitBtnDisabled: {
-    opacity: 0.6,
-  },
-  submitBtnText: {
-    color: BrandColors.white,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

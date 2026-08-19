@@ -3,21 +3,6 @@
  * Following Interface Segregation Principle - small, focused interfaces
  */
 
-import { RelativePathString } from "expo-router";
-
-export interface MenuItem {
-  id: string;
-  label: string;
-  icon: string;
-  route?: RelativePathString;
-  onPress?: () => void;
-  // PBAC (Permission-Based Access Control)
-  requiredPermission?: {
-    moduleId: string; // e.g. "mod_bkm_panen"
-    action: "read" | "write" | "update" | "delete" | "approve" | "select";
-  };
-}
-
 export interface DrawerMenuItem {
   id: string;
   label: string;

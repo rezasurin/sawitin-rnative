@@ -1,10 +1,16 @@
-import React, { useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing } from 'react-native-reanimated';
-import { BrandColors } from '@/constants/Colors';
-import { useDrawerStore } from '@/stores';
+import React, { useCallback } from "react";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
+import { BrandColors } from "@/constants/Colors";
+import { useDrawerStore } from "@/stores";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -16,9 +22,17 @@ interface PageHeaderProps {
   title: string;
   showMenuButton?: boolean;
   actionBtn?: React.ReactElement;
+  showBackButton?: boolean;
+  onBack?: () => void;
 }
 
-export function PageHeader({ title, showMenuButton = true, actionBtn }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  showMenuButton = true,
+  actionBtn,
+  showBackButton = false,
+  onBack,
+}: PageHeaderProps) {
   const insets = useSafeAreaInsets();
   const openDrawer = useDrawerStore((state) => state.openDrawer);
   const scale = useSharedValue(1);
@@ -28,8 +42,14 @@ export function PageHeader({ title, showMenuButton = true, actionBtn }: PageHead
   const headerOpacity = useSharedValue(0);
 
   React.useEffect(() => {
-    headerTranslateY.value = withTiming(0, { duration: 600, easing: Easing.out(Easing.exp) });
-    headerOpacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.exp) });
+    headerTranslateY.value = withTiming(0, {
+      duration: 600,
+      easing: Easing.out(Easing.exp),
+    });
+    headerOpacity.value = withTiming(1, {
+      duration: 600,
+      easing: Easing.out(Easing.exp),
+    });
   }, []);
 
   const headerAnimatedStyle = useAnimatedStyle(() => ({
@@ -60,6 +80,25 @@ export function PageHeader({ title, showMenuButton = true, actionBtn }: PageHead
         headerAnimatedStyle,
       ]}
     >
+      {showBackButton && (
+        <AnimatedPressable
+          onPress={onBack}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={[styles.menuButton, buttonAnimatedStyle]}
+        >
+          <View style={styles.iconContainer}>
+            <FontAwesome
+              name="arrow-left"
+              size={20}
+              color={BrandColors.white}
+            />
+          </View>
+        </AnimatedPressable>
+      )}
+
+      {actionBtn}
       {/* Title */}
       <View style={styles.titleContainer}>
         <Text style={styles.title} numberOfLines={1}>
@@ -69,8 +108,6 @@ export function PageHeader({ title, showMenuButton = true, actionBtn }: PageHead
 
       {/* Right actions area */}
       <View style={styles.actions}>
-        {actionBtn}
-
         {showMenuButton && (
           <AnimatedPressable
             onPress={openDrawer}
@@ -91,14 +128,14 @@ export function PageHeader({ title, showMenuButton = true, actionBtn }: PageHead
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingBottom: 20,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -110,17 +147,17 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   title: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 28,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: 0.5,
-    textShadowColor: 'rgba(0,0,0,0.15)',
+    textShadowColor: "rgba(0,0,0,0.15)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
   actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   menuButton: {
@@ -130,8 +167,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

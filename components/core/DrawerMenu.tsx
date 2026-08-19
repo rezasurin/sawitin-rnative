@@ -1,19 +1,28 @@
 import { BrandColors } from "@/constants/Colors";
-import { useQueryClient } from '@tanstack/react-query';
-import { useNetworkStatus } from "@/hooks";
+import { useQueryClient } from "@tanstack/react-query";
+import { useNetworkStatus, useSync } from "@/hooks";
 import { useDrawerStore } from "@/stores";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { useRouter, useSegments } from 'expo-router';
+import { useRouter, useSegments } from "expo-router";
 import { DrawerMenuItem } from "@/types/home";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import React from "react";
-import { Alert, Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import Animated, {
   useAnimatedStyle,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBadge } from "../home/StatusBadge";
+import { formatSyncResult } from "@/services/sync.service";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const DRAWER_WIDTH = SCREEN_WIDTH * 0.75;
@@ -26,8 +35,8 @@ const DRAWER_WIDTH = SCREEN_WIDTH * 0.75;
 const MENU_ITEMS: DrawerMenuItem[] = [
   { id: "refresh", label: "Perbarui data", icon: "refresh" },
   { id: "sync", label: "Sinkronkan data", icon: "cloud-download" },
-  { id: "history", label: "Riwayat respon", icon: "history" },
-  { id: "team", label: "Kelola tim", icon: "users" },
+  // { id: "history", label: "Riwayat respon", icon: "history" },
+  // { id: "team", label: "Kelola tim", icon: "users" },
   { id: "settings", label: "Pengaturan", icon: "cog" },
   { id: "help", label: "Bantuan", icon: "question-circle" },
 ];
@@ -42,6 +51,8 @@ export function DrawerMenu() {
   const router = useRouter();
   const segments = useSegments();
   const currentGroup = segments[0] || "";
+  const { triggerSync, syncPhase, syncDetail, pendingCount } = useSync();
+  const isSyncing = syncPhase === "pushing" || syncPhase === "pulling";
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
@@ -57,25 +68,40 @@ export function DrawerMenu() {
   const phone = "+62 88828288288"; // TODO: Get from user profile
   const groupCode = "Kel. B20"; // TODO: Get from user profile
 
+  const handleSync = async () => {
+    if (!isOnline) {
+      Alert.alert(
+        "Tidak ada koneksi",
+        "Sinkronisasi membutuhkan koneksi internet. Silakan coba lagi saat online.",
+      );
+      return;
+    }
+    if (isSyncing) return;
+
+    const result = await triggerSync();
+    Alert.alert(
+      result.pushFailed > 0 ? "Sinkronisasi Sebagian" : "Sinkronisasi Berhasil",
+      formatSyncResult(result),
+    );
+  };
+
   const handleMenuPress = (item: DrawerMenuItem) => {
-    closeDrawer();
     switch (item.id) {
       case "refresh":
+        closeDrawer();
         queryClient.invalidateQueries();
         break;
       case "sync":
-        router.push("/(krani)" as any);
-        break;
-      case "history":
-        Alert.alert("Coming Soon", "Riwayat respon akan segera hadir.");
-        break;
-      case "team":
-        Alert.alert("Coming Soon", "Kelola tim akan segera hadir.");
+        handleSync();
         break;
       case "settings":
-        router.push(`/${currentGroup}/${currentGroup === "(admin)" ? "settings" : "profile"}` as any);
+        closeDrawer();
+        router.push(
+          `/${currentGroup}/${currentGroup === "(admin)" ? "settings" : "profile"}` as any,
+        );
         break;
       case "help":
+        closeDrawer();
         Alert.alert("Bantuan", "Hubungi admin untuk bantuan lebih lanjut.");
         break;
     }
@@ -90,68 +116,94 @@ export function DrawerMenu() {
     <Animated.View style={[styles.drawer, animatedStyle]}>
       {/* User Profile Card */}
       <View
-        className="px-4 pb-4"
-        style={{
-          backgroundColor: BrandColors.primary,
-          paddingTop: insets.top + 12,
-        }}
+        style={[
+          styles.profileCard,
+          {
+            paddingTop: insets.top + 16,
+          },
+        ]}
       >
-        <View className="flex-row items-center gap-3">
-          <View className="w-12 h-12 rounded-full bg-white/20 items-center justify-center">
-            <FontAwesome name="user" size={24} color={BrandColors.white} />
+        <View style={styles.profileRow}>
+          <View style={styles.avatarCircle}>
+            <FontAwesome name="user" size={22} color={BrandColors.white} />
           </View>
-          <View className="flex-1">
-            <View className="flex-row items-center gap-2">
-              <Text className="text-white font-bold text-lg">
+          <View style={styles.profileInfo}>
+            <View style={styles.nameRow}>
+              <Text style={styles.displayName} numberOfLines={1}>
                 {displayName}
               </Text>
               <FontAwesome name="pencil" size={12} color={BrandColors.white} />
-              <Text className="text-white/80 text-xs ml-auto">{groupCode}</Text>
             </View>
-            <Text className="text-white/80 text-sm">{phone}</Text>
-            <View className="flex-row items-center gap-1 mt-1">
-              <StatusBadge
-                isOnline={isOnline}
-                label={isOnline ? `Online - ${connectionLabel}` : "Offline"}
-              />
+            <Text style={styles.phoneText} numberOfLines={1}>
+              {phone}
+            </Text>
+            <View style={styles.statusRow}>
+              <StatusBadge isOnline={isOnline} showLabel={false} />
+              <Text style={styles.statusText}>
+                {isOnline ? `Online - ${connectionLabel}` : "Offline"}
+              </Text>
+              <View style={styles.groupBadge}>
+                <Text style={styles.groupBadgeText}>{groupCode}</Text>
+              </View>
             </View>
           </View>
         </View>
       </View>
 
       {/* Menu Items */}
-      <View className="flex-1 py-2">
-        {MENU_ITEMS.map((item) => (
-          <Pressable
-            key={item.id}
-            className="flex-row items-center gap-4 px-4 py-3 active:bg-gray-100"
-            onPress={() => handleMenuPress(item)}
-          >
-            <FontAwesome
-              name={item.icon as any}
-              size={20}
-              color={BrandColors.textSecondary}
-            />
-            <Text
-              className="text-base"
-              style={{ color: BrandColors.textPrimary }}
+      <View style={styles.menuContainer}>
+        {MENU_ITEMS.map((item) => {
+          const isSyncItem = item.id === "sync";
+          const isDisabled = isSyncItem && isSyncing;
+
+          return (
+            <Pressable
+              key={item.id}
+              style={({ pressed }) => [
+                pressed && styles.menuItemPressed,
+                isDisabled && styles.menuItemDisabled,
+              ]}
+              disabled={isDisabled}
+              onPress={() => handleMenuPress(item)}
             >
-              {item.label}
-            </Text>
-          </Pressable>
-        ))}
+              <View style={styles.menuItemRow}>
+                <View style={styles.menuIconContainer}>
+                  {isSyncItem && isSyncing ? (
+                    <ActivityIndicator size={20} color={BrandColors.primary} />
+                  ) : (
+                    <FontAwesome
+                      name={item.icon as any}
+                      size={20}
+                      color={BrandColors.textSecondary}
+                    />
+                  )}
+                </View>
+                <Text style={styles.menuItemLabel}>
+                  {isSyncItem && isSyncing ? syncDetail : item.label}
+                </Text>
+                {/* Pending count badge */}
+                {isSyncItem && pendingCount > 0 && !isSyncing && (
+                  <View style={styles.badgeContainer}>
+                    <Text style={styles.badgeText}>{pendingCount}</Text>
+                  </View>
+                )}
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
 
       {/* Logout Button */}
       <Pressable
-        className="flex-row items-center gap-4 px-4 py-4 border-t border-gray-200 active:bg-gray-100"
-        style={{ paddingBottom: insets.bottom + 16 }}
+        style={({ pressed }) => [pressed && styles.menuItemPressed]}
         onPress={handleLogout}
       >
-        <FontAwesome name="sign-out" size={20} color={BrandColors.error} />
-        <Text className="text-base" style={{ color: BrandColors.error }}>
-          Keluar
-        </Text>
+        <View style={[styles.logoutRow, { paddingBottom: insets.bottom }]}>
+          <View style={styles.menuIconContainer}>
+            <FontAwesome name="sign-out" size={20} color={BrandColors.error} />
+          </View>
+          <Text style={styles.logoutText}>Keluar</Text>
+        </View>
       </Pressable>
     </Animated.View>
   );
@@ -171,5 +223,122 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 5,
     elevation: 10,
+  },
+  profileCard: {
+    backgroundColor: BrandColors.primary,
+    paddingHorizontal: 20,
+    paddingBottom: 22,
+  },
+  profileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  avatarCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(255, 255, 255, 0.22)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255, 255, 255, 0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  displayName: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "700",
+    flexShrink: 1,
+  },
+  phoneText: {
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 13,
+    marginTop: 2,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+  },
+  statusText: {
+    color: "rgba(255, 255, 255, 0.95)",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  groupBadge: {
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  groupBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  menuContainer: {
+    flex: 1,
+    paddingVertical: 12,
+  },
+  menuItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  menuItemPressed: {
+    backgroundColor: "#F3F4F6",
+  },
+  menuItemDisabled: {
+    opacity: 0.5,
+  },
+  menuIconContainer: {
+    width: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 14,
+  },
+  menuItemLabel: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: BrandColors.textPrimary,
+    flex: 1,
+  },
+  badgeContainer: {
+    backgroundColor: BrandColors.error,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  badgeText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  logoutRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  logoutText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: BrandColors.error,
   },
 });

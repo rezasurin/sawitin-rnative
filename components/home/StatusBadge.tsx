@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { BrandColors } from '@/constants/Colors';
 
 /**
@@ -17,15 +17,13 @@ export function StatusBadge({ isOnline, label, showLabel = true }: StatusBadgePr
   const statusText = label || (isOnline ? 'Online' : 'Offline');
 
   return (
-    <View className="flex-row items-center gap-1">
+    <View style={styles.container}>
       <View
-        className="w-2 h-2 rounded-full"
-        style={{ backgroundColor: statusColor }}
+        style={[styles.dot, { backgroundColor: statusColor }]}
       />
       {showLabel && (
         <Text
-          className="text-xs"
-          style={{ color: statusColor }}
+          style={[styles.label, { color: statusColor }]}
         >
           {statusText}
         </Text>
@@ -33,3 +31,20 @@ export function StatusBadge({ isOnline, label, showLabel = true }: StatusBadgePr
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+});

@@ -5,13 +5,11 @@ import { DocStatusBadge } from "@/components/bkm/DocStatusBadge";
 import { MetricCard } from "@/components/bkm/MetricCard";
 import { BrandColors } from "@/constants/Colors";
 import { useBkmPanenDetail, useApproveBkmPanen, useRejectBkmPanen } from "@/hooks/useBkmPanen";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -84,21 +82,12 @@ export default function AsistenBkmDetailScreen() {
     );
   };
 
-  const BackButton = (
-    <Pressable
-      onPress={() => router.back()}
-      style={({ pressed }) => [
-        { opacity: pressed ? 0.7 : 1, width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
-      ]}
-    >
-      <FontAwesome name="arrow-left" size={20} color={BrandColors.white} />
-    </Pressable>
-  );
+  const routerBack = () => router.back();
 
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <PageHeader title="Detail BKM" showMenuButton={false} actionBtn={BackButton} />
+        <PageHeader title="Detail BKM" showMenuButton={false} showBackButton onBack={routerBack} />
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={BrandColors.primary} />
         </View>
@@ -109,7 +98,7 @@ export default function AsistenBkmDetailScreen() {
   if (isError || !data) {
     return (
       <View style={styles.container}>
-        <PageHeader title="Detail BKM" showMenuButton={false} actionBtn={BackButton} />
+        <PageHeader title="Detail BKM" showMenuButton={false} showBackButton onBack={routerBack} />
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={40} color={BrandColors.error} />
           <Text style={styles.errorText}>Gagal memuat data</Text>
@@ -125,7 +114,7 @@ export default function AsistenBkmDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <PageHeader title="Detail BKM" showMenuButton={false} actionBtn={BackButton} />
+      <PageHeader title="Detail BKM" showMenuButton={false} showBackButton onBack={routerBack} />
       
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.sectionHeader}>

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { Stepper } from '../core/Stepper';
 import { BrandColors } from '@/constants/Colors';
@@ -22,9 +22,17 @@ export function BKMCheckerForm({ onSuccess }: Props) {
   const reset = useBkmCheckerStore((s) => s.reset);
 
   const handleSuccess = useCallback(() => {
+    setStep(1);
     reset();
     onSuccess();
   }, [reset, onSuccess]);
+
+  useEffect(() => {
+    return () => {
+      setStep(1);
+      reset();
+    };
+  }, [reset]);
 
   return (
     <View style={styles.container}>

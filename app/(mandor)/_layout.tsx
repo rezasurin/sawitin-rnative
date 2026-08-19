@@ -7,24 +7,18 @@ import {
   TAB_BAR_ITEM_STYLE,
   TAB_BAR_LABEL_STYLE,
 } from "@/constants/navigation";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { TabBarIcon } from "@/components/core";
 import { Tabs, useSegments } from "expo-router";
+import { CommonActions } from "@react-navigation/native";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-
-function TabBarIcon(props: {
-  name: React.ComponentProps<typeof FontAwesome>["name"];
-  color: string;
-}) {
-  return <FontAwesome size={22} style={{ marginBottom: -2 }} {...props} />;
-}
 
 export default function MandorLayout() {
   const segments: string[] = useSegments();
 
   // Hide tab bar on specific nested screens (anything that is not a main tab)
   const lastSegment = segments.length > 0 ? segments[segments.length - 1] : "";
-  const mainTabs = ["", "(mandor)", "index", "absensi", "bkm", "checker", "rawat", "profile"];
+  const mainTabs = ["", "(mandor)", "index", "bkm", "checker", "profile"];
   const hideTabBar = !mainTabs.includes(lastSegment);
 
   const { hasPermission } = useAuthStore();
@@ -63,22 +57,23 @@ export default function MandorLayout() {
           }}
         />
         <Tabs.Screen
-          name="absensi"
-          options={{
-            title: "Absensi",
-            headerShown: false,
-            tabBarIcon: ({ color }) => (
-              <TabBarIcon name="calendar-check-o" color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
           name="bkm"
           options={{
             title: "BKM",
             headerShown: false,
             tabBarIcon: ({ color }) => <TabBarIcon name="book" color={color} />,
           }}
+          listeners={({ navigation }) => ({
+            tabPress: (e) => {
+              e.preventDefault();
+              navigation.dispatch(
+                CommonActions.navigate({
+                  name: 'bkm',
+                  params: { screen: 'index' },
+                })
+              );
+            },
+          })}
         />
         <Tabs.Screen
           name="checker"
@@ -89,16 +84,17 @@ export default function MandorLayout() {
               <TabBarIcon name="check-circle-o" color={color} />
             ),
           }}
-        />
-        <Tabs.Screen
-          name="rawat"
-          options={{
-            title: "Rawat",
-            headerShown: false,
-            tabBarIcon: ({ color }) => (
-              <TabBarIcon name="medkit" color={color} />
-            ),
-          }}
+          listeners={({ navigation }) => ({
+            tabPress: (e) => {
+              e.preventDefault();
+              navigation.dispatch(
+                CommonActions.navigate({
+                  name: 'checker',
+                  params: { screen: 'index' },
+                })
+              );
+            },
+          })}
         />
         <Tabs.Screen
           name="profile"
@@ -108,6 +104,8 @@ export default function MandorLayout() {
             tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
           }}
         />
+        <Tabs.Screen name="absensi" options={{ href: null }} />
+        <Tabs.Screen name="rawat" options={{ href: null }} />
       </Tabs>
       <DrawerOverlay />
       <DrawerMenu />

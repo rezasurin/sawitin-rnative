@@ -1,8 +1,8 @@
 import {
-  AnnouncementSection,
-  MenuGrid,
+  HargaTbsCard,
   PageHeader,
-  TodayTasksList,
+  QuickActions,
+  TodaySummary,
   UserGreeting,
 } from "@/components/home";
 import { BrandColors } from "@/constants/Colors";
@@ -19,9 +19,9 @@ export function DashboardScreen() {
         showsVerticalScrollIndicator={false}
       >
         <UserGreeting />
-        <MenuGrid />
-        <AnnouncementSection />
-        <TodayTasksList />
+        <QuickActions />
+        <HargaTbsCard />
+        <TodaySummary />
       </ScrollView>
     </View>
   );

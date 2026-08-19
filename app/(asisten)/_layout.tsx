@@ -1,22 +1,21 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from 'expo-router';
 import { BrandColors } from '@/constants/Colors';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { FLOATING_TAB_BAR_STYLE, TAB_BAR_LABEL_STYLE, TAB_BAR_ITEM_STYLE } from '@/constants/navigation';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
 import { DrawerOverlay, DrawerMenu } from '@/components/home';
-
-function TabBarIcon(props: {
-  name: React.ComponentProps<typeof FontAwesome>['name'];
-  color: string;
-}) {
-  return <FontAwesome size={22} style={{ marginBottom: -2 }} {...props} />;
-}
+import { useSegments } from 'expo-router';
+import { TabBarIcon } from '@/components/core';
 
 export default function AsistenLayout() {
   const { hasPermission } = useAuthStore();
+
+  const segments: string[] = useSegments();
+  const lastSegment = segments.length > 0 ? segments[segments.length - 1] : "";
+  const mainTabs = ["", "(asisten)", "index", "bkm", "profile"];
+  const hideTabBar = !mainTabs.includes(lastSegment);
 
   if (!hasPermission('mod_bkm_panen', 'read')) {
     return (
@@ -35,7 +34,10 @@ export default function AsistenLayout() {
           headerShown: useClientOnlyValue(false, true),
           tabBarLabelStyle: TAB_BAR_LABEL_STYLE,
           tabBarItemStyle: TAB_BAR_ITEM_STYLE,
-          tabBarStyle: FLOATING_TAB_BAR_STYLE,
+          tabBarStyle: [
+            FLOATING_TAB_BAR_STYLE,
+            hideTabBar ? { display: 'none' } : {},
+          ],
         }}>
         <Tabs.Screen
           name="index"
@@ -54,14 +56,6 @@ export default function AsistenLayout() {
           }}
         />
         <Tabs.Screen
-          name="laporan"
-          options={{
-            title: 'Laporan',
-            headerShown: false,
-            tabBarIcon: ({ color }) => <TabBarIcon name="bar-chart" color={color} />,
-          }}
-        />
-        <Tabs.Screen
           name="profile"
           options={{
             title: 'Profil',
@@ -69,6 +63,7 @@ export default function AsistenLayout() {
             tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
           }}
         />
+        <Tabs.Screen name="laporan" options={{ href: null }} />
       </Tabs>
       <DrawerOverlay />
       <DrawerMenu />

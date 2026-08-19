@@ -2,17 +2,14 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
   View,
-  Text,
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button } from '@/components/core/Button';
 import { FormSelect, FormField, FormDateField } from '@/components/form';
-import { BrandColors } from '@/constants/Colors';
 import {
   useLahanList,
   useBlokList,
@@ -260,21 +257,14 @@ export function BKMRawatForm({ onSuccess }: Props) {
           error={touched.nama_pengawas ? errors.nama_pengawas : undefined}
         />
 
-        <TouchableOpacity
-          style={[
-            styles.submitBtn,
-            (!isValid || createMutation.isPending) && styles.submitBtnDisabled,
-          ]}
-          activeOpacity={0.7}
+        <Button
+          title="Simpan BKM Rawat"
           onPress={handleSubmit}
-          disabled={!isValid || createMutation.isPending}
-        >
-          {createMutation.isPending ? (
-            <ActivityIndicator color={BrandColors.white} />
-          ) : (
-            <Text style={styles.submitBtnText}>Simpan BKM Rawat</Text>
-          )}
-        </TouchableOpacity>
+          loading={createMutation.isPending}
+          disabled={!isValid}
+          variant="primary"
+          style={styles.submitBtn}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -292,19 +282,6 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   submitBtn: {
-    backgroundColor: BrandColors.button,
-    height: 48,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginTop: 24,
-  },
-  submitBtnDisabled: {
-    opacity: 0.5,
-  },
-  submitBtnText: {
-    color: BrandColors.white,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

@@ -1,8 +1,9 @@
 import { Text, View } from '@/components/Themed';
+import { PageHeader } from '@/components/home';
 import { BrandColors } from '@/constants/Colors';
 import { useBkmCheckerDetail, useApproveBkmChecker } from '@/hooks/useBkmChecker';
 import { useLocalSearchParams, router } from 'expo-router';
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,6 +12,9 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
+import ViewShot from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import { Ionicons } from '@expo/vector-icons';
 import { useBkmCheckerStore } from '@/stores/useBkmCheckerStore';
 
 export default function CheckerDetailScreen() {
@@ -18,6 +22,8 @@ export default function CheckerDetailScreen() {
   const { data, isLoading, isError, refetch } = useBkmCheckerDetail(id);
   const approveMutation = useApproveBkmChecker();
   const buildQrPayload = useBkmCheckerStore((s) => s.buildQrPayload);
+  const viewShotRef = useRef<any>(null);
+  const [isSharing, setIsSharing] = useState(false);
 
   if (isLoading) {
     return (
@@ -58,6 +64,30 @@ export default function CheckerDetailScreen() {
     ]);
   };
 
+  const handleShareSpb = async () => {
+    try {
+      setIsSharing(true);
+      if (!viewShotRef.current?.capture) return;
+      const uri = await viewShotRef.current.capture();
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert('Fitur Bagikan', 'Fitur berbagi tidak didukung di perangkat ini.');
+        return;
+      }
+      await Sharing.shareAsync(uri, {
+        mimeType: 'image/png',
+        dialogTitle: 'Bagikan Surat Pengantar Buah (SPB)',
+      });
+    } catch (err) {
+      Alert.alert(
+        'Gagal Membagikan',
+        err instanceof Error ? err.message : 'Terjadi kesalahan saat membuat gambar SPB.'
+      );
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   const canApprove = data.status === 'SUBMITTED';
 
   const totalJanjang = data.details?.reduce((acc, curr) => acc + curr.jumlah_janjang, 0) ?? 0;
@@ -66,28 +96,58 @@ export default function CheckerDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Kembali</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Detail Checker</Text>
-      </View>
+      <PageHeader title="Detail Checker" showMenuButton={false} showBackButton onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Display QR code if APPROVED or SUBMITTED */}
         {(data.status === 'APPROVED' || data.status === 'SUBMITTED') && (
-          <View style={styles.qrCard}>
-            <Text style={styles.qrTitle}>QR Code Surat Pengantar Buah (SPB)</Text>
-            <Text style={styles.qrSubtitle}>Tunjukkan kode QR ini ke Krani Timbang di Mill Gate</Text>
-            <View style={styles.qrContainer}>
-              <QRCode
-                value={qrPayload}
-                size={180}
-                color="black"
-                backgroundColor="white"
-              />
-            </View>
-            <Text style={styles.qrPayloadText}>Signature: {data.id.slice(0, 6)}... · Qty: {totalJanjang}</Text>
+          <View style={styles.qrCardContainer}>
+            <ViewShot
+              ref={viewShotRef}
+              options={{ format: 'png', quality: 0.95 }}
+              style={styles.qrCard}
+            >
+              <Text style={styles.spbBrandHeader}>SAWITIN • SPB</Text>
+              <Text style={styles.qrTitle}>Surat Pengantar Buah (SPB)</Text>
+              <Text style={styles.qrSubtitle}>Tunjukkan kode QR ini ke Krani Timbang di Mill Gate</Text>
+              <View style={styles.qrContainer}>
+                <QRCode
+                  value={qrPayload}
+                  size={180}
+                  color="black"
+                  backgroundColor="white"
+                />
+              </View>
+              <Text style={styles.qrPayloadText}>Signature: {data.id.slice(0, 8)}... · Total: {totalJanjang} jjg</Text>
+
+              <View style={styles.spbSummaryCard}>
+                <Row label="Blok / TPH" value={`${data.blok?.nama ?? data.blok_id} / ${data.tph?.nama ?? data.tph_id}`} />
+                <Row label="Tanggal" value={data.tanggal_laporan} />
+                {data.details?.[0] && (
+                  <>
+                    <Row label="No. Truk" value={data.details[0].nomor_truk || '-'} />
+                    <Row label="Sopir" value={data.details[0].nama_sopir || '-'} />
+                    <Row label="Tujuan" value={data.details[0].tujuan_kirim || '-'} />
+                  </>
+                )}
+              </View>
+            </ViewShot>
+
+            <TouchableOpacity
+              style={styles.shareButton}
+              onPress={handleShareSpb}
+              disabled={isSharing}
+              activeOpacity={0.7}
+            >
+              {isSharing ? (
+                <ActivityIndicator size="small" color={BrandColors.primary} />
+              ) : (
+                <>
+                  <Ionicons name="share-social-outline" size={18} color={BrandColors.primary} />
+                  <Text style={styles.shareButtonText}>Bagikan Tiket SPB (Gambar)</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
         )}
 
@@ -148,18 +208,6 @@ function Row({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BrandColors.background },
-  header: {
-    padding: 16,
-    paddingTop: 60,
-    backgroundColor: BrandColors.primary,
-  },
-  backBtn: { marginBottom: 8 },
-  backText: { color: BrandColors.white, fontSize: 14 },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: BrandColors.white,
-  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scrollContent: { padding: 16, paddingBottom: 100 },
   card: {
@@ -232,23 +280,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  qrCardContainer: {
+    marginBottom: 16,
+  },
   qrCard: {
     backgroundColor: BrandColors.white,
     borderRadius: 8,
     padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#EAEAEA',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+  },
+  spbBrandHeader: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: BrandColors.primary,
+    letterSpacing: 1.5,
+    marginBottom: 6,
   },
   qrTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: BrandColors.textPrimary,
     textAlign: 'center',
@@ -272,5 +324,32 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: BrandColors.textMuted,
     textAlign: 'center',
+    marginBottom: 12,
+  },
+  spbSummaryCard: {
+    width: '100%',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 44,
+    backgroundColor: BrandColors.white,
+    borderWidth: 1,
+    borderColor: BrandColors.primary,
+    borderRadius: 6,
+    marginTop: 12,
+  },
+  shareButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: BrandColors.primary,
   },
 });

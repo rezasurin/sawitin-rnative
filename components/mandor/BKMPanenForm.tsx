@@ -39,9 +39,17 @@ export function BKMPanenForm({ onSuccess }: Props) {
 
   const handleSuccess = useCallback(() => {
     isSaving.current = true;
+    setStep(1);
     reset();
     onSuccess();
   }, [reset, onSuccess]);
+
+  useEffect(() => {
+    return () => {
+      setStep(1);
+      reset();
+    };
+  }, [reset]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
@@ -60,6 +68,7 @@ export function BKMPanenForm({ onSuccess }: Props) {
             text: 'Keluar',
             style: 'destructive',
             onPress: () => {
+              setStep(1);
               reset();
               if (isOnline) {
                 queryClient.invalidateQueries({ queryKey: bkmPanenKeys.lists() });
@@ -86,8 +95,8 @@ export function BKMPanenForm({ onSuccess }: Props) {
 
       <KeyboardAvoidingView
         style={styles.stepContent}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : undefined}
       >
         {step === 1 && (
           <BKMPanenFormStep1 onNext={() => setStep(2)} />

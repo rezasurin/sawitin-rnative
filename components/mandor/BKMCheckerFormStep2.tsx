@@ -1,10 +1,12 @@
+import { Button } from '@/components/core/Button';
 import { FormField, FormSelect } from '@/components/form';
 import { Text, View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { useBkmCheckerStore } from '@/stores/useBkmCheckerStore';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   ScrollView,
   StyleSheet,
@@ -56,9 +58,11 @@ function calcTotal(detail: Record<string, unknown>) {
 interface GradingRowProps {
   detail: ReturnType<typeof useBkmCheckerStore.getState>['details'][number];
   onUpdate: (updates: Record<string, unknown>) => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }
 
-function GradingRow({ detail, onUpdate }: GradingRowProps) {
+function GradingRow({ detail, onUpdate, onEdit, onDelete }: GradingRowProps) {
   const handleStepper = useCallback(
     (key: string, delta: number) => {
       const current = Number(detail[key as keyof typeof detail] ?? 0);
@@ -72,12 +76,22 @@ function GradingRow({ detail, onUpdate }: GradingRowProps) {
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>
-          {detail.tipe_pengiriman} · Truk: {detail.nomor_truk || '-'}
-        </Text>
-        <Text style={styles.cardSubtitle}>
-          Sopir: {detail.nama_sopir || '-'} · Tujuan: {detail.tujuan_kirim || '-'}
-        </Text>
+        <View style={styles.cardHeaderInfo}>
+          <Text style={styles.cardTitle}>
+            {detail.tipe_pengiriman} · Truk: {detail.nomor_truk || '-'}
+          </Text>
+          <Text style={styles.cardSubtitle}>
+            Sopir: {detail.nama_sopir || '-'} · Tujuan: {detail.tujuan_kirim || '-'}
+          </Text>
+        </View>
+        <View style={styles.cardActions}>
+          <TouchableOpacity onPress={onEdit} style={styles.actionBtn} activeOpacity={0.7}>
+            <Ionicons name="create-outline" size={18} color={BrandColors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onDelete} style={styles.actionBtn} activeOpacity={0.7}>
+            <Ionicons name="trash-outline" size={18} color={BrandColors.error} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {GRADING_FIELDS.map((field) => (
@@ -139,39 +153,110 @@ function GradingRow({ detail, onUpdate }: GradingRowProps) {
 export function BKMCheckerFormStep2({ onNext, onBack }: Props) {
   const { details, addDetail, updateDetail, removeDetail } = useBkmCheckerStore();
   const [form, setForm] = useState<DetailFormLocal>({ ...emptyDetailForm });
-  const [showGrading, setShowGrading] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+
+  const handleEditDetail = useCallback(
+    (detail: (typeof details)[number]) => {
+      setForm({
+        tipe_pengiriman: detail.tipe_pengiriman,
+        nomor_truk: detail.nomor_truk ?? '',
+        nama_sopir: detail.nama_sopir ?? '',
+        tujuan_kirim: detail.tujuan_kirim ?? '',
+      });
+      setEditingId(detail._tempId);
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    },
+    [details],
+  );
+
+  const handleDeleteDetail = useCallback(
+    (tempId: string) => {
+      Alert.alert('Hapus Detail?', 'Detail truk ini akan dihapus dari BKM Checker.', [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: () => {
+            removeDetail(tempId);
+            setEditingId((prev) => (prev === tempId ? null : prev));
+          },
+        },
+      ]);
+    },
+    [removeDetail],
+  );
 
   const handleAddDetail = useCallback(() => {
     if (!form.tipe_pengiriman) return;
-    addDetail({
-      bkm_checker_id: '',
+
+    if (form.tipe_pengiriman !== 'RESTAN') {
+      const missing: string[] = [];
+      if (!form.nomor_truk.trim()) missing.push('Nomor Truk');
+      if (!form.nama_sopir.trim()) missing.push('Nama Sopir');
+      if (!form.tujuan_kirim.trim()) missing.push('Tujuan Kirim');
+      if (missing.length > 0) {
+        Alert.alert('Data Belum Lengkap', `Lengkapi ${missing.join(', ')} untuk pengiriman ${form.tipe_pengiriman}.`);
+        return;
+      }
+    }
+
+    const truckFields = {
       tipe_pengiriman: form.tipe_pengiriman,
       nomor_truk: form.nomor_truk || undefined,
       nama_sopir: form.nama_sopir || undefined,
       tujuan_kirim: form.tujuan_kirim || undefined,
-      janjang_normal: 0,
-      buah_mentah: 0,
-      over_ripe: 0,
-      tangkai_panjang: 0,
-      buah_abnormal: 0,
-      janjang_kosong: 0,
-      jumlah_janjang: 0,
-      jumlah_brondol: 0,
-    });
+    };
+
+    if (editingId) {
+      updateDetail(editingId, truckFields);
+    } else {
+      addDetail({
+        bkm_checker_id: '',
+        ...truckFields,
+        janjang_normal: 0,
+        buah_mentah: 0,
+        over_ripe: 0,
+        tangkai_panjang: 0,
+        buah_abnormal: 0,
+        janjang_kosong: 0,
+        jumlah_janjang: 0,
+        jumlah_brondol: 0,
+      });
+    }
+
+    setEditingId(null);
     setForm({ ...emptyDetailForm });
-  }, [form, addDetail]);
+  }, [form, editingId, addDetail, updateDetail]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingId(null);
+    setForm({ ...emptyDetailForm });
+  }, []);
 
   const totalAllJanjang = details.reduce((sum, d) => sum + d.jumlah_janjang, 0);
 
   return (
     <View style={styles.container}>
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.sectionTitle}>Tambah Truk & Pengiriman</Text>
+
+        {editingId && (
+          <View style={styles.editingBanner}>
+            <Text style={styles.editingBannerText}>
+              Mengedit detail — ubah data lalu tekan Simpan Perubahan.
+            </Text>
+            <TouchableOpacity onPress={handleCancelEdit} activeOpacity={0.7}>
+              <Text style={styles.editingBannerCancel}>Batal</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <FormSelect
           label="Tipe Pengiriman"
@@ -207,8 +292,10 @@ export function BKMCheckerFormStep2({ onNext, onBack }: Props) {
           onPress={handleAddDetail}
           activeOpacity={0.7}
         >
-          <Ionicons name="add-circle" size={20} color={BrandColors.white} />
-          <Text style={styles.addButtonText}>Tambah Detail</Text>
+          <Ionicons name={editingId ? 'checkmark-circle' : 'add-circle'} size={20} color={BrandColors.white} />
+          <Text style={styles.addButtonText}>
+            {editingId ? 'Simpan Perubahan' : 'Tambah Detail'}
+          </Text>
         </TouchableOpacity>
 
         {details.length > 0 && (
@@ -225,6 +312,8 @@ export function BKMCheckerFormStep2({ onNext, onBack }: Props) {
                 <GradingRow
                   detail={item}
                   onUpdate={(updates) => updateDetail(item._tempId, updates as any)}
+                  onEdit={() => handleEditDetail(item)}
+                  onDelete={() => handleDeleteDetail(item._tempId)}
                 />
               )}
             />
@@ -242,18 +331,14 @@ export function BKMCheckerFormStep2({ onNext, onBack }: Props) {
       </ScrollView>
 
       <View style={styles.navButtons}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-          <Text style={styles.backButtonText}>Kembali</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.nextButton, details.length === 0 && styles.nextButtonDisabled]}
+        <Button title="Kembali" onPress={onBack} variant="secondary" style={{ flex: 1 }} />
+        <Button
+          title="Review & Konfirmasi"
           onPress={onNext}
           disabled={details.length === 0}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.nextButtonText}>Review & Konfirmasi</Text>
-        </TouchableOpacity>
+          variant="primary"
+          style={{ flex: 2 }}
+        />
       </View>
     </View>
   );
@@ -292,10 +377,49 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     marginBottom: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: BrandColors.inputBorder,
+  },
+  cardHeaderInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  actionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: BrandColors.background,
+  },
+  editingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF8E1',
+    borderRadius: 4,
+    padding: 10,
+    marginBottom: 12,
+  },
+  editingBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: BrandColors.textSecondary,
+  },
+  editingBannerCancel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: BrandColors.primary,
+    marginLeft: 8,
   },
   cardTitle: {
     fontSize: 15,
@@ -407,34 +531,9 @@ const styles = StyleSheet.create({
   navButtons: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 24,
-  },
-  backButton: {
-    flex: 1,
-    height: 48,
-    borderWidth: 1,
-    borderColor: BrandColors.inputBorder,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backButtonText: {
-    color: BrandColors.textSecondary,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  nextButton: {
-    flex: 2,
-    backgroundColor: BrandColors.button,
-    height: 48,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nextButtonDisabled: { opacity: 0.5 },
-  nextButtonText: {
-    color: BrandColors.white,
-    fontSize: 16,
-    fontWeight: '600',
+    padding: 16,
+    backgroundColor: BrandColors.background,
+    borderTopWidth: 1,
+    borderTopColor: BrandColors.inputBorder,
   },
 });
