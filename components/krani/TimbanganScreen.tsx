@@ -3,13 +3,13 @@ import { Button } from "@/components/core/Button";
 import { FormField } from "@/components/form";
 import { PageHeader } from "@/components/home";
 import { BrandColors } from "@/constants/Colors";
-import { useCreateKraniTimbang } from "@/hooks/useKraniTimbang";
 import { useKraniTimbangDetail } from "@/hooks/useKraniTimbang";
 import { useOrgConfig } from "@/hooks/useOrgConfig";
 import { bkmCheckerApi } from "@/services/bkm-checker.service";
+import { stagingApi } from "@/services/staging.service";
 import type { KraniTimbang } from "@/types";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -30,9 +30,10 @@ export default function TimbanganScreen() {
   const group = useModuleGroup('(krani)');
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { checkerId, detailId } = useLocalSearchParams<{
+  const { checkerId, detailId, qrPayload } = useLocalSearchParams<{
     checkerId?: string;
     detailId?: string;
+    qrPayload?: string;
   }>();
 
   // Form states
@@ -74,7 +75,11 @@ export default function TimbanganScreen() {
     refetch: refetchDetail,
   } = useKraniTimbangDetail(detailId ?? "");
 
-  const createMutation = useCreateKraniTimbang();
+  const queryClient = useQueryClient();
+  const createMutation = useMutation({
+    mutationFn: stagingApi.submitPayload,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['kraniTimbang'] }),
+  });
 
   const { data: orgConfig } = useOrgConfig();
   const bjr = orgConfig?.bjr ?? 15;
@@ -112,7 +117,7 @@ export default function TimbanganScreen() {
   const hasDiscrepancy = nettoVal > 0 && estimatedKg > 0 && diffPct > 20;
 
   const handleSubmit = () => {
-    if (!checker) return;
+    if (!checker || !qrPayload) return;
     if (!hasIsi || !hasKosong) {
       Alert.alert(
         "Form Belum Lengkap",
@@ -130,25 +135,19 @@ export default function TimbanganScreen() {
     }
 
     const firstDetail = checker.details?.[0];
+    if (!firstDetail?.nama_sopir || !firstDetail.nomor_truk) {
+      Alert.alert('SPB tidak lengkap', 'Nomor truk dan nama sopir tidak tersedia pada Checker.');
+      return;
+    }
     const payload = {
-      nama_supir: firstDetail?.nama_sopir || "Sopir SPB",
-      nomor_kendaraan: firstDetail?.nomor_truk || "Kendaraan SPB",
-      tujuan_kirim: firstDetail?.tujuan_kirim || "Pabrik",
-      tanggal: new Date().toISOString().split("T")[0],
+      qr_payload: qrPayload,
+      nama_supir: firstDetail.nama_sopir,
+      nomor_kendaraan: firstDetail.nomor_truk,
+      tujuan_kirim: firstDetail.tujuan_kirim ?? '',
+      keterangan: keterangan || undefined,
       timbang_isi: isiVal,
       timbang_kosong: kosongVal,
-      netto: nettoVal,
-      origin_source: "BKM_CHECKER" as const,
-      keterangan: keterangan || undefined,
-      source_checker_ids: checkerId ? [checkerId] : [],
-      details: [
-        {
-          kelompok_lahan_id: checker.blok?.kelompok_lahan_id || "",
-          tph_id: checker.tph_id || "",
-          jumlah_janjang: totalJanjang,
-          jumlah_brondol: totalBrondol,
-        },
-      ],
+      jumlah_brondol: totalBrondol,
     };
 
     createMutation.mutate(payload, {
@@ -177,7 +176,7 @@ export default function TimbanganScreen() {
     router.dismissTo(`/${group}/timbangan`);
   };
 
-  if (!checkerId && !detailId) return <Redirect href={`/${group}/timbangan`} />;
+  if (!detailId && (!checkerId || !qrPayload)) return <Redirect href={`/${group}/timbangan/scan`} />;
 
   return (
     <KeyboardAvoidingView

@@ -1,5 +1,7 @@
 # Audit — Offline sync pipeline (`useSyncProcessor`)
 
+> **Implementation update (2026-09-20):** The duplicate-header/detail finding has been addressed with persisted queue IDs, backend `client_request_id` / `client_detail_id` unique keys, and replay responses. Manual sync now honors the retry cap, unsupported queue items fail, and Panen waits for SQLite persistence before resetting the form. This file retains the original audit evidence. Image uploads can still leave an unused file if a later request fails; Rawat is not queued offline.
+
 **Target:** `saweed-rnative/sawitin/hooks/useSyncProcessor.ts`
 **Date:** 2025 (report-only pass — no code modified)
 **Typecheck at audit time:** `npx tsc --noEmit` → exit 0 (clean).

@@ -3,6 +3,10 @@ import { PaginatedResponse, ApiListParams } from '@/types/common';
 import { BkmChecker, CreateBkmCheckerPayload, UpdateBkmCheckerPayload, BkmCheckerDetail, CreateBkmCheckerDetailPayload, UpdateBkmCheckerDetailPayload } from '@/types/bkm-checker';
 
 export const bkmCheckerApi = {
+  getSpb: async (id: string): Promise<{ qr_payload: string; checker_id: string; tph_id: string; jumlah_janjang: number; issued_at: string; expires_at: string }> => {
+    const response = await apiClient.get(`/bkmChecker/${id}/spb`);
+    return response.data;
+  },
   getAll: async (params?: ApiListParams): Promise<PaginatedResponse<BkmChecker>> => {
     const response = await apiClient.get<PaginatedResponse<BkmChecker>>('/bkmChecker', { params });
     return response.data;

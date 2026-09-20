@@ -9,6 +9,7 @@ import { BrandColors } from '@/constants/Colors';
 import { useBkmRawatList, useDeleteBkmRawat } from '@/hooks/useBkmRawat';
 import { DocStatusBadge } from '@/components/bkm/DocStatusBadge';
 import React from 'react';
+import { useAuthStore } from '@/stores/useAuthStore';
 import {
   Alert,
   FlatList,
@@ -21,6 +22,8 @@ import {
 export default function RawatScreen() {
   const router = useRouter();
   const group = useModuleGroup('(mandor)');
+  const canDelete = useAuthStore((s) => s.hasPermission('mod_bkm_rawat', 'delete'));
+  const canCreate = useAuthStore((s) => s.hasPermission('mod_bkm_rawat', 'write'));
   const {
     data: rawatList,
     isLoading,
@@ -79,9 +82,13 @@ export default function RawatScreen() {
           return (
             <Card>
               <TouchableOpacity
+                onPress={() => router.push(`/${group}/rawat/${item.id}` as never)}
                 onLongPress={() =>
-                  item.status === 'DRAFT' && handleDelete(item.id)
+                  canDelete && item.status === 'DRAFT' && handleDelete(item.id)
                 }
+                accessibilityRole="button"
+                accessibilityLabel={`BKM Rawat ${item.nama_pengawas}, ${item.status}`}
+                accessibilityHint="Buka detail dokumen"
                 delayLongPress={600}
                 activeOpacity={0.7}
               >
@@ -116,7 +123,7 @@ export default function RawatScreen() {
             <Text style={styles.headerSubtitle}>
               {totalItems > 0 ? totalItems : rawatData.length} dokumen perawatan kebun
             </Text>
-            {hasDraft && (
+            {hasDraft && canDelete && (
               <Text style={styles.headerHint}>
                 Tekan lama untuk menghapus DRAFT
               </Text>
@@ -142,7 +149,7 @@ export default function RawatScreen() {
           />
         }
       />
-      <FAB onPress={() => router.push(`/${group}/rawat/add`)} />
+      {canCreate && <FAB onPress={() => router.push(`/${group}/rawat/add`)} />}
     </View>
   );
 }

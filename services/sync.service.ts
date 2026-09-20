@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import { processItem } from '@/hooks/useSyncProcessor';
+import { MAX_RETRIES } from '@/stores/useSyncQueueStore';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -48,6 +49,10 @@ export async function performSync({
 
     for (let i = 0; i < syncQueue.length; i++) {
       const item = syncQueue[i];
+      if (item.retryCount >= MAX_RETRIES) {
+        pushFailed++;
+        continue;
+      }
       onProgress('pushing', `Mengunggah ${i + 1}/${syncQueue.length} item...`);
 
       try {

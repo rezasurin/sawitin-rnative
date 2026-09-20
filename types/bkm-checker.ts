@@ -23,6 +23,7 @@ export interface BkmChecker extends TimestampFields {
 }
 
 export interface CreateBkmCheckerPayload {
+  client_request_id?: string;
   lahan_id?: string;
   tph_id: string;
   blok_id: string;
@@ -55,6 +56,7 @@ export interface BkmCheckerDetail extends TimestampFields {
 }
 
 export interface CreateBkmCheckerDetailPayload {
+  client_detail_id?: string;
   bkm_checker_id: string;
   pekerja_id?: string;
   nomor_truk?: string;

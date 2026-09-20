@@ -3,6 +3,10 @@ import { PaginatedResponse, ApiListParams } from '@/types/common';
 import { BkmRawat, CreateBkmRawatPayload, UpdateBkmRawatPayload, BkmRawatDetail, CreateBkmRawatDetailPayload, UpdateBkmRawatDetailPayload } from '@/types/bkm-rawat';
 
 export const bkmRawatApi = {
+  getLookups: async (): Promise<{ types: { id: string; nama: string }[]; categories: { id: string; nama: string }[]; items: { id: string; nama: string; kategori_pekerjaan_id: string }[] }> => {
+    const response = await apiClient.get('/bkmRawat/lookups');
+    return response.data;
+  },
   getAll: async (params?: ApiListParams): Promise<PaginatedResponse<BkmRawat>> => {
     const response = await apiClient.get<PaginatedResponse<BkmRawat>>('/bkmRawat', { params });
     return response.data;
@@ -26,9 +30,8 @@ export const bkmRawatApi = {
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/bkmRawat/${id}`);
   },
-  approve: async (id: string): Promise<BkmRawat> => {
-    const response = await apiClient.post<BkmRawat>(`/bkmRawat/${id}/approve`);
-    return response.data;
+  approve: async (id: string): Promise<void> => {
+    await apiClient.post(`/bkmRawat/${id}/approve`);
   },
   reject: async (id: string, rejection_note?: string): Promise<BkmRawat> => {
     const response = await apiClient.post<BkmRawat>(`/bkmRawat/${id}/reject`, { rejection_note });

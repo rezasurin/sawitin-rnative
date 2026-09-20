@@ -19,6 +19,7 @@ export interface BkmRawat extends TimestampFields {
   lahan?: Lahan;
   blok?: Blok;
   details?: DetailBkmRawat[];
+  detail_rawat?: DetailBkmRawat[];
 }
 
 export interface CreateBkmRawatPayload {
@@ -29,7 +30,7 @@ export interface CreateBkmRawatPayload {
   nama_pengawas: string;
 }
 
-export type UpdateBkmRawatPayload = Partial<CreateBkmRawatPayload>;
+export type UpdateBkmRawatPayload = Partial<CreateBkmRawatPayload> & { status?: DocumentStatus };
 
 export interface DetailBkmRawat extends TimestampFields {
   id: string;
@@ -61,6 +62,7 @@ export interface CreateDetailBkmRawatPayload {
   satuan_hasil?: string;
   hasil_pekerjaan?: number;
   keterangan?: string;
+  materials?: { material_id: string; jumlah: number }[];
 }
 
 export type UpdateDetailBkmRawatPayload = Partial<Omit<CreateDetailBkmRawatPayload, 'bkm_rawat_id'>>;
@@ -70,6 +72,7 @@ export interface DetailBkmRawatMaterial extends TimestampFields {
   detail_bkm_rawat_id: string;
   material_id: string;
   jumlah: number;
+  material?: { id: string; nama: string; satuan: string };
 }
 
 export type BkmRawatDetail = DetailBkmRawat;

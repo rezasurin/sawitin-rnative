@@ -22,6 +22,7 @@ export interface BkmPanen extends TimestampFields {
 }
 
 export interface CreateBkmPanenPayload {
+  client_request_id?: string;
   lahan_id?: string;
   blok_id: string;
   grup_pekerja_id?: string;
@@ -56,6 +57,7 @@ export interface BkmPanenDetail extends TimestampFields {
 }
 
 export interface CreateBkmPanenDetailPayload {
+  client_detail_id?: string;
   bkm_panen_id: string;
   pekerja_id: string;
   tph_id: string;

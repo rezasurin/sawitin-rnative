@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { CreateBkmCheckerPayload, CreateBkmCheckerDetailPayload } from '@/types/bkm-checker';
-import { buildQrPayload as buildQrPayloadV2 } from '@/utils/qr';
 
 interface BkmCheckerDetailDraft extends CreateBkmCheckerDetailPayload {
   _tempId: string;
@@ -19,7 +18,6 @@ interface BkmCheckerStore extends BkmCheckerDraftState {
   updateDetail: (tempId: string, data: Partial<CreateBkmCheckerDetailPayload>) => void;
   removeDetail: (tempId: string) => void;
   startEditing: (id: string, header: CreateBkmCheckerPayload, details: BkmCheckerDetailDraft[]) => void;
-  buildQrPayload: (checkerId: string, tphId: string, quantity: number, timestamp: number) => string;
   reset: () => void;
 }
 
@@ -70,9 +68,6 @@ export const useBkmCheckerStore = create<BkmCheckerStore>((set) => ({
 
   startEditing: (id, header, details) =>
     set({ isEditing: true, editingId: id, header, details }),
-
-  buildQrPayload: (checkerId, tphId, quantity, timestamp) =>
-    buildQrPayloadV2(checkerId, tphId, quantity, timestamp),
 
   reset: () =>
     set({

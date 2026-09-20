@@ -1,5 +1,7 @@
 # Audit — BKM Rawat screen
 
+> **Implementation update (2026-09-20):** Mandor and admin now have a Rawat detail route. Users can add, edit, and delete work rows and material quantities while Draft, then submit for approval; approvers can approve or reject with a reason. The backend rejects empty submissions and Draft approvals. This remains an online workflow. Pagination, filters, and offline Rawat sync listed below are still follow-up work; the findings below describe the original audit state.
+
 **Target:** `saweed-rnative/sawitin/app/(mandor)/rawat/`
 **Date:** 2025 (report-only pass — no code modified)
 **Typecheck at audit time:** `npx tsc --noEmit` → exit 0 (clean).

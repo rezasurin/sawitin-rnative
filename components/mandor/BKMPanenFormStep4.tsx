@@ -72,7 +72,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
 
   const estimatedTons = (totalJanjang * bjr) / 1000;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!confirmed) return;
 
     const headerPayload = {
@@ -103,6 +103,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
 
     // Offline: queue for later sync
     if (!isOnline) {
+      try {
       if (isEditing && editingId) {
         const detailPayloadsWithServerId = details.map((d) => ({
           pekerja_id: d.pekerja_id,
@@ -123,7 +124,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
           serverId: d.serverId,
         }));
 
-        addToQueue({
+        await addToQueue({
           module: 'bkm_panen',
           action: 'UPDATE',
           endpoint: `/bkmPanen/${editingId}`,
@@ -135,7 +136,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
           },
         });
       } else {
-        addToQueue({
+        await addToQueue({
           module: 'bkm_panen',
           action: 'CREATE',
           endpoint: '/bkmPanen',
@@ -148,6 +149,9 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
         'Data tersimpan dan akan dikirim saat online.',
         [{ text: 'OK', onPress: onSuccess }],
       );
+      } catch (error) {
+        Alert.alert('Gagal Menyimpan', error instanceof Error ? error.message : 'Antrian offline gagal disimpan.');
+      }
       return;
     }
 

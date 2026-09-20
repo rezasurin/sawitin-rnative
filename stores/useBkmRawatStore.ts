@@ -22,7 +22,7 @@ interface BkmRawatDraftState {
 interface BkmRawatStore extends BkmRawatDraftState {
   setHeader: (header: Partial<CreateBkmRawatPayload>) => void;
   addDetail: (detail: CreateDetailBkmRawatPayload) => void;
-  updateDetail: (tempId: string, data: Partial<CreateDetailBkmRawatPayload>) => void;
+  updateDetail: (tempId: string, data: Partial<Omit<CreateDetailBkmRawatPayload, 'materials'>>) => void;
   removeDetail: (tempId: string) => void;
   addMaterial: (detailTempId: string, material: Omit<MaterialDraft, '_tempId'>) => void;
   removeMaterial: (detailTempId: string, materialTempId: string) => void;

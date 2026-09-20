@@ -28,7 +28,7 @@ interface SyncQueueStore {
 const MAX_RETRIES = 5;
 
 let queueIdCounter = 0;
-const generateQueueId = () => `sync_${Date.now()}_${++queueIdCounter}`;
+const generateQueueId = () => `sync_${Date.now()}_${++queueIdCounter}_${Math.random().toString(36).slice(2)}`;
 
 export const useSyncQueueStore = create<SyncQueueStore>((set, get) => ({
   queue: [],

@@ -8,7 +8,7 @@ import { useIsFocused } from 'expo-router/react-navigation';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { BrandColors } from '@/constants/Colors';
 import { PageHeader } from '@/components/home';
-import { verifyQrPayload, isQrFresh } from '@/utils/qr';
+import { parseQrPayload, isQrFresh } from '@/utils/qr';
 
 export default function ScanQrScreen() {
   const group = useModuleGroup('(krani)');
@@ -87,7 +87,7 @@ export default function ScanQrScreen() {
     setHasScanned(true);
     isAlerting.current = true;
 
-    const parsed = verifyQrPayload(value);
+    const parsed = parseQrPayload(value);
     if (!parsed) {
       Alert.alert(
         'Format Tidak Valid',
@@ -124,8 +124,8 @@ export default function ScanQrScreen() {
 
     // Success dialog
     Alert.alert(
-      'SPB Terverifikasi',
-      `SPB berhasil divalidasi.\n\nID Checker: ${parsed.checkerId}\nTotal Janjang: ${parsed.qty} janjang`,
+      'QR SPB Terbaca',
+      `ID Checker: ${parsed.checkerId}\nTotal Janjang: ${parsed.qty} janjang\n\nKeaslian SPB akan diverifikasi oleh server saat hasil timbang disimpan.`,
       [
         {
           text: 'Lanjutkan Timbangan',
@@ -133,7 +133,7 @@ export default function ScanQrScreen() {
             isAlerting.current = false;
             router.replace({
               pathname: `/${group}/timbangan/add`,
-              params: { checkerId: parsed.checkerId },
+              params: { checkerId: parsed.checkerId, qrPayload: value },
             });
           },
         },

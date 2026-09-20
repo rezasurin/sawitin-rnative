@@ -15,13 +15,19 @@ import QRCode from 'react-native-qrcode-svg';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
-import { useBkmCheckerStore } from '@/stores/useBkmCheckerStore';
+import { bkmCheckerApi } from '@/services/bkm-checker.service';
+import { useQuery } from '@tanstack/react-query';
 
 export default function CheckerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading, isError, refetch } = useBkmCheckerDetail(id);
   const approveMutation = useApproveBkmChecker();
-  const buildQrPayload = useBkmCheckerStore((s) => s.buildQrPayload);
+  const spb = useQuery({
+    queryKey: ['bkmChecker', id, 'spb'],
+    queryFn: () => bkmCheckerApi.getSpb(id),
+    enabled: !!id && data?.status === 'APPROVED',
+    refetchOnWindowFocus: false,
+  });
   const viewShotRef = useRef<any>(null);
   const [isSharing, setIsSharing] = useState(false);
 
@@ -91,21 +97,19 @@ export default function CheckerDetailScreen() {
   const canApprove = data.status === 'SUBMITTED';
 
   const totalJanjang = data.details?.reduce((acc, curr) => acc + curr.jumlah_janjang, 0) ?? 0;
-  // QR ts must be a persisted issuance time. Not tanggal_laporan: a document older than the
-  // 48h window (utils/qr.ts QR_EXPIRY_MS) renders a QR that is already expired at Mill Gate.
-  // Not Date.now() either: the QR string IS staging's dedup key
-  // (pending_timbangan_log @@unique([org_id, unique_transaction_id])), so a ts that changes
-  // per render silently disables duplicate-weighing protection.
-  const timestamp = Date.parse(data.approved_at ?? data.modified_at) || Date.now();
-  const qrPayload = buildQrPayload(data.id, data.tph_id, totalJanjang, timestamp);
 
   return (
     <View style={styles.container}>
       <PageHeader title="Detail Checker" showBackButton onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Display QR code if APPROVED or SUBMITTED */}
-        {(data.status === 'APPROVED' || data.status === 'SUBMITTED') && (
+        {data.status === 'APPROVED' && spb.isLoading && <ActivityIndicator color={BrandColors.primary} />}
+        {data.status === 'APPROVED' && spb.isError && (
+          <TouchableOpacity onPress={() => spb.refetch()} style={styles.retryButton}>
+            <Text style={styles.retryText}>SPB belum tersedia. Coba lagi.</Text>
+          </TouchableOpacity>
+        )}
+        {data.status === 'APPROVED' && spb.data && (
           <View style={styles.qrCardContainer}>
             <ViewShot
               ref={viewShotRef}
@@ -117,7 +121,7 @@ export default function CheckerDetailScreen() {
               <Text style={styles.qrSubtitle}>Tunjukkan kode QR ini ke Krani Timbang di Mill Gate</Text>
               <View style={styles.qrContainer}>
                 <QRCode
-                  value={qrPayload}
+                  value={spb.data.qr_payload}
                   size={180}
                   color="black"
                   backgroundColor="white"

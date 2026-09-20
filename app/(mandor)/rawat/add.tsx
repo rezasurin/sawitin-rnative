@@ -3,11 +3,13 @@ import { PageHeader } from '@/components/home';
 import { View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { useRouter } from 'expo-router';
+import { useModuleGroup } from '@/hooks/useModuleGroup';
 import React from 'react';
 import { StyleSheet } from 'react-native';
 
 export default function AddRawatScreen() {
   const router = useRouter();
+  const group = useModuleGroup('(mandor)');
 
   return (
     <View style={styles.container}>
@@ -16,7 +18,7 @@ export default function AddRawatScreen() {
         showBackButton
         onBack={() => router.back()}
       />
-      <BKMRawatForm onSuccess={() => router.back()} />
+      <BKMRawatForm onSuccess={(id) => router.replace(`/${group}/rawat/${id}` as never)} />
     </View>
   );
 }

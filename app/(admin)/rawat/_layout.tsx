@@ -7,6 +7,7 @@ export default function RawatLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="add" />
+      <Stack.Screen name="[id]" />
     </Stack>
     </AdminModuleGuard>
   );

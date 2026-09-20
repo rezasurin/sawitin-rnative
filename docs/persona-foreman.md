@@ -35,7 +35,7 @@ The `Foreman` (Mandor) is the core operational user in the field. Foremen regist
    - Automatically computes `jumlah_janjang` by aggregating grading items (`janjang_normal`, `buah_mentah`, `over_ripe`, `tangkai_panjang`, `buah_abnormal`, `janjang_kosong`).
 2. **`useBkmCheckerStore`**:
    - Manages checker documents and FFB cargo validation parameters.
-   - **Flat Payload Generator (`buildQrPayload`)**: Outputs a signed flat string payload (`V2|<checkerId>|<tphId>|<quantity>|<timestamp>|<signature>`) where signature is HMAC-SHA256 of the first five fields using `EXPO_PUBLIC_QR_SECRET_KEY` (base64url).
+   - Approved Checkers request their V3 SPB QR from `GET /bkmChecker/:id/spb`; signing remains on the backend.
 3. **`useSyncQueueStore`**:
    - Holds pending offline mutation actions (CREATE/UPDATE/DELETE) with endpoints and payloads.
 
@@ -53,7 +53,7 @@ The `Foreman` (Mandor) is the core operational user in the field. Foremen regist
 
 ### B. Fruit Cargo Dispatches (BKM Checker)
 - Logs transporter details, driver identity, afdeling, block, and grading check details.
-- Generates a local QR Code graphic utilizing `react-native-qrcode-svg` containing the flat string signature for krani timbang to scan.
+- Displays the server-issued SPB with `react-native-qrcode-svg` for Krani Timbang to scan. The QR cannot be issued before approval or after weighing.
 
 ---
 

@@ -18,7 +18,7 @@ import {
 import { useCreateBkmRawat } from '@/hooks/useBkmRawat';
 
 interface Props {
-  onSuccess: () => void;
+  onSuccess: (id: string) => void;
 }
 
 interface FormErrors {
@@ -152,9 +152,9 @@ export function BKMRawatForm({ onSuccess }: Props) {
     };
 
     createMutation.mutate(payload, {
-      onSuccess: () => {
+      onSuccess: (created) => {
         Alert.alert('Berhasil', 'Dokumen BKM Rawat berhasil dibuat.');
-        onSuccess();
+        onSuccess(created.id);
       },
       onError: (err) => {
         Alert.alert(
