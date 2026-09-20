@@ -52,7 +52,6 @@ export default function EditBkmScreen() {
       <View style={styles.container}>
         <PageHeader
           title="Edit BKM"
-          showMenuButton={false}
           showBackButton
           onBack={() => router.back()}
         />
@@ -67,7 +66,6 @@ export default function EditBkmScreen() {
     <View style={styles.container}>
       <PageHeader
         title="Edit BKM"
-        showMenuButton={false}
         showBackButton
         onBack={() => router.back()}
       />

@@ -1,3 +1,4 @@
+import { useModuleGroup } from '@/hooks/useModuleGroup';
 import { FAB } from '@/components/core/FAB';
 import { ListEmptyState } from '@/components/core/ListEmptyState';
 import { CheckerCard } from '@/components/bkm/CheckerCard';
@@ -16,6 +17,7 @@ import {
 } from 'react-native';
 
 export default function CheckerListScreen() {
+  const group = useModuleGroup('(mandor)');
   const { status } = useLocalSearchParams<{ status?: string }>();
 
   const queryParams = useMemo(() => {
@@ -39,7 +41,7 @@ export default function CheckerListScreen() {
   } = useBkmCheckerInfinite(queryParams);
 
   const handleCreate = () => {
-    router.push('/(mandor)/checker/add' as any);
+    router.push(`/${group}/checker/add` as any);
   };
 
   const handleLoadMore = useCallback(() => {
@@ -60,7 +62,7 @@ export default function CheckerListScreen() {
         renderItem={({ item }) => (
           <CheckerCard
             item={item}
-            onPress={() => router.push(`/(mandor)/checker/${item.id}` as any)}
+            onPress={() => router.push(`/${group}/checker/${item.id}` as any)}
           />
         )}
         contentContainerStyle={styles.listContent}

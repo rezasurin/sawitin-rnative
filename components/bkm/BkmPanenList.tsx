@@ -10,7 +10,7 @@ import { FilterSortSheet, type FilterSortState } from '@/components/bkm/FilterSo
 import { Ionicons } from '@expo/vector-icons';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +26,7 @@ interface BkmPanenListProps {
   onCreatePress?: () => void;
   emptyHint?: string;
   initialStatus?: string | null;
+  onStatusChange?: (status: string | null) => void;
 }
 
 /**
@@ -34,7 +35,7 @@ interface BkmPanenListProps {
  *  - onCreatePress renders the FAB (mandor creates, asisten reviews)
  *  - long-press delete of DRAFT is mandor-only (asisten has no delete permission)
  */
-export function BkmPanenList({ onCardPress, onCreatePress, emptyHint, initialStatus = null }: BkmPanenListProps) {
+export function BkmPanenList({ onCardPress, onCreatePress, emptyHint, initialStatus = null, onStatusChange }: BkmPanenListProps) {
   const [showFilter, setShowFilter] = useState(false);
   const [filterState, setFilterState] = useState<FilterSortState>({
     sort: 'tanggal_laporan:desc',
@@ -53,6 +54,11 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint, initialSta
       filters: Object.keys(filters).length > 0 ? JSON.stringify(filters) : undefined,
     };
   }, [filterState]);
+
+  // Dashboard links must update the filter even when this tab is already mounted.
+  useEffect(() => {
+    setFilterState((current) => ({ ...current, status: initialStatus }));
+  }, [initialStatus]);
 
   const {
     data,
@@ -181,7 +187,10 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint, initialSta
         visible={showFilter}
         onClose={() => setShowFilter(false)}
         initialState={filterState}
-        onApply={setFilterState}
+        onApply={(next) => {
+          setFilterState(next);
+          onStatusChange?.(next.status);
+        }}
       />
     </View>
   );

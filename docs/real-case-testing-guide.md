@@ -3,6 +3,8 @@
 > **Disusun oleh:** Konsultan Kelapa Sawit (medium estate, 25–500 ha, Indonesia)
 > **Tujuan:** Menguji aplikasi mobile Sawitin dengan skenario operasional **nyata di lapangan** — bukan sekadar "happy path" — sekaligus memvalidasi bahwa angka yang muncul **masuk akal secara agronomi** (bukan cuma berhasil tersimpan).
 
+> **Status 20 September 2026:** Absensi ditunda. Skenario F bukan bagian dari pengujian rilis; mobile tidak menyediakan route atau aksi Absensi.
+
 ---
 
 ## 1. Profil Kebun Uji (dari seed)
@@ -41,10 +43,10 @@ Sebuah **rantai panen lengkap yang koheren** sudah disiapkan agar Anda bisa lang
 
 | Peran | Username | Password | Peran dalam uji |
 |---|---|---|---|
-| Mandor Panen | `mandor1` | `password123` | Input panen, checker, rawat, absensi |
+| Mandor Panen | `mandor1` | `password123` | Input panen, checker, rawat |
 | Asisten Afdeling | `asisten1` | `password123` | Approve/reject BKM |
 | Krani Timbang | `krani1` | `password123` | Scan QR, timbang |
-| Pemanen | `pemanen1` | `password123` | Absensi |
+| Pemanen | `pemanen1` | `password123` | Beranda dan Akun; Absensi ditunda |
 | Admin | `admin` | `admin` | Fallback / cek data |
 
 **Prasyarat:**
@@ -157,13 +159,9 @@ redis-cli KEYS "permissions:*" | xargs redis-cli DEL   # reset cache permission
 
 ---
 
-### Skenario F — Absensi Lapangan (Pemanen) + Geofence
+### Skenario F — Ditunda: Absensi Lapangan
 
-1. Login **pemanen1** → tab **Absensi**.
-2. Pilih **Blok A1** → **CLOCK IN** → badge **"Sesuai"** (simulasi dalam 100m).
-3. Pilih **Blok A2** → **CLOCK IN** → muncul **"Peringatan Geofencing"** (simulasi 160m di luar) → tulis alasan → **Kirim Absen** → badge **"Luar Blok"**.
-
-> ⚠️ Geofence masih **simulasi** (koordinat blok belum punya polygon). Untuk MVP, cukup validasi bahwa alur warning + alasan tersimpan.
+Skenario ini disimpan sebagai pengingat untuk implementasi mendatang. Belum ada API backend, route mobile, atau geofence otoritatif untuk diuji.
 
 ---
 
@@ -201,7 +199,6 @@ Gunakan tabel ini sebagai *checklist* saat menguji — nilai yang tampil harus m
 | Estimasi tonase BJR muncul di Panen, Checker, dan Timbangan | ✅ Terpasang |
 | Cascade Rawat kelompok→blok→lahan benar | ✅ Terpasang |
 | Lahan/TPH filter per blok benar | ✅ Terpasang |
-| Geofence absensi (simulasi) berjalan | ✅ Terpasang |
 | Offline queue → sync | ✅ Terpasang |
 
 ---

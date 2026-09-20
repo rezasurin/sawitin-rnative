@@ -20,14 +20,8 @@ import { useLocation } from "@/hooks/useLocation";
 import { useBlokList } from "@/hooks/useBlok";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { attendanceDb } from "@/services/database";
-import { getDistance, Coordinate } from "@/utils/geofencing";
-import { ConfirmModal } from "@/components/core/ConfirmModal";
+import { estateDate } from "@/utils/estateDate";
 
-// Mock center coordinates for estate blocks (for geofencing demonstration)
-// Centered roughly near central Sumatra palm plantations, or will fallback dynamically
-const MOCK_BLOCK_COORDINATES: Record<string, Coordinate> = {
-  default: { latitude: -0.789275, longitude: 113.921327 }, // Central Indonesia
-};
 
 export function AbsensiScreen() {
   const { user } = useAuthStore();
@@ -45,11 +39,6 @@ export function AbsensiScreen() {
   const [selectedBlockName, setSelectedBlockName] = useState("");
   const [attendanceHistory, setAttendanceHistory] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Modals state
-  const [geofenceWarnVisible, setGeofenceWarnVisible] = useState(false);
-  const [pendingRecord, setPendingRecord] = useState<any>(null);
-  const [warnNote, setWarnNote] = useState("");
 
   const userCode = user?.username || "pekerja";
 
@@ -91,9 +80,6 @@ export function AbsensiScreen() {
       await attendanceDb.saveRecord(record);
       Alert.alert("Sukses", "Absensi masuk berhasil dicatat!");
       loadHistory();
-      setPendingRecord(null);
-      setGeofenceWarnVisible(false);
-      setWarnNote("");
     } catch (err) {
       Alert.alert("Gagal", "Terjadi kesalahan saat menyimpan absensi.");
     } finally {
@@ -124,24 +110,13 @@ export function AbsensiScreen() {
       return;
     }
 
-    // 2. Perform Geofencing Verification
-    // Happy Path: First block in the list is always mapped exactly to device location (0m distance)
-    // Unhappy Path: Other blocks are given a slight offset (approx 160m away) to trigger geofence warning
-    const isFirstBlock = blocksData?.data?.[0]?.id === selectedBlockId;
-    const blockCoords = MOCK_BLOCK_COORDINATES[selectedBlockId] || {
-      latitude: isFirstBlock ? coords.latitude : coords.latitude + 0.0015,
-      longitude: isFirstBlock ? coords.longitude : coords.longitude + 0.0012,
-    };
-
-    const distance = getDistance(coords, blockCoords);
-    const isWithinGeofence = distance <= 100; // 100 meters margin
-
     const now = new Date();
     const timeStr = now.toLocaleTimeString("id-ID", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Asia/Pontianak",
     });
-    const dateStr = now.toISOString().split("T")[0];
+    const dateStr = estateDate(now);
 
     const newRecord = {
       id: `att_${Date.now()}`,
@@ -152,30 +127,11 @@ export function AbsensiScreen() {
       longitude: coords.longitude,
       block_id: selectedBlockId,
       block_name: selectedBlockName,
-      status: isWithinGeofence ? "SUCCESS" : "WARNING_OUTSIDE",
-      note: null,
+      status: "UNVERIFIED",
+      note: "Batas blok belum tersedia; lokasi belum diverifikasi.",
     };
 
-    if (!isWithinGeofence) {
-      // Prompt verification warning box (modal) if outside block margins
-      setPendingRecord(newRecord);
-      setGeofenceWarnVisible(true);
-      setIsSubmitting(false);
-    } else {
-      // Success check-in directly
-      await executeClockIn(newRecord);
-    }
-  };
-
-  const handleConfirmWithNote = (note?: string) => {
-    if (pendingRecord) {
-      const updatedRecord = {
-        ...pendingRecord,
-        note:
-          note || warnNote || "Melakukan absen di luar wilayah geofence blok.",
-      };
-      executeClockIn(updatedRecord);
-    }
+    await executeClockIn(newRecord);
   };
 
   return (
@@ -207,7 +163,7 @@ export function AbsensiScreen() {
         <View style={styles.actionCard}>
           <Text style={styles.cardTitle}>Pencatatan Kehadiran</Text>
           <Text style={styles.cardSubtitle}>
-            Pilih lokasi blok kerja Anda hari ini sebelum melakukan Clock In
+            Pilih blok kerja untuk mencatat kehadiran dan GPS. Batas blok belum tersedia, sehingga lokasi belum dapat diverifikasi.
           </Text>
 
           {/* Block Selection Selector */}
@@ -298,7 +254,7 @@ export function AbsensiScreen() {
         <Text style={styles.sectionTitle}>Histori Absensi Harian</Text>
         {attendanceHistory.length > 0 ? (
           attendanceHistory.map((h) => {
-            const isOutside = h.status === "WARNING_OUTSIDE";
+
             return (
               <View key={h.id} style={styles.historyCard}>
                 <View style={styles.historyDateBox}>
@@ -321,16 +277,16 @@ export function AbsensiScreen() {
                 <View
                   style={[
                     styles.statusBadge,
-                    { backgroundColor: isOutside ? "#FFF3E0" : "#E8F5E9" },
+                    { backgroundColor: "#FFF3E0" },
                   ]}
                 >
                   <Text
                     style={[
                       styles.statusText,
-                      { color: isOutside ? "#E65100" : "#2E7D32" },
+                      { color: "#E65100" },
                     ]}
                   >
-                    {isOutside ? "Luar Blok" : "Sesuai"}
+                    {"Belum diverifikasi"}
                   </Text>
                 </View>
               </View>
@@ -350,22 +306,6 @@ export function AbsensiScreen() {
         )}
       </ScrollView>
 
-      {/* Geofence Alert Modal */}
-      <ConfirmModal
-        visible={geofenceWarnVisible}
-        title="⚠️ Peringatan Geofencing"
-        message={`Lokasi GPS Anda terdeteksi berada di luar koordinat Blok ${selectedBlockName}.\n\nJika tetap ingin melakukan absensi, silakan tulis catatan alasan kehadiran (misal: Sinyal buruk, Rapat pagi di pos, dll.) dan tekan Kirim.`}
-        confirmText="Kirim Absen"
-        cancelText="Batal"
-        showInput
-        inputPlaceholder="Masukkan alasan absensi luar blok..."
-        onConfirm={handleConfirmWithNote}
-        onCancel={() => {
-          setGeofenceWarnVisible(false);
-          setPendingRecord(null);
-          setWarnNote("");
-        }}
-      />
     </View>
   );
 }

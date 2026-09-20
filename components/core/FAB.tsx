@@ -4,11 +4,12 @@ import { BrandColors } from "../../constants/Colors";
 
 interface FABProps {
   onPress?: () => void;
+  label?: string;
 }
 
-export const FAB = ({ onPress }: FABProps) => {
+export const FAB = ({ onPress, label = 'Tambah data' }: FABProps) => {
   return (
-    <TouchableOpacity style={styles.container} onPress={onPress}>
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={label} style={styles.container} onPress={onPress}>
       <AntDesign name="plus" size={24} color={BrandColors.white} />
     </TouchableOpacity>
   );

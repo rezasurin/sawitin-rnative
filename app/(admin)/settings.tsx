@@ -1,25 +1,5 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { BrandColors } from '@/constants/Colors';
-import { PageHeader } from '@/components/home';
+import { Redirect } from 'expo-router';
 
 export default function SettingsScreen() {
-  return (
-    <View style={styles.container}>
-      <PageHeader title="Pengaturan" />
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.content}>
-          <Text style={styles.emptyText}>Pengaturan sistem</Text>
-        </View>
-      </ScrollView>
-    </View>
-  );
+  return <Redirect href="/(admin)/profile" />;
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BrandColors.background },
-  scrollView: { flex: 1 },
-  scrollContent: { paddingBottom: 120 },
-  content: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
-  emptyText: { color: BrandColors.textMuted, fontSize: 14 },
-});

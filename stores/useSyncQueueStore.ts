@@ -39,7 +39,7 @@ export const useSyncQueueStore = create<SyncQueueStore>((set, get) => ({
   loadQueue: async () => {
     try {
       const saved = await syncQueueDb.getAll();
-      set({ queue: saved.filter((q) => q.retryCount < MAX_RETRIES) });
+      set({ queue: saved });
     } catch {
       // Silent fail — start with empty queue
     }
@@ -64,6 +64,7 @@ export const useSyncQueueStore = create<SyncQueueStore>((set, get) => ({
       }));
     } catch (err) {
       console.error('Failed to add item to SQLite sync queue:', err);
+      throw err;
     }
   },
 

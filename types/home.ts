@@ -3,13 +3,6 @@
  * Following Interface Segregation Principle - small, focused interfaces
  */
 
-export interface DrawerMenuItem {
-  id: string;
-  label: string;
-  icon: string;
-  onPress?: () => void;
-}
-
 export interface Announcement {
   id: string;
   title: string;

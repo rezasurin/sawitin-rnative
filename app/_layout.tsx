@@ -1,8 +1,6 @@
 import { Stack, router } from "expo-router";
 import { useEffect } from "react";
 
-import "./globals.css";
-
 import { getRoleRouteGroup } from "@/constants/navigation";
 import { QueryProvider } from "@/providers";
 import { useAuthStore } from "@/stores/useAuthStore";

@@ -22,7 +22,7 @@ export function useSync() {
   const isSyncingRef = useRef(false);
 
   const triggerSync = useCallback(async (): Promise<SyncResult> => {
-    if (isSyncingRef.current) {
+    if (isSyncingRef.current || useSyncQueueStore.getState().isProcessing) {
       return { pushed: 0, pushFailed: 0, pulled: false, error: 'Sinkronisasi sedang berjalan.' };
     }
 

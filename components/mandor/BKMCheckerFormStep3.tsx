@@ -9,7 +9,7 @@ import { useBkmCheckerStore } from '@/stores/useBkmCheckerStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { useQuery } from '@tanstack/react-query';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -22,13 +22,16 @@ const DISCREPANCY_TOLERANCE_PCT = 2;
 interface Props {
   onBack: () => void;
   onSuccess: () => void;
+  onSavingChange: (saving: boolean) => void;
 }
 
-export function BKMCheckerFormStep3({ onBack, onSuccess }: Props) {
-  const { header, details, reset } = useBkmCheckerStore();
+export function BKMCheckerFormStep3({ onBack, onSuccess, onSavingChange }: Props) {
+  const { header, details } = useBkmCheckerStore();
   const submitMutation = useSubmitBkmChecker();
   const isOnline = useNetworkStore((s) => s.isOnline);
   const addToQueue = useSyncQueueStore((s) => s.addToQueue);
+  const savingRef = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
   const { data: blokData } = useQuery({ queryKey: ['blok', 'all'], queryFn: () => blokApi.getAll({ limit: 200 }) });
@@ -67,8 +70,8 @@ export function BKMCheckerFormStep3({ onBack, onSuccess }: Props) {
     (panenJanjangForTph > 0 ? discrepancyPct > DISCREPANCY_TOLERANCE_PCT : totalJanjang > 0);
   const estimatedTons = (totalJanjang * bjr) / 1000;
 
-  const handleSubmit = () => {
-    if (!confirmed) return;
+  const handleSubmit = async () => {
+    if (!confirmed || savingRef.current) return;
 
     if (mismatchExceedsTolerance) {
       Alert.alert(
@@ -115,37 +118,29 @@ export function BKMCheckerFormStep3({ onBack, onSuccess }: Props) {
       jumlah_brondol: d.jumlah_brondol,
     }));
 
-    if (!isOnline) {
-      addToQueue({
-        module: 'bkm_checker',
-        action: 'CREATE',
-        endpoint: '/bkmChecker',
-        payload: { header: headerPayload, details: detailPayloads },
-      });
-      reset();
-      Alert.alert(
-        'Antrian Offline',
-        'Data tersimpan dan akan dikirim saat online.',
-        [{ text: 'OK', onPress: onSuccess }],
-      );
-      return;
+    savingRef.current = true;
+    setIsSaving(true);
+    onSavingChange(true);
+    try {
+      if (!isOnline) {
+        await addToQueue({
+          module: 'bkm_checker',
+          action: 'CREATE',
+          endpoint: '/bkmChecker',
+          payload: { header: headerPayload, details: detailPayloads },
+        });
+        Alert.alert('Antrian Offline', 'Data tersimpan dan akan dikirim saat online.');
+      } else {
+        await submitMutation.mutateAsync({ header: headerPayload, details: detailPayloads });
+      }
+      onSuccess();
+    } catch (err) {
+      Alert.alert('Gagal Menyimpan', err instanceof Error ? err.message : 'Data belum tersimpan. Silakan coba lagi.');
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+      onSavingChange(false);
     }
-
-    submitMutation.mutate(
-      { header: headerPayload, details: detailPayloads },
-      {
-        onSuccess: () => {
-          reset();
-          onSuccess();
-        },
-        onError: (err) => {
-          Alert.alert(
-            'Gagal Menyimpan',
-            err instanceof Error ? err.message : 'Terjadi kesalahan',
-          );
-        },
-      },
-    );
   };
 
   return (
@@ -221,12 +216,12 @@ export function BKMCheckerFormStep3({ onBack, onSuccess }: Props) {
       </ScrollView>
 
       <View style={styles.navButtons}>
-        <Button title="Edit Data" onPress={onBack} variant="secondary" style={{ flex: 1 }} />
+        <Button title="Edit Data" onPress={onBack} disabled={isSaving} variant="secondary" style={{ flex: 1 }} />
         <Button
           title="Submit Checker"
           onPress={handleSubmit}
-          disabled={!confirmed || mismatchExceedsTolerance}
-          loading={submitMutation.isPending}
+          disabled={isSaving || !confirmed || mismatchExceedsTolerance}
+          loading={isSaving}
           variant="primary"
           style={{ flex: 2 }}
         />

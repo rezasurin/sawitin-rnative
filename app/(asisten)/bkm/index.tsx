@@ -15,6 +15,7 @@ export default function BkmScreen() {
         onCardPress={(id) => router.push(`/(asisten)/bkm/${id}`)}
         emptyHint="Belum ada dokumen BKM Panen untuk direview"
         initialStatus={status ?? null}
+        onStatusChange={(next) => router.setParams({ status: next ?? undefined })}
       />
     </View>
   );

@@ -1,6 +1,6 @@
+import { useModuleGroup } from '@/hooks/useModuleGroup';
 import { Button } from "@/components/core/Button";
 import { FormField } from "@/components/form";
-import { KraniTimbangHistory } from "@/components/krani/KraniTimbangHistory";
 import { PageHeader } from "@/components/home";
 import { BrandColors } from "@/constants/Colors";
 import { useCreateKraniTimbang } from "@/hooks/useKraniTimbang";
@@ -10,7 +10,7 @@ import { bkmCheckerApi } from "@/services/bkm-checker.service";
 import type { KraniTimbang } from "@/types";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useQuery } from "@tanstack/react-query";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -27,6 +27,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TimbanganScreen() {
+  const group = useModuleGroup('(krani)');
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { checkerId, detailId } = useLocalSearchParams<{
@@ -156,7 +157,7 @@ export default function TimbanganScreen() {
           {
             text: "OK",
             onPress: () => {
-              router.setParams({ checkerId: undefined, detailId: undefined });
+              router.dismissTo(`/${group}/timbangan`);
             },
           },
         ]);
@@ -173,8 +174,10 @@ export default function TimbanganScreen() {
   };
 
   const handleBack = () => {
-    router.setParams({ checkerId: undefined, detailId: undefined });
+    router.dismissTo(`/${group}/timbangan`);
   };
+
+  if (!checkerId && !detailId) return <Redirect href={`/${group}/timbangan`} />;
 
   return (
     <KeyboardAvoidingView
@@ -182,9 +185,8 @@ export default function TimbanganScreen() {
       style={styles.container}
     >
       <PageHeader
-        title={detailId ? "Detail Timbangan" : "Timbangan"}
-        showMenuButton={!checkerId && !detailId}
-        showBackButton={!!checkerId || !!detailId}
+        title={detailId ? "Detail Timbangan" : "Input Timbangan"}
+        showBackButton
         onBack={handleBack}
       />
 
@@ -194,16 +196,6 @@ export default function TimbanganScreen() {
           isLoading={isDetailLoading}
           isError={isDetailError}
           onRetry={() => refetchDetail()}
-        />
-      ) : !checkerId ? (
-        <KraniTimbangHistory
-          onCardPress={(id) =>
-            router.push({
-              pathname: "/(krani)/timbangan",
-              params: { detailId: id },
-            })
-          }
-          onScanPress={() => router.push("/(krani)/scan")}
         />
       ) : isLoading ? (
         <View style={styles.centerContent}>

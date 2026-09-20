@@ -1,5 +1,7 @@
 # Weighbridge Scribe (Krani Timbang) Persona Documentation
 
+> **Historical design draft:** Absensi is deferred as of 20 September 2026 and is not available in the current mobile app. See [documentation hub](README.md) for current navigation.
+
 ## 1. Overview & Purpose
 The `Weighbridge Scribe` (Krani Timbang) is stationed at the mill gate where the physical weighbridge scale resides. Scribes scan the incoming driver's QR code (representing the BKM Checker Surat Pengantar Buah / SPB), auto-populate driver and vehicle metadata, log scale weights, and print receipt slips.
 

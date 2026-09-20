@@ -91,12 +91,17 @@ export default function CheckerDetailScreen() {
   const canApprove = data.status === 'SUBMITTED';
 
   const totalJanjang = data.details?.reduce((acc, curr) => acc + curr.jumlah_janjang, 0) ?? 0;
-  const timestamp = Date.parse(data.tanggal_laporan) || Date.now();
+  // QR ts must be a persisted issuance time. Not tanggal_laporan: a document older than the
+  // 48h window (utils/qr.ts QR_EXPIRY_MS) renders a QR that is already expired at Mill Gate.
+  // Not Date.now() either: the QR string IS staging's dedup key
+  // (pending_timbangan_log @@unique([org_id, unique_transaction_id])), so a ts that changes
+  // per render silently disables duplicate-weighing protection.
+  const timestamp = Date.parse(data.approved_at ?? data.modified_at) || Date.now();
   const qrPayload = buildQrPayload(data.id, data.tph_id, totalJanjang, timestamp);
 
   return (
     <View style={styles.container}>
-      <PageHeader title="Detail Checker" showMenuButton={false} showBackButton onBack={() => router.back()} />
+      <PageHeader title="Detail Checker" showBackButton onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Display QR code if APPROVED or SUBMITTED */}

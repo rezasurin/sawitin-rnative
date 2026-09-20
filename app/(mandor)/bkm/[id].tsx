@@ -1,3 +1,4 @@
+import { useModuleGroup } from '@/hooks/useModuleGroup';
 import { ConfirmModal } from "@/components/core/ConfirmModal";
 import { PageHeader } from "@/components/home";
 import { View } from "@/components/Themed";
@@ -19,6 +20,7 @@ import {
 } from "react-native";
 
 export default function BkmDetailScreen() {
+  const group = useModuleGroup('(mandor)');
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading, isError, refetch } = useBkmPanenDetail(id);
@@ -67,7 +69,7 @@ export default function BkmDetailScreen() {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <PageHeader title="Detail BKM" showMenuButton={false} showBackButton onBack={() => router.back()} />
+        <PageHeader title="Detail BKM" showBackButton onBack={() => router.back()} />
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={BrandColors.primary} />
         </View>
@@ -78,7 +80,7 @@ export default function BkmDetailScreen() {
   if (isError || !data) {
     return (
       <View style={styles.container}>
-        <PageHeader title="Detail BKM" showMenuButton={false} showBackButton onBack={() => router.back()} />
+        <PageHeader title="Detail BKM" showBackButton onBack={() => router.back()} />
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={40} color={BrandColors.error} />
           <Text style={styles.errorText}>Gagal memuat data</Text>
@@ -94,7 +96,7 @@ export default function BkmDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <PageHeader title="Detail BKM" showMenuButton={false} showBackButton onBack={() => router.back()} />
+      <PageHeader title="Detail BKM" showBackButton onBack={() => router.back()} />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.sectionHeader}>
           <View style={styles.sectionHeaderRow}>
@@ -135,7 +137,7 @@ export default function BkmDetailScreen() {
           <View style={styles.actionButtons}>
             <TouchableOpacity
               style={[styles.actionButton, styles.editButtonSm]}
-              onPress={() => router.push(`/(mandor)/bkm/edit?id=${id}`)}
+              onPress={() => router.push(`/${group}/bkm/edit?id=${id}`)}
             >
               <Ionicons name="create-outline" size={18} color={BrandColors.white} />
               <Text style={styles.editButtonText}>Edit</Text>
@@ -151,7 +153,7 @@ export default function BkmDetailScreen() {
           <View style={styles.editButtonContainer}>
             <TouchableOpacity
               style={styles.editButton}
-              onPress={() => router.push(`/(mandor)/bkm/edit?id=${id}`)}
+              onPress={() => router.push(`/${group}/bkm/edit?id=${id}`)}
             >
               <Ionicons name="create-outline" size={18} color={BrandColors.white} />
               <Text style={styles.editButtonText}>Edit</Text>

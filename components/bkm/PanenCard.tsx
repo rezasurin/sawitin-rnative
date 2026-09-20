@@ -18,7 +18,15 @@ export function PanenCard({
 }) {
   return (
     <Card>
-      <TouchableOpacity onPress={onPress} onLongPress={onLongPress} activeOpacity={0.7}>
+      <TouchableOpacity accessibilityRole="button"
+        accessibilityLabel={`BKM Panen, ${item.blok?.nama ?? item.blok_id}, ${item.tanggal_laporan}, ${item.status}`}
+        accessibilityHint={onLongPress ? 'Ketuk untuk detail. Tekan lama untuk pilihan dokumen.' : 'Ketuk untuk membuka detail dokumen.'}
+        accessibilityActions={onLongPress ? [{ name: 'activate' }, { name: 'longpress', label: 'Pilihan dokumen' }] : [{ name: 'activate' }]}
+        onAccessibilityAction={({ nativeEvent }) => {
+          if (nativeEvent.actionName === 'longpress') onLongPress?.();
+          else if (nativeEvent.actionName === 'activate') onPress();
+        }}
+        onPress={onPress} onLongPress={onLongPress} activeOpacity={0.7}>
         <View style={styles.header}>
           <View style={styles.titleRow}>
             <Ionicons name="leaf" size={18} color={BrandColors.primary} />
@@ -38,9 +46,9 @@ export function PanenCard({
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  title: { fontSize: 16, fontWeight: "600", color: BrandColors.textPrimary },
+  header: { flexWrap: "wrap", gap: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  titleRow: { flex: 1, minWidth: 0, marginRight: 8, flexDirection: "row", alignItems: "center", gap: 8 },
+  title: { flexShrink: 1, fontSize: 16, fontWeight: "600", color: BrandColors.textPrimary },
   body: {},
   date: { fontSize: 14, color: BrandColors.textSecondary },
   meta: { fontSize: 13, color: BrandColors.textMuted, marginTop: 2 },

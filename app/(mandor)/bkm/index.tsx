@@ -1,3 +1,4 @@
+import { useModuleGroup } from '@/hooks/useModuleGroup';
 import { BkmPanenList } from '@/components/bkm/BkmPanenList';
 import { View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
@@ -6,16 +7,18 @@ import React from 'react';
 import { StyleSheet } from 'react-native';
 
 export default function BkmScreen() {
+  const group = useModuleGroup('(mandor)');
   const router = useRouter();
   const { status } = useLocalSearchParams<{ status?: string }>();
 
   return (
     <View style={styles.container}>
       <BkmPanenList
-        onCardPress={(id) => router.push(`/(mandor)/bkm/${id}`)}
-        onCreatePress={() => router.push('/(mandor)/bkm/add')}
+        onCardPress={(id) => router.push(`/${group}/bkm/${id}`)}
+        onCreatePress={() => router.push(`/${group}/bkm/add`)}
         emptyHint="Tambahkan dokumen panen baru dengan menekan tombol +"
         initialStatus={status ?? null}
+        onStatusChange={(next) => router.setParams({ status: next ?? undefined })}
       />
     </View>
   );

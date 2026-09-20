@@ -1,9 +1,10 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import React from 'react';
+import { ColorValue } from 'react-native';
 
 interface TabBarIconProps {
   name: React.ComponentProps<typeof FontAwesome>['name'];
-  color: string;
+  color: ColorValue;
 }
 
 export function TabBarIcon({ name, color }: TabBarIconProps) {

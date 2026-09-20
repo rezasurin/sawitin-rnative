@@ -13,7 +13,6 @@ export default function CheckerAddScreen() {
     <View style={styles.container}>
       <PageHeader
         title="BKM Checker Baru"
-        showMenuButton={false}
         showBackButton
         onBack={() => router.back()}
       />

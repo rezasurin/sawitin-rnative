@@ -1,12 +1,11 @@
+import { estateDate } from "@/utils/estateDate";
 import { BrandColors } from "@/constants/Colors";
 import { useBkmCheckerList } from "@/hooks/useBkmChecker";
 import { useBkmPanenList } from "@/hooks/useBkmPanen";
 import { useKraniTimbangList } from "@/hooks/useKraniTimbang";
-import { attendanceDb } from "@/services/database";
-import { useAuthStore } from "@/stores/useAuthStore";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { RelativePathString, useRouter, useSegments } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { RelativePathString, useFocusEffect, useRouter, useSegments } from "expo-router";
+import React, { useCallback } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 interface SummaryStat {
@@ -18,7 +17,7 @@ interface SummaryStat {
   params?: Record<string, string>;
 }
 
-const todayStr = () => new Date().toISOString().split("T")[0];
+const todayStr = estateDate;
 
 /**
  * TodaySummary Component
@@ -33,9 +32,6 @@ export function TodaySummary() {
   }
   if (currentGroup === "(krani)") {
     return <KraniTodaySummary />;
-  }
-  if (currentGroup === "(pemanen)") {
-    return <PemanenTodaySummary />;
   }
   return null;
 }
@@ -100,13 +96,14 @@ function Loading() {
 }
 
 function PendingApprovalSummary({ group }: { group: string }) {
-  const { data: panen, isLoading: panenLoading } = useBkmPanenList({
+  const { data: panen, isError: panenError, refetch: refetchPanen, isLoading: panenLoading } = useBkmPanenList({
     limit: 100,
   });
-  const { data: checker, isLoading: checkerLoading } = useBkmCheckerList({
+  const { data: checker, isError: checkerError, refetch: refetchChecker, isLoading: checkerLoading } = useBkmCheckerList({
     limit: 100,
   });
 
+  useFocusEffect(useCallback(() => { void refetchPanen(); void refetchChecker(); }, [refetchPanen, refetchChecker]));
   const pendingPanen =
     panen?.data?.filter((d) => d.status === "SUBMITTED").length ?? 0;
   const pendingChecker =
@@ -124,7 +121,7 @@ function PendingApprovalSummary({ group }: { group: string }) {
     {
       id: "bkm-panen",
       label: "BKM Panen",
-      value: String(pendingPanen),
+      value: panenError || !panen ? "Tidak tersedia" : String(pendingPanen),
       icon: "book",
       route: `/(${group.slice(1, -1)})/bkm`,
       params: { status: "SUBMITTED" },
@@ -135,7 +132,7 @@ function PendingApprovalSummary({ group }: { group: string }) {
     stats.push({
       id: "bkm-checker",
       label: "BKM Checker",
-      value: String(pendingChecker),
+      value: checkerError || !checker ? "Tidak tersedia" : String(pendingChecker),
       icon: "check-square-o",
       route: "/(mandor)/checker",
       params: { status: "SUBMITTED" },
@@ -150,8 +147,9 @@ function PendingApprovalSummary({ group }: { group: string }) {
 }
 
 function KraniTodaySummary() {
-  const { data, isLoading } = useKraniTimbangList({ limit: 100 });
+  const { data, isLoading, isError, refetch } = useKraniTimbangList({ limit: 100 });
 
+  useFocusEffect(useCallback(() => { void refetch(); }, [refetch]));
   const today = todayStr();
   const todays = data?.data?.filter((d) => d.tanggal === today) ?? [];
   const count = todays.length;
@@ -175,65 +173,19 @@ function KraniTodaySummary() {
           {
             id: "count",
             label: "Jumlah Timbangan",
-            value: String(count),
+            value: isError || !data ? "Tidak tersedia" : String(count),
             icon: "truck",
             route: "/(krani)/timbangan",
           },
           {
             id: "netto",
             label: "Total Netto",
-            value: `${(totalNetto / 1000).toFixed(1)} t`,
+            value: isError || !data ? "Tidak tersedia" : `${(totalNetto / 1000).toFixed(1)} t`,
             icon: "balance-scale",
             route: "/(krani)/timbangan",
           },
         ]}
       />
-    </SectionCard>
-  );
-}
-
-function PemanenTodaySummary() {
-  const user = useAuthStore((s) => s.user);
-  const [todayCount, setTodayCount] = useState<number | null>(null);
-  const userCode = user?.username || "pekerja";
-
-  useEffect(() => {
-    let isMounted = true;
-    attendanceDb
-      .getAll(userCode)
-      .then((history) => {
-        if (isMounted) {
-          const today = todayStr();
-          setTodayCount(
-            history.filter((h) => String(h.date).startsWith(today)).length,
-          );
-        }
-      })
-      .catch(() => {
-        if (isMounted) setTodayCount(0);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, [userCode]);
-
-  return (
-    <SectionCard title="Absensi Hari Ini" icon="hand-pointer-o">
-      {todayCount === null ? (
-        <Loading />
-      ) : (
-        <StatRow
-          stats={[
-            {
-              id: "absensi",
-              label: todayCount > 0 ? "Sudah Absen" : "Belum Absen",
-              value: String(todayCount),
-              icon: "calendar-check-o",
-              route: "/(pemanen)/absensi",
-            },
-          ]}
-        />
-      )}
     </SectionCard>
   );
 }

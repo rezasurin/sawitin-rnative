@@ -57,7 +57,6 @@ export default function AddMaterialScreen() {
     <View style={styles.container}>
       <PageHeader
         title="Tambah Material"
-        showMenuButton={false}
         showBackButton
         onBack={() => router.back()}
       />

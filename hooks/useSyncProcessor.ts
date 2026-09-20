@@ -145,40 +145,32 @@ export function useSyncProcessor() {
 
   // Process queue when online and items exist
   useEffect(() => {
-    if (!isOnline || queue.length === 0 || isProcessing || processingRef.current) return;
+    if (!isOnline || !queue.some((item) => item.retryCount < MAX_RETRIES) || isProcessing || processingRef.current) return;
 
-    let cancelled = false;
 
     async function processQueue() {
       processingRef.current = true;
       setProcessing(true);
 
-      const snapshot = [...queue];
+      const snapshot = queue.filter((item) => item.retryCount < MAX_RETRIES);
 
       for (const item of snapshot) {
-        if (cancelled) break;
 
         try {
           await processItem(item);
-          if (!cancelled) removeFromQueue(item.id);
+          await removeFromQueue(item.id);
         } catch {
-          if (!cancelled) {
-            incrementRetry(item.id);
-          }
+          await incrementRetry(item.id);
         }
       }
 
-      if (!cancelled) {
-        setProcessing(false);
-      }
+      setProcessing(false);
       processingRef.current = false;
     }
 
     processQueue();
 
-    return () => {
-      cancelled = true;
-    };
+
   }, [isOnline, queue, isProcessing, setProcessing, removeFromQueue, incrementRetry]);
 
   return {

@@ -12,7 +12,7 @@ import { ScrollView, StyleSheet, View } from "react-native";
 export function DashboardScreen() {
   return (
     <View style={styles.container}>
-      <PageHeader title="Home" />
+      <PageHeader title="Beranda" />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -20,8 +20,8 @@ export function DashboardScreen() {
       >
         <UserGreeting />
         <QuickActions />
-        <HargaTbsCard />
         <TodaySummary />
+        <HargaTbsCard />
       </ScrollView>
     </View>
   );

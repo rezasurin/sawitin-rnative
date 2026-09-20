@@ -1,3 +1,6 @@
+import { FAB } from '@/components/core/FAB';
+import { useRouter } from 'expo-router';
+import { useModuleGroup } from '@/hooks/useModuleGroup';
 import { Card } from '@/components/core/Card';
 import { ListEmptyState } from '@/components/core/ListEmptyState';
 import { PageHeader } from '@/components/home';
@@ -16,6 +19,8 @@ import {
 } from 'react-native';
 
 export default function RawatScreen() {
+  const router = useRouter();
+  const group = useModuleGroup('(mandor)');
   const {
     data: rawatList,
     isLoading,
@@ -137,6 +142,7 @@ export default function RawatScreen() {
           />
         }
       />
+      <FAB onPress={() => router.push(`/${group}/rawat/add`)} />
     </View>
   );
 }

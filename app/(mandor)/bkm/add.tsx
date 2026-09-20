@@ -19,7 +19,6 @@ export default function AddBkmScreen() {
     <View style={styles.container}>
       <PageHeader
         title="Tambah BKM"
-        showMenuButton={false}
         showBackButton
         onBack={() => router.back()}
       />

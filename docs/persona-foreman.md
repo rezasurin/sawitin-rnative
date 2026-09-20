@@ -1,5 +1,7 @@
 # Foreman (Mandor) Persona Documentation
 
+> **Historical design draft:** Absensi is deferred as of 20 September 2026. The current Mandor app has Beranda, BKM Panen, Checker, and Akun tabs; the Absensi route described below was removed. See [documentation hub](README.md) for current status.
+
 ## 1. Overview & Purpose
 The `Foreman` (Mandor) is the core operational user in the field. Foremen register daily crew check-ins, record harvested bunches per worker per TPH block, register upkeep maintenance, and generate cargo check transport documents (BKM Checker) utilizing offline queues and hardware-agnostic barcode payloads.
 

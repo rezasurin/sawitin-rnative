@@ -10,7 +10,6 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { BrandColors } from "@/constants/Colors";
-import { useDrawerStore } from "@/stores";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -20,7 +19,6 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
  */
 interface PageHeaderProps {
   title: string;
-  showMenuButton?: boolean;
   actionBtn?: React.ReactElement;
   showBackButton?: boolean;
   onBack?: () => void;
@@ -28,13 +26,11 @@ interface PageHeaderProps {
 
 export function PageHeader({
   title,
-  showMenuButton = true,
   actionBtn,
   showBackButton = false,
   onBack,
 }: PageHeaderProps) {
   const insets = useSafeAreaInsets();
-  const openDrawer = useDrawerStore((state) => state.openDrawer);
   const scale = useSharedValue(1);
 
   // bounce the header in on mount
@@ -83,6 +79,8 @@ export function PageHeader({
       {showBackButton && (
         <AnimatedPressable
           onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Kembali"
           onPressIn={onPressIn}
           onPressOut={onPressOut}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -98,7 +96,6 @@ export function PageHeader({
         </AnimatedPressable>
       )}
 
-      {actionBtn}
       {/* Title */}
       <View style={styles.titleContainer}>
         <Text style={styles.title} numberOfLines={1}>
@@ -106,22 +103,7 @@ export function PageHeader({
         </Text>
       </View>
 
-      {/* Right actions area */}
-      <View style={styles.actions}>
-        {showMenuButton && (
-          <AnimatedPressable
-            onPress={openDrawer}
-            onPressIn={onPressIn}
-            onPressOut={onPressOut}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={[styles.menuButton, buttonAnimatedStyle]}
-          >
-            <View style={styles.iconContainer}>
-              <FontAwesome name="bars" size={22} color={BrandColors.white} />
-            </View>
-          </AnimatedPressable>
-        )}
-      </View>
+      {actionBtn && <View style={styles.actions}>{actionBtn}</View>}
     </Animated.View>
   );
 }

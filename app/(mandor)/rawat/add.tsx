@@ -13,7 +13,6 @@ export default function AddRawatScreen() {
     <View style={styles.container}>
       <PageHeader
         title="Tambah BKM Rawat"
-        showMenuButton={false}
         showBackButton
         onBack={() => router.back()}
       />

@@ -1,55 +1,50 @@
+import { useAuthStore } from "@/stores/useAuthStore";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { BrandColors } from "@/constants/Colors";
-import { RelativePathString, useRouter, useSegments } from "expo-router";
+import { Href, useRouter, useSegments } from "expo-router";
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 interface QuickAction {
   id: string;
   label: string;
   icon: string;
-  route: string;
+  route: Href;
+  permission?: string;
+  permissionAction?: "write" | "read";
 }
 
 const ROLE_ACTIONS: Record<string, QuickAction[]> = {
+  "(admin)": [
+    { id: "bkm-add", label: "Buat BKM Panen", icon: "book", route: "/(admin)/bkm/add", permission: "mod_bkm_panen", permissionAction: "write" },
+    { id: "checker-add", label: "Input Checker", icon: "check-square-o", route: "/(admin)/checker/add", permission: "mod_bkm_checker", permissionAction: "write" },
+    { id: "timbangan-scan", label: "Pindai Timbangan", icon: "qrcode", route: "/(admin)/timbangan/scan", permission: "mod_krani_timbang", permissionAction: "write" },
+  ],
   "(mandor)": [
     {
       id: "bkm-add",
       label: "Buat BKM Panen",
       icon: "money",
-      route: "(mandor)/bkm/add",
+      route: "/(mandor)/bkm/add",
     },
     {
       id: "checker-add",
       label: "Input Checker",
       icon: "check-square-o",
-      route: "(mandor)/checker/add",
-    },
-  ],
-  "(asisten)": [
-    {
-      id: "bkm-review",
-      label: "Review BKM Panen",
-      icon: "check-square-o",
-      route: "(asisten)/bkm",
-    },
-  ],
-  "(krani)": [
-    { id: "scan", label: "Scan QR", icon: "qrcode", route: "(krani)/scan" },
-    {
-      id: "timbangan",
-      label: "Input Timbangan",
-      icon: "truck",
-      route: "(krani)/timbangan",
+      route: "/(mandor)/checker/add",
     },
   ],
 };
 
 export function QuickActions() {
   const router = useRouter();
+  const { width, fontScale } = useWindowDimensions();
+  const hasPermission = useAuthStore((state) => state.hasPermission);
   const segments = useSegments();
   const currentGroup = segments[0] ?? "";
-  const actions = ROLE_ACTIONS[currentGroup] ?? [];
+  const actions = (ROLE_ACTIONS[currentGroup] ?? []).filter((action) =>
+    !action.permission || (hasPermission(action.permission, "read") && hasPermission(action.permission, action.permissionAction ?? "read")),
+  );
 
   if (actions.length === 0) return null;
 
@@ -62,13 +57,18 @@ export function QuickActions() {
             key={action.id}
             style={[
               styles.actionItem,
-              actions.length === 1 && styles.actionItemFull,
+              (actions.length === 1 || width < 360 || fontScale > 1.3) && styles.actionItemFull,
             ]}
           >
             <Pressable
-              className="flex-row items-center px-5 py-3 active:bg-gray-100"
+              accessibilityRole="button"
+              accessibilityLabel={action.label}
+              style={({ pressed }) => [
+                styles.actionCardPressable,
+                pressed && styles.actionCardPressableActive,
+              ]}
               onPress={() =>
-                router.push({ pathname: action.route as RelativePathString })
+                router.push(action.route)
               }
             >
               <View style={styles.actionCard}>
@@ -79,7 +79,7 @@ export function QuickActions() {
                     color={BrandColors.primary}
                   />
                 </View>
-                <Text style={styles.actionLabel} numberOfLines={2}>
+                <Text style={styles.actionLabel}>
                   {action.label}
                 </Text>
               </View>
@@ -115,14 +115,18 @@ const styles = StyleSheet.create({
   actionItemFull: {
     width: "100%",
   },
-  actionCardPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.98 }],
+  actionCardPressable: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  actionCardPressableActive: {
+    opacity: 0.65,
   },
   actionCard: {
     flexDirection: "row",
 
-    // backgroundColor: "#fff",
+    flex: 1,
     alignItems: "center",
     backgroundColor: BrandColors.cardBg,
     borderRadius: 12,

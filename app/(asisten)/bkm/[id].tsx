@@ -87,7 +87,7 @@ export default function AsistenBkmDetailScreen() {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <PageHeader title="Detail BKM" showMenuButton={false} showBackButton onBack={routerBack} />
+        <PageHeader title="Detail BKM" showBackButton onBack={routerBack} />
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={BrandColors.primary} />
         </View>
@@ -98,7 +98,7 @@ export default function AsistenBkmDetailScreen() {
   if (isError || !data) {
     return (
       <View style={styles.container}>
-        <PageHeader title="Detail BKM" showMenuButton={false} showBackButton onBack={routerBack} />
+        <PageHeader title="Detail BKM" showBackButton onBack={routerBack} />
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={40} color={BrandColors.error} />
           <Text style={styles.errorText}>Gagal memuat data</Text>
@@ -114,7 +114,7 @@ export default function AsistenBkmDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <PageHeader title="Detail BKM" showMenuButton={false} showBackButton onBack={routerBack} />
+      <PageHeader title="Detail BKM" showBackButton onBack={routerBack} />
       
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.sectionHeader}>

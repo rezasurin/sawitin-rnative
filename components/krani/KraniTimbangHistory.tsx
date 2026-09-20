@@ -41,7 +41,7 @@ export function KraniTimbangHistory({ onCardPress, onScanPress }: KraniTimbangHi
 
   return (
     <View style={styles.container}>
-      <PageHeader title="Riwayat Timbangan" />
+      <PageHeader title="Timbangan" />
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
@@ -74,7 +74,7 @@ export function KraniTimbangHistory({ onCardPress, onScanPress }: KraniTimbangHi
         }
       />
 
-      <FAB onPress={onScanPress} />
+      <FAB label="Pindai QR untuk timbangan baru" onPress={onScanPress} />
     </View>
   );
 }
