@@ -90,7 +90,7 @@ test('Permission guard remains active', () => {
 test('Retained hidden root routes keep a visible way back to the main tabs', () => {
   for (const [group, route] of [
     ['(mandor)', 'rawat'],
-    ['(asisten)', 'laporan'], ['(admin)', 'master-data'], ['(admin)', 'users'],
+    ['(admin)', 'master-data'], ['(admin)', 'users'],
   ]) {
     segments = [group, route];
     assert.ok(!moduleExports.RoleTabs({ group }).props.screenOptions.tabBarStyle.some((style) => style?.display === 'none'));

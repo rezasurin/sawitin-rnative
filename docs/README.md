@@ -4,6 +4,8 @@ Welcome to the documentation hub for the `sawitin` React Native mobile applicati
 
 > **Current feature decision (20 September 2026):** Absensi is deferred. No mobile role has an Absensi route, tab, menu item, quick action, or dashboard attendance card. The local SQLite attendance table and dormant `AbsensiScreen` are retained for a later implementation, but there is no backend Absensi API or attendance synchronization. Older persona and audit documents below are historical design notes; use the current route tree and `components/core/RoleTabs.tsx` for current navigation.
 
+> **Planning and Laporan are also deferred.** Neither has a backend API. Planning has no mobile workflow, and the empty Asisten Laporan screen and Admin placeholder have been removed. `organization.plan_type` is metadata only; it does not gate features or apply usage limits.
+
 ---
 
 ## 👥 Persona Documentation Links

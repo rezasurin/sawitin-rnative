@@ -1,6 +1,6 @@
 # Assistant & Manager (Asisten) Persona Documentation
 
-> **Historical design draft:** Absensi is deferred as of 20 September 2026 and is not available in the current mobile app. See [documentation hub](README.md) for current navigation.
+> **Historical design draft:** Absensi and Laporan are deferred as of 20 September 2026 and are not available in the current mobile app. The Laporan route described below has been removed. See [documentation hub](README.md) for current navigation.
 
 ## 1. Overview & Purpose
 The `Assistant & Manager` (Asisten) mobile module serves as the oversight and validation interface for estate managers. It focuses on validating block-level harvests, reviewing worker productivity parameters, approving BKM logs, and reviewing yield graphs.

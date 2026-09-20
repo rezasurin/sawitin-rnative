@@ -6,4 +6,4 @@ export const ADMIN_MODULES = [
   { route: 'material', title: 'Material', description: 'Daftar dan tambah material', icon: 'cube', permission: 'mod_material' },
 ] as const;
 
-export const UNAVAILABLE_ADMIN_MODULES = ['Master Data', 'Pengguna', 'Laporan'] as const;
+export const UNAVAILABLE_ADMIN_MODULES = ['Master Data', 'Pengguna'] as const;

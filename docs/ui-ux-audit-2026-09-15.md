@@ -1,6 +1,6 @@
 # UI/UX audit — 15 September 2026
 
-> **Historical snapshot:** This audit predates the 20 September 2026 decision to defer Absensi. Attendance routes, tabs, menu and quick-action entries, and the dashboard attendance card have since been removed. Attendance references below describe the earlier implementation; use `components/core/RoleTabs.tsx` and [documentation hub](README.md) for current behavior.
+> **Historical snapshot:** This audit predates the 20 September 2026 decision to defer Absensi and Laporan. Their mobile routes and entry points have since been removed. References below describe the earlier implementation; use `components/core/RoleTabs.tsx` and [documentation hub](README.md) for current behavior.
 
 Source review by a separate agent, checked against the current implementation. No device walkthrough was performed. This report distinguishes remaining product issues from the navigation cleanup completed alongside the audit.
 

@@ -32,7 +32,7 @@ export default function AdminMenuScreen() {
             </Pressable>
           );
         })}
-        <Text style={styles.heading}>Administrasi & laporan</Text>
+        <Text style={styles.heading}>Administrasi</Text>
         {UNAVAILABLE_ADMIN_MODULES.map((title) => (
           <View key={title} style={[styles.row, styles.dimmed]} accessible accessibilityLabel={`${title}, belum tersedia`}>
             <FontAwesome name="clock-o" size={22} color={BrandColors.textMuted} />

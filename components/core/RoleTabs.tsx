@@ -37,7 +37,7 @@ const ROLE_TABS: Record<RoleRouteGroup, { permission: string; tabs: Destination[
   '(asisten)': {
     permission: 'mod_bkm_panen',
     tabs: [HOME, PANEN, ACCOUNT],
-    hidden: ['laporan'],
+    hidden: [],
   },
   '(admin)': {
     permission: 'mod_lahan',
