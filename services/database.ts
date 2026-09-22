@@ -82,6 +82,12 @@ async function initDb(db: SQLite.SQLiteDatabase) {
       payload TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS lookup_cache (
+      cache_key TEXT PRIMARY KEY NOT NULL,
+      payload TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
 }
 
@@ -134,6 +140,44 @@ export const syncQueueDb = {
   clear: async () => {
     const db = await getDb();
     await db.runAsync('DELETE FROM sync_queue');
+  },
+};
+
+/**
+ * Master data cached so a field form still opens with no connectivity. Keys are
+ * scoped to the signed-in user, and everything is dropped on logout, because a
+ * device is shared between workers and one organization's master data must
+ * never appear under another's session.
+ *
+ * ponytail: this duplicates rawatLookupCacheDb, which predates it and holds one
+ * blob per user. Fold that table into this one the next time it is touched.
+ */
+export const lookupCacheDb = {
+  save: async (cacheKey: string, payload: unknown) => {
+    const db = await getDb();
+    await db.runAsync(
+      'INSERT OR REPLACE INTO lookup_cache (cache_key, payload, updated_at) VALUES (?, ?, ?)',
+      [cacheKey, JSON.stringify(payload), Date.now()]
+    );
+  },
+  get: async (cacheKey: string): Promise<unknown | null> => {
+    const db = await getDb();
+    const row = await db.getFirstAsync<{ payload: string }>(
+      'SELECT payload FROM lookup_cache WHERE cache_key = ?',
+      [cacheKey]
+    );
+    if (!row) return null;
+    try {
+      return JSON.parse(row.payload);
+    } catch {
+      // A row written by an older build can be unreadable; treat it as absent.
+      return null;
+    }
+  },
+  clearAll: async () => {
+    const db = await getDb();
+    await db.runAsync('DELETE FROM lookup_cache');
+    await db.runAsync('DELETE FROM rawat_lookup_cache_by_user');
   },
 };
 

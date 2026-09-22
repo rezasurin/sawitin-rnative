@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import { AuthState, User, Role, Permission } from '@/types/auth';
 import { authApi } from '@/services/auth';
+import { lookupCacheDb } from '@/services/database';
 
 const TOKEN_KEY = 'auth_token';
 
@@ -42,6 +43,13 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     } catch {
     }
     await SecureStore.deleteItemAsync(TOKEN_KEY);
+    // A shared device must not leave one worker's master data readable by the
+    // next person to sign in. Clearing costs one refetch after the next login.
+    try {
+      await lookupCacheDb.clearAll();
+    } catch {
+      // A cache that cannot be cleared must not block signing out.
+    }
     set({
       user: null,
       token: null,

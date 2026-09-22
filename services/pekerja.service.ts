@@ -1,12 +1,22 @@
 import { apiClient } from './api';
+import { lookupCacheDb } from './database';
+import { readThroughCache } from './master-cache';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { PaginatedResponse, ApiListParams } from '@/types/common';
 import { Pekerja, CreatePekerjaPayload, UpdatePekerjaPayload } from '@/types/master-data';
 
+const masterCacheDeps = {
+  getUserId: () => useAuthStore.getState().user?.id,
+  save: lookupCacheDb.save,
+  read: lookupCacheDb.get,
+};
+
 export const pekerjaApi = {
-  getAll: async (params?: ApiListParams): Promise<PaginatedResponse<Pekerja>> => {
-    const response = await apiClient.get<PaginatedResponse<Pekerja>>('/pekerja', { params });
-    return response.data;
-  },
+  getAll: async (params?: ApiListParams): Promise<PaginatedResponse<Pekerja>> =>
+    readThroughCache(masterCacheDeps, 'pekerja', params, async () => {
+      const response = await apiClient.get<PaginatedResponse<Pekerja>>('/pekerja', { params });
+      return response.data;
+    }),
   getById: async (id: string): Promise<Pekerja> => {
     const response = await apiClient.get<Pekerja>(`/pekerja/${id}`);
     return response.data;

@@ -1,12 +1,22 @@
 import { apiClient } from './api';
+import { lookupCacheDb } from './database';
+import { readThroughCache } from './master-cache';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { PaginatedResponse, ApiListParams } from '@/types/common';
 import { Blok, CreateBlokPayload, UpdateBlokPayload } from '@/types/master-data';
 
+const masterCacheDeps = {
+  getUserId: () => useAuthStore.getState().user?.id,
+  save: lookupCacheDb.save,
+  read: lookupCacheDb.get,
+};
+
 export const blokApi = {
-  getAll: async (params?: ApiListParams): Promise<PaginatedResponse<Blok>> => {
-    const response = await apiClient.get<PaginatedResponse<Blok>>('/blok', { params });
-    return response.data;
-  },
+  getAll: async (params?: ApiListParams): Promise<PaginatedResponse<Blok>> =>
+    readThroughCache(masterCacheDeps, 'blok', params, async () => {
+      const response = await apiClient.get<PaginatedResponse<Blok>>('/blok', { params });
+      return response.data;
+    }),
   getById: async (id: string): Promise<Blok> => {
     const response = await apiClient.get<Blok>(`/blok/${id}`);
     return response.data;
