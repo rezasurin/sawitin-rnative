@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
-import { processItem } from '@/hooks/useSyncProcessor';
+import { processItem } from '@/services/sync-processor';
+import type { SyncQueueItem } from '@/types/sync';
 import { MAX_RETRIES } from '@/stores/useSyncQueueStore';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -11,16 +12,6 @@ export interface SyncResult {
   pushFailed: number;
   pulled: boolean;
   error?: string;
-}
-
-interface SyncQueueItem {
-  id: string;
-  module: string;
-  action: string;
-  endpoint: string;
-  payload: Record<string, unknown> | null;
-  createdAt: number;
-  retryCount: number;
 }
 
 interface PerformSyncParams {

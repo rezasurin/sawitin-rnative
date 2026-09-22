@@ -41,7 +41,8 @@ The `Foreman` (Mandor) is the core operational user in the field. Foremen regist
 
 ### B. Background Sync Processor (`useSyncProcessor`)
 - Automatically triggers on app launch and monitors `isOnline` network state changes.
-- Intercepts local image paths starting with `file://`, triggers `uploadApi.uploadImage(foto_url, 'bkm-panen')`, and replaces details paths with server URL paths before dispatching the payload transaction.
+- Intercepts local image paths starting with `file://`, triggers `uploadApi.uploadImage(foto_url, 'bkm-panen')`, and checkpoints each returned remote URL into SQLite before dispatching later API calls. Retries reuse the checkpointed URL.
+- Keeps new BKM Rawat drafts under a local queue ID. Detail and material changes update that draft payload; sync creates the header and nested details with stable idempotency keys and then submits it when requested.
 
 ---
 

@@ -76,6 +76,12 @@ async function initDb(db: SQLite.SQLiteDatabase) {
       status TEXT NOT NULL,
       note TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS rawat_lookup_cache_by_user (
+      cache_key TEXT PRIMARY KEY NOT NULL,
+      payload TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
 }
 
@@ -120,9 +126,29 @@ export const syncQueueDb = {
     await db.runAsync('UPDATE sync_queue SET retry_count = retry_count + 1 WHERE id = ?', [id]);
   },
 
+  updatePayload: async (id: string, payload: Record<string, unknown>) => {
+    const db = await getDb();
+    await db.runAsync('UPDATE sync_queue SET payload = ? WHERE id = ?', [JSON.stringify(payload), id]);
+  },
+
   clear: async () => {
     const db = await getDb();
     await db.runAsync('DELETE FROM sync_queue');
+  },
+};
+
+export const rawatLookupCacheDb = {
+  save: async (cacheKey: string, payload: Record<string, unknown>) => {
+    const db = await getDb();
+    await db.runAsync(
+      'INSERT OR REPLACE INTO rawat_lookup_cache_by_user (cache_key, payload, updated_at) VALUES (?, ?, ?)',
+      [cacheKey, JSON.stringify(payload), Date.now()]
+    );
+  },
+  get: async (cacheKey: string): Promise<Record<string, unknown> | null> => {
+    const db = await getDb();
+    const row = await db.getFirstAsync<{ payload: string }>('SELECT payload FROM rawat_lookup_cache_by_user WHERE cache_key = ?', [cacheKey]);
+    return row ? JSON.parse(row.payload) : null;
   },
 };
 

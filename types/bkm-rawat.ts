@@ -4,6 +4,7 @@ import { KelompokLahan, Lahan, Blok, Pekerja, TipePekerjaan, ItemPekerjaan, Kate
 export interface BkmRawat extends TimestampFields {
   id: string;
   org_id: string;
+  client_request_id?: string | null;
   kelompok_lahan_id: string;
   lahan_id: string | null;
   blok_id: string;
@@ -23,11 +24,13 @@ export interface BkmRawat extends TimestampFields {
 }
 
 export interface CreateBkmRawatPayload {
+  client_request_id?: string;
   kelompok_lahan_id: string;
   lahan_id?: string;
   blok_id: string;
   tanggal: string;
   nama_pengawas: string;
+  details?: Omit<CreateDetailBkmRawatPayload, 'bkm_rawat_id'>[];
 }
 
 export type UpdateBkmRawatPayload = Partial<CreateBkmRawatPayload> & { status?: DocumentStatus };
@@ -35,6 +38,7 @@ export type UpdateBkmRawatPayload = Partial<CreateBkmRawatPayload> & { status?: 
 export interface DetailBkmRawat extends TimestampFields {
   id: string;
   bkm_rawat_id: string;
+  client_detail_id?: string | null;
   pekerja_id: string | null;
   nama_pekerja: string;
   jumlah_pekerja: number;
@@ -52,6 +56,7 @@ export interface DetailBkmRawat extends TimestampFields {
 }
 
 export interface CreateDetailBkmRawatPayload {
+  client_detail_id?: string;
   bkm_rawat_id: string;
   pekerja_id?: string;
   nama_pekerja: string;
@@ -66,6 +71,27 @@ export interface CreateDetailBkmRawatPayload {
 }
 
 export type UpdateDetailBkmRawatPayload = Partial<Omit<CreateDetailBkmRawatPayload, 'bkm_rawat_id'>>;
+
+export interface BkmRawatLookups {
+  types: { id: string; nama: string }[];
+  categories: { id: string; nama: string }[];
+  items: { id: string; nama: string; kategori_pekerjaan_id: string }[];
+  materials: { id: string; nama: string; satuan: string }[];
+  groups: { id: string; nama: string }[];
+  blocks: { id: string; nama: string; kelompok_lahan_id: string }[];
+  lands: { id: string; nama: string; blok_id: string | null }[];
+}
+
+export interface QueuedBkmRawatPayload {
+  header: Omit<CreateBkmRawatPayload, 'client_request_id' | 'details'>;
+  details: Omit<CreateDetailBkmRawatPayload, 'bkm_rawat_id'>[];
+  submit: boolean;
+  display?: {
+    kelompok_lahan_nama?: string;
+    blok_nama?: string;
+    lahan_nama?: string;
+  };
+}
 
 export interface DetailBkmRawatMaterial extends TimestampFields {
   id: string;

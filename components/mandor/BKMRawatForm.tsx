@@ -16,6 +16,9 @@ import {
   useKelompokLahanList,
 } from '@/hooks';
 import { useCreateBkmRawat } from '@/hooks/useBkmRawat';
+import { useBkmRawatLookups } from '@/hooks/useBkmRawat';
+import { useNetworkStore } from '@/stores/useNetworkStore';
+import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 
 interface Props {
   onSuccess: (id: string) => void;
@@ -32,6 +35,9 @@ interface FormErrors {
 export function BKMRawatForm({ onSuccess }: Props) {
   const insets = useSafeAreaInsets();
   const createMutation = useCreateBkmRawat();
+  const isOnline = useNetworkStore((state) => state.isOnline);
+  const addToQueue = useSyncQueueStore((state) => state.addToQueue);
+  const { data: rawatLookups } = useBkmRawatLookups();
 
   const [kelompokLahanId, setKelompokLahanId] = useState('');
   const [lahanId, setLahanId] = useState('');
@@ -55,31 +61,31 @@ export function BKMRawatForm({ onSuccess }: Props) {
 
   const kelompokLahanOptions = useMemo(
     () =>
-      (kelompokLahanList?.data ?? []).map((g) => ({
+      (kelompokLahanList?.data ?? rawatLookups?.groups ?? []).map((g) => ({
         label: g.nama,
         value: g.id,
       })),
-    [kelompokLahanList],
+    [kelompokLahanList, rawatLookups],
   );
 
   const blokOptions = useMemo(
     () =>
-      (blokList?.data ?? []).map((b) => ({
+      (blokList?.data ?? rawatLookups?.blocks.filter((b) => b.kelompok_lahan_id === kelompokLahanId) ?? []).map((b) => ({
         label: b.nama,
         value: b.id,
       })),
-    [blokList],
+    [blokList, rawatLookups, kelompokLahanId],
   );
 
   const lahanOptions = useMemo(
     () => [
       { label: 'Tanpa Lahan', value: '' },
-      ...(lahanList?.data ?? []).map((l) => ({
+      ...(lahanList?.data ?? rawatLookups?.lands.filter((l) => l.blok_id === blokId) ?? []).map((l) => ({
         label: l.nama,
         value: l.id,
       })),
     ],
-    [lahanList],
+    [lahanList, rawatLookups, blokId],
   );
 
   const validate = useCallback((): boolean => {
@@ -140,7 +146,7 @@ export function BKMRawatForm({ onSuccess }: Props) {
     setLahanId(value);
   }, []);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!validate()) return;
 
     const payload = {
@@ -150,6 +156,31 @@ export function BKMRawatForm({ onSuccess }: Props) {
       tanggal: new Date(tanggal).toISOString(),
       nama_pengawas: namaPengawas.trim(),
     };
+
+    if (!isOnline) {
+      try {
+        const queued = await addToQueue({
+          module: 'bkm_rawat',
+          action: 'CREATE',
+          endpoint: '/bkmRawat',
+          payload: {
+            header: payload,
+            details: [],
+            submit: false,
+            display: {
+              kelompok_lahan_nama: kelompokLahanOptions.find((option) => option.value === kelompokLahanId)?.label,
+              blok_nama: blokOptions.find((option) => option.value === blokId)?.label,
+              lahan_nama: lahanOptions.find((option) => option.value === lahanId)?.label,
+            },
+          },
+        });
+        Alert.alert('Tersimpan offline', 'Tambahkan pekerjaan lalu kirim dokumen. Data akan disinkronkan saat online.');
+        onSuccess(`local:${queued.id}`);
+      } catch (error) {
+        Alert.alert('Gagal Menyimpan', error instanceof Error ? error.message : 'Antrian offline gagal disimpan.');
+      }
+      return;
+    }
 
     createMutation.mutate(payload, {
       onSuccess: (created) => {
@@ -173,6 +204,11 @@ export function BKMRawatForm({ onSuccess }: Props) {
     tanggal,
     namaPengawas,
     createMutation,
+    isOnline,
+    addToQueue,
+    kelompokLahanOptions,
+    blokOptions,
+    lahanOptions,
     onSuccess,
   ]);
 

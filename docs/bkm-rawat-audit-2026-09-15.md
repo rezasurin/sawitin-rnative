@@ -1,6 +1,6 @@
 # Audit — BKM Rawat screen
 
-> **Implementation update (2026-09-20):** Mandor and admin now have a Rawat detail route. Users can add, edit, and delete work rows and material quantities while Draft, then submit for approval; approvers can approve or reject with a reason. The backend rejects empty submissions and Draft approvals. This remains an online workflow. Pagination, filters, and offline Rawat sync listed below are still follow-up work; the findings below describe the original audit state.
+> **Implementation update (2026-09-21):** Mandor and admin now have a Rawat detail route. Users can add, edit, and delete work rows and material quantities while Draft, then submit for approval; approvers can approve or reject with a reason. The backend rejects empty submissions and Draft approvals. Rawat drafts, details, deletes, and submission now use the persistent offline queue. New local drafts create the header and nested rows atomically with stable replay keys; existing-document mutations replay in queue order. Active group, block, land, work, and material lookups are cached after an online load. Pagination and filters listed below remain follow-up work; the findings below describe the original audit state.
 
 **Target:** `saweed-rnative/sawitin/app/(mandor)/rawat/`
 **Date:** 2025 (report-only pass — no code modified)

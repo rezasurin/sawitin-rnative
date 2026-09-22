@@ -1,28 +1,35 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { View } from '@/components/Themed';
 import { PageHeader } from '@/components/home';
 import { Button } from '@/components/core/Button';
 import { FormField, FormSelect } from '@/components/form';
 import { DocStatusBadge } from '@/components/bkm/DocStatusBadge';
 import { BrandColors } from '@/constants/Colors';
-import { useBkmRawatActions, useBkmRawatDetail } from '@/hooks/useBkmRawat';
-import { useMaterialList } from '@/hooks/useMaterial';
-import { bkmRawatApi } from '@/services/bkm-rawat.service';
+import { bkmRawatKeys, useBkmRawatActions, useBkmRawatDetail, useBkmRawatLookups } from '@/hooks/useBkmRawat';
 import { useAuthStore } from '@/stores/useAuthStore';
-import type { DetailBkmRawat } from '@/types/bkm-rawat';
+import { useNetworkStore } from '@/stores/useNetworkStore';
+import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
+import type { BkmRawat, CreateDetailBkmRawatPayload, DetailBkmRawat, QueuedBkmRawatPayload } from '@/types/bkm-rawat';
 
 type MaterialRow = { material_id: string; jumlah: number };
 
 export default function RawatDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data, isLoading, isError, refetch } = useBkmRawatDetail(id);
+  const isLocal = id.startsWith('local:');
+  const queueId = isLocal ? id.slice('local:'.length) : '';
+  const remote = useBkmRawatDetail(id);
   const { hasPermission } = useAuthStore();
   const actions = useBkmRawatActions();
-  const lookups = useQuery({ queryKey: ['bkmRawat', 'lookups'], queryFn: bkmRawatApi.getLookups });
-  const materials = useMaterialList({ limit: 200 });
+  const lookups = useBkmRawatLookups();
+  const isOnline = useNetworkStore((state) => state.isOnline);
+  const queue = useSyncQueueStore((state) => state.queue);
+  const addToQueue = useSyncQueueStore((state) => state.addToQueue);
+  const updateQueuePayload = useSyncQueueStore((state) => state.updatePayload);
+  const removeFromQueue = useSyncQueueStore((state) => state.removeFromQueue);
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState<DetailBkmRawat | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [typeId, setTypeId] = useState('');
@@ -39,10 +46,55 @@ export default function RawatDetailScreen() {
   const [rejectionOpen, setRejectionOpen] = useState(false);
   const [rejectionNote, setRejectionNote] = useState('');
 
+  const localItem = isLocal ? queue.find((item) => item.id === queueId && item.module === 'bkm_rawat' && item.action === 'CREATE') : undefined;
+  const localPayload = localItem?.payload as unknown as QueuedBkmRawatPayload | undefined;
+  const localData: BkmRawat | undefined = localPayload ? {
+    id,
+    org_id: 'local',
+    ...localPayload.header,
+    lahan_id: localPayload.header.lahan_id ?? null,
+    status: localPayload.submit ? 'SUBMITTED' : 'DRAFT',
+    approved_by: null,
+    approved_at: null,
+    rejected_by: null,
+    rejected_at: null,
+    rejection_note: null,
+    created_at: new Date(localItem!.createdAt).toISOString(),
+    created_by: 'local',
+    modified_at: new Date(localItem!.createdAt).toISOString(),
+    modified_by: null,
+    kelompok_lahan: { id: localPayload.header.kelompok_lahan_id, nama: localPayload.display?.kelompok_lahan_nama ?? localPayload.header.kelompok_lahan_id } as BkmRawat['kelompok_lahan'],
+    blok: { id: localPayload.header.blok_id, nama: localPayload.display?.blok_nama ?? localPayload.header.blok_id } as BkmRawat['blok'],
+    lahan: localPayload.header.lahan_id ? { id: localPayload.header.lahan_id, nama: localPayload.display?.lahan_nama ?? localPayload.header.lahan_id } as BkmRawat['lahan'] : undefined,
+    detail_rawat: localPayload.details.map((detail, index) => ({
+      ...detail,
+      id: detail.client_detail_id ?? `${queueId}:${index}`,
+      bkm_rawat_id: id,
+      pekerja_id: detail.pekerja_id ?? null,
+      satuan_hasil: detail.satuan_hasil ?? null,
+      hasil_pekerjaan: detail.hasil_pekerjaan ?? null,
+      keterangan: detail.keterangan ?? null,
+      created_at: new Date(localItem!.createdAt).toISOString(),
+      created_by: 'local',
+      modified_at: new Date(localItem!.createdAt).toISOString(),
+      modified_by: null,
+      materials: (detail.materials ?? []).map((material) => ({
+        ...material,
+        id: `${detail.client_detail_id ?? index}:${material.material_id}`,
+        detail_bkm_rawat_id: detail.client_detail_id ?? `${queueId}:${index}`,
+        created_at: new Date(localItem!.createdAt).toISOString(),
+        created_by: 'local',
+        modified_at: new Date(localItem!.createdAt).toISOString(),
+        modified_by: null,
+      })),
+    })),
+  } : undefined;
+  const data = isLocal ? localData : remote.data;
+
   const canEdit = data?.status === 'DRAFT' && hasPermission('mod_bkm_rawat', 'update');
   const canAdd = data?.status === 'DRAFT' && hasPermission('mod_bkm_rawat', 'write');
   const canDeleteDetail = data?.status === 'DRAFT' && hasPermission('mod_bkm_rawat', 'delete');
-  const canApprove = data?.status === 'SUBMITTED' && hasPermission('mod_bkm_rawat', 'approve');
+  const canApprove = !isLocal && isOnline && data?.status === 'SUBMITTED' && hasPermission('mod_bkm_rawat', 'approve');
 
   const openForm = (detail?: DetailBkmRawat) => {
     setEditing(detail ?? null);
@@ -68,7 +120,9 @@ export default function RawatDetailScreen() {
       return;
     }
     try {
+      const clientDetailId = editing?.id ?? `rawat_detail_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const payload = {
+        client_detail_id: clientDetailId,
         tipe_pekerjaan_id: typeId,
         kategori_pekerjaan_id: categoryId,
         item_pekerjaan_id: itemId,
@@ -79,13 +133,90 @@ export default function RawatDetailScreen() {
         keterangan: note.trim() || undefined,
         materials: materialRows,
       };
-      if (editing) await actions.updateDetail.mutateAsync({ id: editing.id, data: payload });
+      if (isLocal && localPayload) {
+        const nextDetails = editing
+          ? localPayload.details.map((detail) => detail.client_detail_id === editing.id ? payload : detail)
+          : [...localPayload.details, payload];
+        await updateQueuePayload(queueId, { ...localPayload, details: nextDetails });
+      } else if (!isOnline) {
+        const pendingCreate = editing ? queue.find((item) => {
+          if (item.module !== 'bkm_rawat_detail' || item.action !== 'CREATE') return false;
+          const queued = item.payload as unknown as CreateDetailBkmRawatPayload;
+          return queued.bkm_rawat_id === id && queued.client_detail_id === editing.id;
+        }) : undefined;
+        if (pendingCreate) {
+          await updateQueuePayload(pendingCreate.id, { bkm_rawat_id: id, ...payload });
+        } else if (editing) {
+          await addToQueue({ module: 'bkm_rawat_detail', action: 'UPDATE', endpoint: `/bkmRawat/detail/${editing.id}`, payload: { id: editing.id, data: payload } });
+        } else {
+          await addToQueue({ module: 'bkm_rawat_detail', action: 'CREATE', endpoint: '/bkmRawat/detail', payload: { bkm_rawat_id: id, ...payload } });
+        }
+        queryClient.setQueryData<BkmRawat>(bkmRawatKeys.detail(id), (current) => {
+          if (!current) return current;
+          const currentDetails = current.detail_rawat ?? current.details ?? [];
+          const optimistic = {
+            ...payload,
+            id: clientDetailId,
+            bkm_rawat_id: id,
+            pekerja_id: null,
+            satuan_hasil: payload.satuan_hasil ?? null,
+            hasil_pekerjaan: payload.hasil_pekerjaan ?? null,
+            keterangan: payload.keterangan ?? null,
+            created_at: new Date().toISOString(), created_by: 'offline', modified_at: new Date().toISOString(), modified_by: null,
+            materials: payload.materials.map((material) => ({ ...material, id: `${clientDetailId}:${material.material_id}`, detail_bkm_rawat_id: clientDetailId, created_at: new Date().toISOString(), created_by: 'offline', modified_at: new Date().toISOString(), modified_by: null })),
+          } as DetailBkmRawat;
+          const nextDetails = editing ? currentDetails.map((detail) => detail.id === editing.id ? { ...detail, ...optimistic, id: editing.id } : detail) : [...currentDetails, optimistic];
+          return { ...current, detail_rawat: nextDetails };
+        });
+      } else if (editing) await actions.updateDetail.mutateAsync({ id: editing.id, data: payload });
       else await actions.addDetail.mutateAsync({ bkm_rawat_id: id, ...payload });
       setFormOpen(false);
       setEditing(null);
     } catch (error) {
       Alert.alert('Gagal menyimpan', error instanceof Error ? error.message : 'Coba lagi.');
     }
+  };
+
+  const deleteDetail = async (detail: DetailBkmRawat) => {
+    if (isLocal && localPayload) {
+      await updateQueuePayload(queueId, { ...localPayload, details: localPayload.details.filter((row) => row.client_detail_id !== detail.id) });
+      return;
+    }
+    if (!isOnline) {
+      const pendingCreate = queue.find((item) => {
+        if (item.module !== 'bkm_rawat_detail' || item.action !== 'CREATE') return false;
+        const queued = item.payload as unknown as CreateDetailBkmRawatPayload;
+        return queued.bkm_rawat_id === id && queued.client_detail_id === detail.id;
+      });
+      if (pendingCreate) {
+        await removeFromQueue(pendingCreate.id);
+        queryClient.setQueryData<BkmRawat>(bkmRawatKeys.detail(id), (current) => current ? {
+          ...current,
+          detail_rawat: (current.detail_rawat ?? current.details ?? []).filter((row) => row.id !== detail.id),
+        } : current);
+        return;
+      }
+      await addToQueue({ module: 'bkm_rawat_detail', action: 'DELETE', endpoint: `/bkmRawat/detail/${detail.id}`, payload: { id: detail.id } });
+      queryClient.setQueryData<BkmRawat>(bkmRawatKeys.detail(id), (current) => current ? {
+        ...current,
+        detail_rawat: (current.detail_rawat ?? current.details ?? []).filter((row) => row.id !== detail.id),
+      } : current);
+      return;
+    }
+    await actions.deleteDetail.mutateAsync(detail.id);
+  };
+
+  const submitDocument = async () => {
+    if (isLocal && localPayload) {
+      await updateQueuePayload(queueId, { ...localPayload, submit: true });
+      return;
+    }
+    if (!isOnline) {
+      await addToQueue({ module: 'bkm_rawat', action: 'UPDATE', endpoint: `/bkmRawat/${id}`, payload: { id, data: { status: 'SUBMITTED' } } });
+      queryClient.setQueryData<BkmRawat>(bkmRawatKeys.detail(id), (current) => current ? { ...current, status: 'SUBMITTED' } : current);
+      return;
+    }
+    await actions.update.mutateAsync({ id, data: { status: 'SUBMITTED' } });
   };
 
   const addMaterial = () => {
@@ -109,17 +240,18 @@ export default function RawatDetailScreen() {
     ]);
   };
 
-  if (isLoading) return <View style={styles.center}><ActivityIndicator color={BrandColors.primary} /></View>;
-  if (isError || !data) return <View style={styles.center}><Text>Gagal memuat BKM Rawat.</Text><Button title="Coba lagi" onPress={() => refetch()} /></View>;
+  if (!isLocal && remote.isLoading) return <View style={styles.center}><ActivityIndicator color={BrandColors.primary} /></View>;
+  if ((!isLocal && remote.isError) || !data) return <View style={styles.center}><Text>{isLocal ? 'Draft offline tidak lagi tersedia.' : 'Gagal memuat BKM Rawat.'}</Text>{!isLocal && <Button title="Coba lagi" onPress={() => remote.refetch()} />}</View>;
 
   const details = data.detail_rawat ?? data.details ?? [];
-  const materialNames = new Map((materials.data?.data ?? []).map((m) => [m.id, m.nama]));
+  const materialNames = new Map((lookups.data?.materials ?? []).map((material) => [material.id, material.nama]));
   const itemOptions = (lookups.data?.items ?? []).filter((item) => item.kategori_pekerjaan_id === categoryId).map((item) => ({ label: item.nama, value: item.id }));
 
   return (
     <View style={styles.container}>
       <PageHeader title="Detail BKM Rawat" showBackButton onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.content}>
+        {(isLocal || !isOnline) && <View style={styles.offlineBanner}><Text style={styles.offlineText}>{isLocal ? 'Draft offline · perubahan tersimpan di perangkat' : 'Offline · perubahan akan dikirim saat tersambung'}</Text></View>}
         <View style={styles.card}>
           <View style={styles.row}><Text style={styles.title}>{data.blok?.nama ?? data.blok_id}</Text><DocStatusBadge status={data.status} /></View>
           <Text style={styles.meta}>Tanggal: {new Date(data.tanggal).toLocaleDateString('id-ID')}</Text>
@@ -139,7 +271,7 @@ export default function RawatDetailScreen() {
             {(detail.materials ?? []).map((material) => <Text key={material.id} style={styles.meta}>Material: {material.material?.nama ?? materialNames.get(material.material_id) ?? material.material_id} · {material.jumlah}</Text>)}
             {(canEdit || canDeleteDetail) && <View style={styles.row}>
               {canEdit && <Button title="Ubah" variant="secondary" size="sm" onPress={() => openForm(detail)} />}
-              {canDeleteDetail && <Button title="Hapus" variant="danger" size="sm" onPress={() => confirmAction('Hapus pekerjaan?', 'Detail dan materialnya akan dihapus.', () => actions.deleteDetail.mutateAsync(detail.id))} />}
+              {canDeleteDetail && <Button title="Hapus" variant="danger" size="sm" onPress={() => confirmAction('Hapus pekerjaan?', 'Detail dan materialnya akan dihapus.', () => deleteDetail(detail))} />}
             </View>}
           </View>
         ))}
@@ -158,13 +290,13 @@ export default function RawatDetailScreen() {
           <FormField label="Keterangan" value={note} onChangeText={setNote} />
           <Text style={styles.section}>Material</Text>
           {materialRows.map((row) => <TouchableOpacity key={row.material_id} onPress={() => setMaterialRows((rows) => rows.filter((m) => m.material_id !== row.material_id))}><Text style={styles.meta}>{materialNames.get(row.material_id) ?? row.material_id} · {row.jumlah}  ×</Text></TouchableOpacity>)}
-          <FormSelect label="Pilih material" value={materialId} options={(materials.data?.data ?? []).map((m) => ({ label: m.nama, value: m.id }))} onSelect={setMaterialId} searchable />
+          <FormSelect label="Pilih material" value={materialId} options={(lookups.data?.materials ?? []).map((material) => ({ label: material.nama, value: material.id }))} onSelect={setMaterialId} searchable />
           <FormField label="Jumlah material" value={materialQty} onChangeText={setMaterialQty} keyboardType="decimal-pad" />
           <Button title="Tambahkan material" variant="secondary" onPress={addMaterial} />
           <View style={styles.row}><Button title="Batal" variant="ghost" onPress={() => setFormOpen(false)} /><Button title="Simpan pekerjaan" loading={actions.addDetail.isPending || actions.updateDetail.isPending} onPress={saveDetail} /></View>
         </View>}
 
-        {canEdit && !formOpen && <Button title="Kirim untuk persetujuan" disabled={details.length === 0} onPress={() => confirmAction('Kirim BKM Rawat?', 'Dokumen tidak dapat diubah setelah dikirim.', () => actions.update.mutateAsync({ id, data: { status: 'SUBMITTED' } }))} />}
+        {canEdit && !formOpen && <Button title="Kirim untuk persetujuan" disabled={details.length === 0} onPress={() => confirmAction('Kirim BKM Rawat?', 'Dokumen tidak dapat diubah setelah dikirim.', submitDocument)} />}
         {canApprove && <View style={styles.actions}>
           <Button title="Setujui" onPress={() => confirmAction('Setujui BKM Rawat?', 'Persediaan material akan dikurangi.', () => actions.approve.mutateAsync(id))} />
           <Button title="Tolak" variant="danger" onPress={() => setRejectionOpen(true)} />
@@ -197,4 +329,6 @@ const styles = StyleSheet.create({
   section: { fontSize: 17, fontWeight: '600', color: BrandColors.textPrimary },
   meta: { fontSize: 14, color: BrandColors.textSecondary },
   actions: { gap: 10 },
+  offlineBanner: { backgroundColor: '#FFF4D6', borderRadius: 8, padding: 12 },
+  offlineText: { color: '#725300', fontSize: 13, fontWeight: '600' },
 });

@@ -22,7 +22,14 @@ export function useBkmRawatDetail(id: string) {
   return useQuery({
     queryKey: bkmRawatKeys.detail(id),
     queryFn: () => bkmRawatApi.getById(id),
-    enabled: !!id,
+    enabled: !!id && !id.startsWith('local:'),
+  });
+}
+
+export function useBkmRawatLookups() {
+  return useQuery({
+    queryKey: [...bkmRawatKeys.all, 'lookups'],
+    queryFn: bkmRawatApi.getLookups,
   });
 }
 

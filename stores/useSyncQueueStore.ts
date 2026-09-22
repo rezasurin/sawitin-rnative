@@ -1,23 +1,13 @@
 import { create } from 'zustand';
 import { syncQueueDb } from '@/services/database';
-
-type SyncAction = 'CREATE' | 'UPDATE' | 'DELETE';
-
-interface SyncQueueItem {
-  id: string;
-  module: string;
-  action: SyncAction;
-  endpoint: string;
-  payload: Record<string, unknown> | null;
-  createdAt: number;
-  retryCount: number;
-}
+import type { SyncQueueItem } from '@/types/sync';
 
 interface SyncQueueStore {
   queue: SyncQueueItem[];
   isProcessing: boolean;
   pendingCount: () => number;
-  addToQueue: (item: Omit<SyncQueueItem, 'id' | 'createdAt' | 'retryCount'>) => Promise<void>;
+  addToQueue: (item: Omit<SyncQueueItem, 'id' | 'createdAt' | 'retryCount'>) => Promise<SyncQueueItem>;
+  updatePayload: (id: string, payload: Record<string, unknown>) => Promise<void>;
   removeFromQueue: (id: string) => Promise<void>;
   incrementRetry: (id: string) => Promise<void>;
   setProcessing: (processing: boolean) => void;
@@ -62,10 +52,18 @@ export const useSyncQueueStore = create<SyncQueueStore>((set, get) => ({
           },
         ],
       }));
+      return { ...newItem, retryCount: 0 };
     } catch (err) {
       console.error('Failed to add item to SQLite sync queue:', err);
       throw err;
     }
+  },
+
+  updatePayload: async (id, payload) => {
+    await syncQueueDb.updatePayload(id, payload);
+    set((state) => ({
+      queue: state.queue.map((item) => item.id === id ? { ...item, payload } : item),
+    }));
   },
 
   removeFromQueue: async (id) => {

@@ -1,11 +1,21 @@
 import { apiClient } from './api';
 import { PaginatedResponse, ApiListParams } from '@/types/common';
-import { BkmRawat, CreateBkmRawatPayload, UpdateBkmRawatPayload, BkmRawatDetail, CreateBkmRawatDetailPayload, UpdateBkmRawatDetailPayload } from '@/types/bkm-rawat';
+import { BkmRawat, CreateBkmRawatPayload, UpdateBkmRawatPayload, BkmRawatDetail, CreateBkmRawatDetailPayload, UpdateBkmRawatDetailPayload, BkmRawatLookups } from '@/types/bkm-rawat';
+import { rawatLookupCacheDb } from './database';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 export const bkmRawatApi = {
-  getLookups: async (): Promise<{ types: { id: string; nama: string }[]; categories: { id: string; nama: string }[]; items: { id: string; nama: string; kategori_pekerjaan_id: string }[] }> => {
-    const response = await apiClient.get('/bkmRawat/lookups');
-    return response.data;
+  getLookups: async (): Promise<BkmRawatLookups> => {
+    const cacheKey = useAuthStore.getState().user?.id;
+    try {
+      const response = await apiClient.get<BkmRawatLookups>('/bkmRawat/lookups');
+      if (cacheKey) await rawatLookupCacheDb.save(cacheKey, response.data as unknown as Record<string, unknown>);
+      return response.data;
+    } catch (error) {
+      const cached = cacheKey ? await rawatLookupCacheDb.get(cacheKey) : null;
+      if (cached) return cached as unknown as BkmRawatLookups;
+      throw error;
+    }
   },
   getAll: async (params?: ApiListParams): Promise<PaginatedResponse<BkmRawat>> => {
     const response = await apiClient.get<PaginatedResponse<BkmRawat>>('/bkmRawat', { params });
