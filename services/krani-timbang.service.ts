@@ -1,15 +1,19 @@
+import { readOperational, requireOnline } from './operational.service';
 import { apiClient } from './api';
 import { PaginatedResponse, ApiListParams } from '@/types/common';
+import type { HarvestTrace } from '@/types/harvest-trace';
 import { KraniTimbang, CreateKraniTimbangPayload, UpdateKraniTimbangPayload, KraniTimbangDetail, CreateKraniTimbangDetailPayload, UpdateKraniTimbangDetailPayload } from '@/types/krani-timbang';
 
 export const kraniTimbangApi = {
+  trace: async (id: string): Promise<HarvestTrace> => {
+    requireOnline();
+    return (await apiClient.get<HarvestTrace>(`/kraniTimbang/${id}/trace`)).data;
+  },
   getAll: async (params?: ApiListParams): Promise<PaginatedResponse<KraniTimbang>> => {
-    const response = await apiClient.get<PaginatedResponse<KraniTimbang>>('/kraniTimbang', { params });
-    return response.data;
+    return readOperational('kraniTimbang', '/kraniTimbang', params);
   },
   getById: async (id: string): Promise<KraniTimbang> => {
-    const response = await apiClient.get<KraniTimbang>(`/kraniTimbang/${id}`);
-    return response.data;
+    return readOperational('kraniTimbang', `/kraniTimbang/${id}`);
   },
   create: async (data: CreateKraniTimbangPayload): Promise<KraniTimbang> => {
     const response = await apiClient.post<KraniTimbang>('/kraniTimbang', data);
@@ -23,10 +27,12 @@ export const kraniTimbangApi = {
     await apiClient.delete(`/kraniTimbang/${id}`);
   },
   approve: async (id: string): Promise<KraniTimbang> => {
+    requireOnline();
     const response = await apiClient.post<KraniTimbang>(`/kraniTimbang/${id}/approve`);
     return response.data;
   },
   reject: async (id: string, rejection_note?: string): Promise<KraniTimbang> => {
+    requireOnline();
     const response = await apiClient.post<KraniTimbang>(`/kraniTimbang/${id}/reject`, { rejection_note });
     return response.data;
   },

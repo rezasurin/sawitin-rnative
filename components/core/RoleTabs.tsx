@@ -27,7 +27,7 @@ const ROLE_TABS: Record<RoleRouteGroup, { permission: string; tabs: Destination[
   '(mandor)': {
     permission: 'mod_bkm_panen',
     tabs: [HOME, PANEN, { name: 'checker', title: 'Checker', icon: 'check-circle-o', nested: true }, ACCOUNT],
-    hidden: ['rawat'],
+    hidden: ['rawat', 'observasi', 'pemakaian-kendaraan'],
   },
   '(krani)': {
     permission: 'mod_krani_timbang',
@@ -37,12 +37,12 @@ const ROLE_TABS: Record<RoleRouteGroup, { permission: string; tabs: Destination[
   '(asisten)': {
     permission: 'mod_bkm_panen',
     tabs: [HOME, PANEN, ACCOUNT],
-    hidden: [],
+    hidden: ['observasi', 'pemakaian-kendaraan', 'stock-opname'],
   },
   '(admin)': {
     permission: 'mod_lahan',
     tabs: [HOME, PANEN, { name: 'menu', title: 'Menu', icon: 'th-large' }, ACCOUNT],
-    hidden: ['master-data', 'users', 'settings', 'material', 'checker', 'rawat', 'timbangan'],
+    hidden: ['master-data', 'users', 'settings', 'material', 'checker', 'rawat', 'timbangan', 'observasi', 'pemakaian-kendaraan', 'stock-opname'],
   },
 };
 

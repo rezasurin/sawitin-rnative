@@ -1,17 +1,23 @@
+import { OperationalActions } from '@/components/bkm/OperationalActions';
+import { OperationalHistory } from '@/components/bkm/OperationalHistory';
+import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
+import { OperationalDraftEditor } from '@/components/bkm/OperationalDraftEditor';
 import { useModuleGroup } from '@/hooks/useModuleGroup';
 import { Button } from "@/components/core/Button";
-import { FormField } from "@/components/form";
+import { FormField, FormSelect } from "@/components/form";
 import { PageHeader } from "@/components/home";
 import { BrandColors } from "@/constants/Colors";
 import { useKraniTimbangDetail } from "@/hooks/useKraniTimbang";
+import { useFleetChoices } from '@/hooks/useFleetChoices';
 import { useOrgConfig } from "@/hooks/useOrgConfig";
 import { bkmCheckerApi } from "@/services/bkm-checker.service";
 import { stagingApi } from "@/services/staging.service";
+import { isWholeKg } from '@/utils/field-summary';
 import type { KraniTimbang } from "@/types";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +33,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TimbanganScreen() {
+  const policy = useOperationalPolicy('kraniTimbang');
   const group = useModuleGroup('(krani)');
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -40,6 +47,16 @@ export default function TimbanganScreen() {
   const [timbangIsi, setTimbangIsi] = useState("");
   const [timbangKosong, setTimbangKosong] = useState("");
   const [keterangan, setKeterangan] = useState("");
+  const [nomorDokumen, setNomorDokumen] = useState('');
+  const [brondolTruk, setBrondolTruk] = useState('');
+  const [kendaraanId, setKendaraanId] = useState('');
+  const [supirId, setSupirId] = useState('');
+  const [nomorKendaraan, setNomorKendaraan] = useState('');
+  const [namaSupir, setNamaSupir] = useState('');
+  const [manualVehicle, setManualVehicle] = useState(false);
+  const [manualDriver, setManualDriver] = useState(false);
+  const initializedCheckerId = useRef<string | null>(null);
+  const fleet = useFleetChoices();
 
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
@@ -86,10 +103,27 @@ export default function TimbanganScreen() {
 
   // Reset form when checkerId changes
   useEffect(() => {
+    initializedCheckerId.current = null;
     setTimbangIsi("");
     setTimbangKosong("");
     setKeterangan("");
+    setNomorDokumen('');
+    setBrondolTruk('');
+    setKendaraanId(''); setSupirId('');
+    setNomorKendaraan(''); setNamaSupir('');
   }, [checkerId]);
+
+  useEffect(() => {
+    const first = checker?.details?.[0];
+    if (!first || !checkerId || initializedCheckerId.current === checkerId) return;
+    initializedCheckerId.current = checkerId;
+    setKendaraanId(first.kendaraan_id ?? '');
+    setSupirId(first.supir_id ?? '');
+    setNomorKendaraan(first.nomor_truk ?? '');
+    setNamaSupir(first.nama_sopir ?? '');
+    setManualVehicle(!first.kendaraan_id);
+    setManualDriver(!first.supir_id);
+  }, [checker]);
 
   // Helper to parse weight input cleanly (handles Indonesian dot thousand separator e.g. 5.000 -> 5000)
   const parseWeight = (val: string): number => {
@@ -117,7 +151,7 @@ export default function TimbanganScreen() {
   const hasDiscrepancy = nettoVal > 0 && estimatedKg > 0 && diffPct > 20;
 
   const handleSubmit = () => {
-    if (!checker || !qrPayload) return;
+    if (!policy.create || !checker || !qrPayload) return;
     if (!hasIsi || !hasKosong) {
       Alert.alert(
         "Form Belum Lengkap",
@@ -134,20 +168,28 @@ export default function TimbanganScreen() {
       return;
     }
 
+    if (!isWholeKg(brondolTruk)) {
+      Alert.alert('Brondol belum valid', 'Masukkan brondol di truk ini dalam kilogram bulat, termasuk 0 jika tidak ada.');
+      return;
+    }
+
     const firstDetail = checker.details?.[0];
-    if (!firstDetail?.nama_sopir || !firstDetail.nomor_truk) {
+    if (!firstDetail || !namaSupir.trim() || !nomorKendaraan.trim()) {
       Alert.alert('SPB tidak lengkap', 'Nomor truk dan nama sopir tidak tersedia pada Checker.');
       return;
     }
     const payload = {
       qr_payload: qrPayload,
-      nama_supir: firstDetail.nama_sopir,
-      nomor_kendaraan: firstDetail.nomor_truk,
+      ...(kendaraanId ? { kendaraan_id: kendaraanId } : {}),
+      ...(supirId ? { supir_id: supirId } : {}),
+      ...(nomorDokumen.trim() ? { nomor_dokumen: nomorDokumen.trim() } : {}),
+      nama_supir: namaSupir.trim(),
+      nomor_kendaraan: nomorKendaraan.trim(),
       tujuan_kirim: firstDetail.tujuan_kirim ?? '',
       keterangan: keterangan || undefined,
       timbang_isi: isiVal,
       timbang_kosong: kosongVal,
-      jumlah_brondol: totalBrondol,
+      jumlah_brondol: Number(brondolTruk),
     };
 
     createMutation.mutate(payload, {
@@ -192,6 +234,7 @@ export default function TimbanganScreen() {
       {detailId ? (
         <DetailTimbanganView
           detail={detail}
+          documentId={detailId}
           isLoading={isDetailLoading}
           isError={isDetailError}
           onRetry={() => refetchDetail()}
@@ -251,7 +294,7 @@ export default function TimbanganScreen() {
                 </Text>
               </View>
               <View style={styles.row}>
-                <Text style={styles.label}>Total Janjang / Brondol</Text>
+                <Text style={styles.label}>Janjang / Brondol Checker (kg)</Text>
                 <Text style={styles.value}>
                   {totalJanjang} Janjang / {totalBrondol} kg
                 </Text>
@@ -264,6 +307,31 @@ export default function TimbanganScreen() {
                 Input Timbangan Jembatan
               </Text>
               <View style={styles.divider} />
+
+              <FormSelect label="Kendaraan" searchable value={manualVehicle ? '__manual__' : kendaraanId}
+                options={[...fleet.vehicles.map((row) => ({ label: row.nomor_kendaraan, value: row.id })), { label: 'Ketik manual', value: '__manual__' }]}
+                placeholder="Pilih kendaraan atau ketik manual" onSelect={(id) => {
+                  const row = fleet.vehicles.find((vehicle) => vehicle.id === id);
+                  setManualVehicle(id === '__manual__'); setKendaraanId(row?.id ?? '');
+                  if (row) setNomorKendaraan(row.nomor_kendaraan);
+                }} />
+              {(manualVehicle || !fleet.vehicles.length) && <FormField label="Nomor kendaraan"
+                value={nomorKendaraan} onChangeText={(value) => { setNomorKendaraan(value); setKendaraanId(''); setManualVehicle(true); }} />}
+              <FormSelect label="Sopir" searchable value={manualDriver ? '__manual__' : supirId}
+                options={[...fleet.drivers.map((row) => ({ label: row.nama, value: row.id })), { label: 'Ketik manual', value: '__manual__' }]}
+                placeholder="Pilih sopir atau ketik manual" onSelect={(id) => {
+                  const row = fleet.drivers.find((driver) => driver.id === id);
+                  setManualDriver(id === '__manual__'); setSupirId(row?.id ?? '');
+                  if (row) setNamaSupir(row.nama);
+                }} />
+              {(manualDriver || !fleet.drivers.length) && <FormField label="Nama sopir"
+                value={namaSupir} onChangeText={(value) => { setNamaSupir(value); setSupirId(''); setManualDriver(true); }} />}
+              <FormField label="Nomor dokumen perjalanan (opsional)" value={nomorDokumen}
+                onChangeText={setNomorDokumen} placeholder="Nomor dari operasi" />
+
+              <FormField label="Brondol di truk ini (kg)" value={brondolTruk}
+                onChangeText={(value) => { if (value === '' || isWholeKg(value)) setBrondolTruk(value); }}
+                keyboardType="numeric" placeholder="Masukkan kg aktual, 0 jika tidak ada" />
 
               {/* Input 1: Gross Weight */}
               <FormField
@@ -332,7 +400,7 @@ export default function TimbanganScreen() {
               title="Simpan Timbangan"
               onPress={handleSubmit}
               variant="primary"
-              disabled={!hasIsi || !hasKosong || isWeightInvalid || createMutation.isPending}
+              disabled={!policy.create || !hasIsi || !hasKosong || isWeightInvalid || createMutation.isPending}
               loading={createMutation.isPending}
               style={{ flex: 1 }}
             />
@@ -345,15 +413,19 @@ export default function TimbanganScreen() {
 
 function DetailTimbanganView({
   detail,
+  documentId,
   isLoading,
   isError,
   onRetry,
 }: {
   detail?: KraniTimbang;
+  documentId: string;
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
 }) {
+  const group = useModuleGroup('(krani)');
+  const router = useRouter();
   if (isLoading) {
     return (
       <View style={styles.centerContent}>
@@ -372,6 +444,7 @@ function DetailTimbanganView({
           color={BrandColors.error}
         />
         <Text style={styles.errorText}>Gagal memuat detail</Text>
+        <OperationalHistory module="kraniTimbang" id={documentId} />
         <Pressable style={styles.retryBtn} onPress={onRetry}>
           <Text style={styles.retryBtnText}>Coba Lagi</Text>
         </Pressable>
@@ -395,9 +468,15 @@ function DetailTimbanganView({
       contentContainerStyle={styles.detailScrollContent}
       showsVerticalScrollIndicator={false}
     >
+      <Button title="Tiket PKS" onPress={() => router.push(`/${group}/timbangan/tiket/${documentId}` as never)} />
+      <Button title="Lihat jejak panen" variant="secondary" onPress={() => router.push(`/${group}/timbangan/trace/${documentId}` as never)} />
       <View style={styles.infoCard}>
         <Text style={styles.cardHeaderTitle}>Informasi Dokumen</Text>
         <View style={styles.divider} />
+        <View style={styles.row}>
+          <Text style={styles.label}>No. Dokumen</Text>
+          <Text style={styles.value}>{detail.nomor_dokumen || '-'}</Text>
+        </View>
         <View style={styles.row}>
           <Text style={styles.label}>Nama Sopir</Text>
           <Text style={styles.value}>{detail.nama_supir || "-"}</Text>
@@ -415,7 +494,7 @@ function DetailTimbanganView({
           <Text style={styles.value}>{detail.tanggal || "-"}</Text>
         </View>
         <View style={styles.row}>
-          <Text style={styles.label}>Total Janjang / Brondol</Text>
+          <Text style={styles.label}>Janjang / Brondol ditimbang (kg)</Text>
           <Text style={styles.value}>
             {totalJanjang} Janjang / {totalBrondol} kg
           </Text>
@@ -470,6 +549,9 @@ function DetailTimbanganView({
           ))}
         </View>
       ) : null}
+      {detail.origin_source === 'MANUAL' && <OperationalActions module="kraniTimbang" document={detail} />}
+      {detail.origin_source === 'MANUAL' && <OperationalDraftEditor module="kraniTimbang" document={detail} />}
+      <OperationalHistory module="kraniTimbang" id={detail.id} />
     </ScrollView>
   );
 }

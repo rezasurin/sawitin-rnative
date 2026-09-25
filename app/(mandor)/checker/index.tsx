@@ -1,3 +1,4 @@
+import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
 import { useModuleGroup } from '@/hooks/useModuleGroup';
 import { FAB } from '@/components/core/FAB';
 import { ListEmptyState } from '@/components/core/ListEmptyState';
@@ -17,6 +18,7 @@ import {
 } from 'react-native';
 
 export default function CheckerListScreen() {
+  const policy = useOperationalPolicy('bkmChecker');
   const group = useModuleGroup('(mandor)');
   const { status } = useLocalSearchParams<{ status?: string }>();
 
@@ -102,7 +104,7 @@ export default function CheckerListScreen() {
         }
       />
 
-      <FAB onPress={handleCreate} />
+      {policy.create && <FAB onPress={handleCreate} />}
     </View>
   );
 }

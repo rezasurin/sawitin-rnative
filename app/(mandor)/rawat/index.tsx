@@ -1,4 +1,5 @@
 import { FAB } from '@/components/core/FAB';
+import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
 import { useRouter } from 'expo-router';
 import { useModuleGroup } from '@/hooks/useModuleGroup';
 import { Card } from '@/components/core/Card';
@@ -9,7 +10,6 @@ import { BrandColors } from '@/constants/Colors';
 import { useBkmRawatList, useDeleteBkmRawat } from '@/hooks/useBkmRawat';
 import { DocStatusBadge } from '@/components/bkm/DocStatusBadge';
 import React from 'react';
-import { useAuthStore } from '@/stores/useAuthStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import type { BkmRawat, QueuedBkmRawatPayload } from '@/types/bkm-rawat';
@@ -25,8 +25,9 @@ import {
 export default function RawatScreen() {
   const router = useRouter();
   const group = useModuleGroup('(mandor)');
-  const canDelete = useAuthStore((s) => s.hasPermission('mod_bkm_rawat', 'delete'));
-  const canCreate = useAuthStore((s) => s.hasPermission('mod_bkm_rawat', 'write'));
+  const policy = useOperationalPolicy('bkmRawat', 'DRAFT');
+  const canDelete = policy.delete;
+  const canCreate = policy.create;
   const isOnline = useNetworkStore((state) => state.isOnline);
   const queue = useSyncQueueStore((state) => state.queue);
   const addToQueue = useSyncQueueStore((state) => state.addToQueue);
@@ -92,7 +93,7 @@ export default function RawatScreen() {
             }
             deleteMutation.mutate(id, {
               onSuccess: () => {
-                Alert.alert('Berhasil', 'Dokumen berhasil dihapus.');
+                Alert.alert('Berhasil', 'Dokumen berhasil dihapus.', [{ text: 'Tutup' }, { text: 'Lihat riwayat', onPress: () => router.push(`/${group}/rawat/${id}` as never) }]);
                 refetch();
               },
               onError: (err) => {
@@ -148,7 +149,7 @@ export default function RawatScreen() {
                 </View>
                 <View style={styles.cardBody}>
                   <Text style={styles.cardMeta}>
-                    Kelompok: {item.kelompok_lahan?.nama || '-'}
+                    Kebun: {item.kelompok_lahan?.nama || '—'}
                   </Text>
                 {item.blok?.nama && (
                   <Text style={styles.cardMeta}>

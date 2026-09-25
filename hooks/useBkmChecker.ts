@@ -1,3 +1,4 @@
+import { useAuthStore } from '@/stores/useAuthStore';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { bkmCheckerApi } from '@/services/bkm-checker.service';
 import { bkmCheckerKeys } from '@/services/queryKeys';
@@ -161,13 +162,12 @@ export function useSubmitBkmChecker() {
       const checker = await bkmCheckerApi.create(header);
 
       // 2. Create all details
-      await Promise.all(
-        details.map((d) =>
-          bkmCheckerApi.addDetail({ ...d, bkm_checker_id: checker.id })
-        )
-      );
+      for (const detail of details) {
+        await bkmCheckerApi.addDetail({ ...detail, bkm_checker_id: checker.id });
+      }
 
       // 3. Submit (set status to SUBMITTED)
+      if (!useAuthStore.getState().hasPermission('mod_bkm_checker', 'update')) return checker;
       return bkmCheckerApi.update(checker.id, { status: 'SUBMITTED' });
     },
     onSuccess: () => {

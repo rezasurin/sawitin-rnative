@@ -51,6 +51,15 @@ export interface BkmPanenDetail extends TimestampFields {
   foto_url: string | null;
   lat: number | null;
   lng: number | null;
+  /** Fix radius in metres, as the platform reported it. */
+  gps_accuracy: number | null;
+  /** When the device read the position — not when the row was uploaded. */
+  captured_at: string | null;
+  foto_hash: string | null;
+  foto_bytes: number | null;
+  /** Evaluated by the server against the mapped parcel, then the block. */
+  geofence_status: 'INSIDE' | 'OUTSIDE' | 'UNKNOWN' | null;
+  geofence_override_reason: string | null;
   note: string | null;
   pekerja?: Pekerja;
   tph?: Tph;
@@ -73,6 +82,15 @@ export interface CreateBkmPanenDetailPayload {
   foto_url?: string;
   lat?: number;
   lng?: number;
+  gps_accuracy?: number;
+  captured_at?: string;
+  foto_hash?: string;
+  foto_bytes?: number;
+  /**
+   * Optional. The server records an out-of-bounds position rather than
+   * rejecting it, so never block a save on collecting this.
+   */
+  geofence_override_reason?: string;
   note?: string;
 }
 

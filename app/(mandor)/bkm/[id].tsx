@@ -1,5 +1,7 @@
 import { useModuleGroup } from '@/hooks/useModuleGroup';
-import { ConfirmModal } from "@/components/core/ConfirmModal";
+import { OperationalActions } from '@/components/bkm/OperationalActions';
+import { OperationalHistory } from '@/components/bkm/OperationalHistory';
+import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
 import { PageHeader } from "@/components/home";
 import { View } from "@/components/Themed";
 import { DetailCard } from "@/components/bkm/DetailCard";
@@ -7,7 +9,6 @@ import { DocStatusBadge } from "@/components/bkm/DocStatusBadge";
 import { MetricCard } from "@/components/bkm/MetricCard";
 import { BrandColors } from "@/constants/Colors";
 import { useBkmPanenDetail } from "@/hooks/useBkmPanen";
-import { useBkmPanenActions } from "@/hooks/useBkmPanenActions";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo } from "react";
@@ -24,30 +25,7 @@ export default function BkmDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading, isError, refetch } = useBkmPanenDetail(id);
-  const {
-    canApprove,
-    handleApprove,
-    handleReject,
-    handleDelete,
-    handleRevoke,
-    handleCancel,
-    handleSubmit,
-    rejectModalVisible,
-    setRejectModalVisible,
-    rejectReason,
-    setRejectReason,
-    approveModalVisible,
-    setApproveModalVisible,
-    revokeModalVisible,
-    setRevokeModalVisible,
-    cancelModalVisible,
-    setCancelModalVisible,
-    deleteMutation,
-  } = useBkmPanenActions(id);
-
-  const showApproveReject = canApprove && data?.status === "SUBMITTED";
-  const showRevokeCancel = data?.status === "SUBMITTED" || data?.status === "REVISION_REQUESTED";
-
+  const policy = useOperationalPolicy('bkmPanen', data?.status, data?.details?.length);
   const metrics = useMemo(() => {
     const details = data?.details ?? [];
     const totalJanjang = details.reduce(
@@ -62,8 +40,9 @@ export default function BkmDetailScreen() {
       0,
     );
     const totalBrondol = details.reduce((sum, d) => sum + (Number(d.jumlah_brondol) || 0), 0);
+    const hasBrondol = details.some((d) => d.jumlah_brondol != null);
     const tphCount = new Set(details.map((d) => d.tph_id)).size;
-    return { totalJanjang, totalBrondol, tphCount };
+    return { totalJanjang, totalBrondol, hasBrondol, tphCount };
   }, [data]);
 
   if (isLoading) {
@@ -84,6 +63,7 @@ export default function BkmDetailScreen() {
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={40} color={BrandColors.error} />
           <Text style={styles.errorText}>Gagal memuat data</Text>
+          <OperationalHistory module="bkmPanen" id={id} />
           <TouchableOpacity onPress={() => refetch()}>
             <Text style={styles.retryText}>Coba lagi</Text>
           </TouchableOpacity>
@@ -120,7 +100,7 @@ export default function BkmDetailScreen() {
           <MetricCard label="Pekerja" value={String(details.length)} />
           <MetricCard label="TPH" value={String(metrics.tphCount)} />
           <MetricCard label="Total Janjang" value={String(metrics.totalJanjang)} />
-          <MetricCard label="Brondolan" value={`${metrics.totalBrondol} kg`} />
+          <MetricCard label="Brondol (kg)" value={metrics.hasBrondol ? `${metrics.totalBrondol} kg` : '—'} />
         </View>
 
         <Text style={styles.sectionLabel}>Detail per Pekerja</Text>
@@ -133,7 +113,7 @@ export default function BkmDetailScreen() {
           </View>
         )}
 
-        {data?.status === "DRAFT" && (
+        {policy.edit && (
           <View style={styles.actionButtons}>
             <TouchableOpacity
               style={[styles.actionButton, styles.editButtonSm]}
@@ -142,69 +122,13 @@ export default function BkmDetailScreen() {
               <Ionicons name="create-outline" size={18} color={BrandColors.white} />
               <Text style={styles.editButtonText}>Edit</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionButton, styles.submitButton]} onPress={handleSubmit}>
-              <Ionicons name="send-outline" size={18} color={BrandColors.white} />
-              <Text style={styles.editButtonText}>Submit</Text>
-            </TouchableOpacity>
           </View>
         )}
 
-        {data?.status === "REVISION_REQUESTED" && (
-          <View style={styles.editButtonContainer}>
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => router.push(`/${group}/bkm/edit?id=${id}`)}
-            >
-              <Ionicons name="create-outline" size={18} color={BrandColors.white} />
-              <Text style={styles.editButtonText}>Edit</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {showApproveReject && (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity style={[styles.actionButton, styles.rejectButton]} onPress={() => setRejectModalVisible(true)}>
-              <Text style={styles.rejectButtonText}>Tolak</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionButton, styles.approveButton]} onPress={() => setApproveModalVisible(true)}>
-              <Text style={styles.approveButtonText}>Setuju</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {showRevokeCancel && (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity style={[styles.actionButton, styles.revokeButton]} onPress={() => setRevokeModalVisible(true)}>
-              <Ionicons name="arrow-undo-outline" size={16} color={BrandColors.white} />
-              <Text style={styles.revokeButtonText}>Tarik Kembali</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionButton, styles.cancelButton]} onPress={() => setCancelModalVisible(true)}>
-              <Ionicons name="close-circle-outline" size={16} color={BrandColors.white} />
-              <Text style={styles.cancelButtonText}>Batalkan</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {data?.status === "DRAFT" && (
-          <TouchableOpacity
-            style={[styles.deleteButton, deleteMutation.isPending && styles.deleteButtonDisabled]}
-            onPress={handleDelete}
-            disabled={deleteMutation.isPending}
-          >
-            {deleteMutation.isPending ? (
-              <ActivityIndicator size="small" color={BrandColors.error} />
-            ) : (
-              <Ionicons name="trash-outline" size={18} color={BrandColors.error} />
-            )}
-            <Text style={styles.deleteButtonText}>{deleteMutation.isPending ? "Menghapus..." : "Hapus"}</Text>
-          </TouchableOpacity>
-        )}
+        <OperationalActions module="bkmPanen" document={data} />
+        <OperationalHistory module="bkmPanen" id={id} />
       </ScrollView>
 
-      <ConfirmModal visible={approveModalVisible} title="Setuju BKM" message="Apakah Anda yakin ingin menyetujui dokumen BKM ini?" confirmText="Setuju" cancelText="Batal" onConfirm={handleApprove} onCancel={() => setApproveModalVisible(false)} />
-      <ConfirmModal visible={rejectModalVisible} title="Tolak BKM" message="Masukkan alasan penolakan (opsional):" confirmText="Tolak" cancelText="Batal" showInput inputPlaceholder="Alasan penolakan..." inputValue={rejectReason} onInputChange={setRejectReason} onConfirm={handleReject} onCancel={() => { setRejectModalVisible(false); setRejectReason(""); }} />
-      <ConfirmModal visible={revokeModalVisible} title="Tarik Kembali BKM" message="Dokumen akan kembali ke status Draft dan dapat diedit kembali." confirmText="Tarik Kembali" cancelText="Batal" onConfirm={handleRevoke} onCancel={() => setRevokeModalVisible(false)} />
-      <ConfirmModal visible={cancelModalVisible} title="Batalkan BKM" message="Dokumen yang dibatalkan tidak dapat dikembalikan." confirmText="Batalkan" cancelText="Batal" onConfirm={handleCancel} onCancel={() => setCancelModalVisible(false)} />
     </View>
   );
 }

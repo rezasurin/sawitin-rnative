@@ -1,4 +1,5 @@
 import { Button } from '@/components/core/Button';
+import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
 import { Text, View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { useSubmitBkmChecker } from '@/hooks/useBkmChecker';
@@ -8,6 +9,7 @@ import { bkmPanenApi } from '@/services/bkm-panen.service';
 import { useBkmCheckerStore } from '@/stores/useBkmCheckerStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
+import { checkerLoadConflict } from '@/utils/transport';
 import { useQuery } from '@tanstack/react-query';
 import React, { useMemo, useRef, useState } from 'react';
 import {
@@ -27,6 +29,7 @@ interface Props {
 
 export function BKMCheckerFormStep3({ onBack, onSuccess, onSavingChange }: Props) {
   const { header, details } = useBkmCheckerStore();
+  const policy = useOperationalPolicy('bkmChecker', 'DRAFT', details.length);
   const submitMutation = useSubmitBkmChecker();
   const isOnline = useNetworkStore((s) => s.isOnline);
   const addToQueue = useSyncQueueStore((s) => s.addToQueue);
@@ -71,7 +74,7 @@ export function BKMCheckerFormStep3({ onBack, onSuccess, onSavingChange }: Props
   const estimatedTons = (totalJanjang * bjr) / 1000;
 
   const handleSubmit = async () => {
-    if (!confirmed || savingRef.current) return;
+    if (!confirmed || savingRef.current || !policy.create) return;
 
     if (mismatchExceedsTolerance) {
       Alert.alert(
@@ -94,6 +97,9 @@ export function BKMCheckerFormStep3({ onBack, onSuccess, onSavingChange }: Props
       return;
     }
 
+    const loadConflict = checkerLoadConflict(details);
+    if (loadConflict) { Alert.alert('Muatan berbeda', loadConflict); return; }
+
     const headerPayload = {
       blok_id: header.blok_id,
       tph_id: header.tph_id,
@@ -105,6 +111,8 @@ export function BKMCheckerFormStep3({ onBack, onSuccess, onSavingChange }: Props
 
     const detailPayloads = details.map((d) => ({
       tipe_pengiriman: d.tipe_pengiriman,
+      kendaraan_id: d.kendaraan_id,
+      supir_id: d.supir_id,
       nomor_truk: d.nomor_truk,
       nama_sopir: d.nama_sopir,
       tujuan_kirim: d.tujuan_kirim,
@@ -127,7 +135,7 @@ export function BKMCheckerFormStep3({ onBack, onSuccess, onSavingChange }: Props
           module: 'bkm_checker',
           action: 'CREATE',
           endpoint: '/bkmChecker',
-          payload: { header: headerPayload, details: detailPayloads },
+          payload: { header: headerPayload, details: detailPayloads, submit: policy.submit },
         });
         Alert.alert('Antrian Offline', 'Data tersimpan dan akan dikirim saat online.');
       } else {
@@ -162,7 +170,7 @@ export function BKMCheckerFormStep3({ onBack, onSuccess, onSavingChange }: Props
         <View style={styles.grid}>
           <MetricCard label="Detail" value={String(details.length)} />
           <MetricCard label="Total Janjang" value={String(totalJanjang)} />
-          <MetricCard label="Brondolan" value={`${totalBrondol} kg`} />
+          <MetricCard label="Brondol (kg)" value={`${totalBrondol} kg`} />
         </View>
 
         {header.bkm_panen_id && linkedPanen && (
@@ -196,7 +204,7 @@ export function BKMCheckerFormStep3({ onBack, onSuccess, onSavingChange }: Props
               Normal: {d.janjang_normal} | Mentah: {d.buah_mentah} | Over: {d.over_ripe} | T.Panjang: {d.tangkai_panjang}
             </Text>
             <Text style={styles.detailCardValue}>
-              Abnormal: {d.buah_abnormal} | Kosong: {d.janjang_kosong} | Brondol: {d.jumlah_brondol} kg
+              Abnormal: {d.buah_abnormal} | Kosong: {d.janjang_kosong} | Brondol (kg): {d.jumlah_brondol}
             </Text>
           </View>
         ))}
@@ -218,7 +226,7 @@ export function BKMCheckerFormStep3({ onBack, onSuccess, onSavingChange }: Props
       <View style={styles.navButtons}>
         <Button title="Edit Data" onPress={onBack} disabled={isSaving} variant="secondary" style={{ flex: 1 }} />
         <Button
-          title="Submit Checker"
+          title={policy.submit ? 'Submit Checker' : 'Simpan draft'}
           onPress={handleSubmit}
           disabled={isSaving || !confirmed || mismatchExceedsTolerance}
           loading={isSaving}

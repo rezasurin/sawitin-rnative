@@ -43,6 +43,7 @@ const STATUS_OPTIONS = [
   { label: 'Semua', value: null },
   { label: 'Draft', value: 'DRAFT' },
   { label: 'Submitted', value: 'SUBMITTED' },
+  { label: 'Revisi', value: 'REVISION_REQUESTED' },
   { label: 'Approved', value: 'APPROVED' },
   { label: 'Cancelled', value: 'CANCELLED' },
 ];

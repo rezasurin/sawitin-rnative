@@ -14,6 +14,11 @@ interface BkmPanenDraftState {
   details: BkmPanenDetailDraft[];
   isEditing: boolean;
   editingId: string | null;
+  /**
+   * The `modified_at` this edit was loaded from, sent as `If-Unmodified-Since`
+   * so a queued change cannot silently overwrite someone else's later edit.
+   */
+  editingModifiedAt: string | null;
   deletedDetailIds: string[];
 }
 
@@ -29,6 +34,7 @@ interface BkmPanenStore extends BkmPanenDraftState {
     id: string,
     header: CreateBkmPanenPayload,
     details: BkmPanenDetailDraft[],
+    modifiedAt?: string | null,
   ) => void;
   reset: () => void;
 }
@@ -47,6 +53,7 @@ export const useBkmPanenStore = create<BkmPanenStore>((set) => ({
   details: [],
   isEditing: false,
   editingId: null,
+  editingModifiedAt: null,
   deletedDetailIds: [],
 
   setHeader: (partial) =>
@@ -87,8 +94,15 @@ export const useBkmPanenStore = create<BkmPanenStore>((set) => ({
       };
     }),
 
-  startEditing: (id, header, details) =>
-    set({ isEditing: true, editingId: id, header, details, deletedDetailIds: [] }),
+  startEditing: (id, header, details, modifiedAt = null) =>
+    set({
+      isEditing: true,
+      editingId: id,
+      editingModifiedAt: modifiedAt,
+      header,
+      details,
+      deletedDetailIds: [],
+    }),
 
   reset: () =>
     set({
@@ -96,6 +110,7 @@ export const useBkmPanenStore = create<BkmPanenStore>((set) => ({
       details: [],
       isEditing: false,
       editingId: null,
+      editingModifiedAt: null,
       deletedDetailIds: [],
     }),
 }));

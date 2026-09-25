@@ -1,9 +1,21 @@
 import * as Location from 'expo-location';
 import { useCallback, useState } from 'react';
 
-interface LocationResult {
+export interface LocationResult {
   latitude: number;
   longitude: number;
+  /**
+   * Reported radius in metres. It says where the worker could have been, not
+   * that they were somewhere wrong — a 30 m fix under canopy is normal, and the
+   * server records it beside the position rather than judging it.
+   */
+  accuracy: number | null;
+  /**
+   * When the platform took this reading, as an ISO string. Deliberately not the
+   * time the row is sent: an offline queue can deliver it days later, and the
+   * difference is the whole reason it is recorded.
+   */
+  capturedAt: string;
 }
 
 interface UseLocationReturn {
@@ -37,6 +49,8 @@ export function useLocation(): UseLocationReturn {
       const result: LocationResult = {
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
+        accuracy: loc.coords.accuracy ?? null,
+        capturedAt: new Date(loc.timestamp).toISOString(),
       };
 
       setLocation(result);

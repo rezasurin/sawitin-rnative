@@ -1,4 +1,5 @@
 import { Button } from "@/components/core/Button";
+import { agronomyLabel, operationalLands } from '@/utils/plantation';
 import { FormDateField, FormField, FormSelect } from "@/components/form";
 import { blokApi, lahanApi, grupPekerjaApi } from "@/services";
 import { useBkmPanenStore } from "@/stores/useBkmPanenStore";
@@ -31,14 +32,13 @@ export function BKMPanenFormStep1({ onNext }: Props) {
   });
 
   const blokOptions = (blokData?.data ?? []).map((b) => ({
-    label: b.nama,
+    label: agronomyLabel(b),
     value: b.id,
   }));
 
-  const lahanOptions = (lahanData?.data ?? [])
-    .filter((l) => !header.blok_id || l.blok_id === header.blok_id)
+  const lahanOptions = operationalLands(lahanData?.data ?? [], header.blok_id)
     .map((l) => ({
-      label: l.nama,
+      label: agronomyLabel(l),
       value: l.id,
     }));
 
@@ -47,7 +47,8 @@ export function BKMPanenFormStep1({ onNext }: Props) {
     value: g.id,
   }));
 
-  const isValid = !!header.blok_id && !!header.tanggal_laporan;
+  const isValid = !!header.blok_id && !!header.tanggal_laporan
+    && (!header.lahan_id || lahanOptions.some((l) => l.value === header.lahan_id));
 
   return (
     <ScrollView

@@ -1,9 +1,11 @@
 import { Text, View } from '@/components/Themed';
+import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
 import { Button } from '@/components/core/Button';
 import { BrandColors } from '@/constants/Colors';
 import { useSubmitBkmPanen } from '@/hooks/useBkmPanen';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { blokApi, lahanApi, grupPekerjaApi, pekerjaApi, tphApi } from '@/services';
+import { memberLabel } from '@/utils/plantation';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
@@ -23,7 +25,8 @@ interface Props {
 }
 
 export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
-  const { header, details, isEditing, editingId, deletedDetailIds, reset } = useBkmPanenStore();
+  const { header, details, isEditing, editingId, editingModifiedAt, deletedDetailIds, reset } = useBkmPanenStore();
+  const policy = useOperationalPolicy('bkmPanen', 'DRAFT', details.length);
   const submitMutation = useSubmitBkmPanen();
   const insets = useSafeAreaInsets();
   const isOnline = useNetworkStore((s) => s.isOnline);
@@ -44,7 +47,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
   const grupName = useMemo(() => grupData?.data?.find((g) => g.id === header.grup_pekerja_id)?.nama ?? header.grup_pekerja_id, [grupData, header.grup_pekerja_id]);
   const pekerjaMap = useMemo(() => {
     const map = new Map<string, string>();
-    (pekerjaData?.data ?? []).forEach((p) => map.set(p.id, p.member?.nama ?? p.id));
+    (pekerjaData?.data ?? []).forEach((p) => map.set(p.id, memberLabel(p.member, p.id)));
     return map;
   }, [pekerjaData]);
   const tphMap = useMemo(() => {
@@ -69,11 +72,12 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
     (sum, d) => sum + (Number(d.jumlah_brondol) || 0),
     0,
   );
+  const hasBrondol = details.some((d) => d.jumlah_brondol != null);
 
   const estimatedTons = (totalJanjang * bjr) / 1000;
 
   const handleSubmit = async () => {
-    if (!confirmed) return;
+    if (!confirmed || (isEditing ? !policy.edit : !policy.create)) return;
 
     const headerPayload = {
       blok_id: header.blok_id!,
@@ -98,6 +102,8 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
       foto_url: d.foto_url ?? undefined,
       lat: d.lat ?? undefined,
       lng: d.lng ?? undefined,
+      gps_accuracy: d.gps_accuracy ?? undefined,
+      captured_at: d.captured_at ?? undefined,
       note: d.note ?? undefined,
     }));
 
@@ -120,6 +126,8 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
           foto_url: d.foto_url ?? undefined,
           lat: d.lat ?? undefined,
           lng: d.lng ?? undefined,
+          gps_accuracy: d.gps_accuracy ?? undefined,
+          captured_at: d.captured_at ?? undefined,
           note: d.note ?? undefined,
           serverId: d.serverId,
         }));
@@ -130,17 +138,22 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
           endpoint: `/bkmPanen/${editingId}`,
           payload: {
             id: editingId,
+            documentId: editingId,
+            expectedStatus: 'DRAFT',
             header: headerPayload,
             details: detailPayloadsWithServerId,
             deletedDetailIds,
           },
+          // What this edit was based on. Days may pass before it is sent, and
+          // without this it would silently overwrite anything changed since.
+          precondition: editingModifiedAt,
         });
       } else {
         await addToQueue({
           module: 'bkm_panen',
           action: 'CREATE',
           endpoint: '/bkmPanen',
-          payload: { header: headerPayload, details: detailPayloads },
+          payload: { header: headerPayload, details: detailPayloads, submit: policy.submit },
         });
       }
       reset();
@@ -202,8 +215,8 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
             value={String(totalJanjang)}
           />
           <MetricCard
-            label="Brondolan"
-            value={`${totalBrondol} kg`}
+            label="Brondol (kg)"
+            value={hasBrondol ? `${totalBrondol} kg` : '—'}
           />
           <MetricCard
             label="Estimasi Tonase"
@@ -227,7 +240,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
             </Text>
             <Text style={styles.detailCardValue}>
               Abnormal: {d.buah_abnormal} | Kosong: {d.janjang_kosong} |
-              Brondol: {d.jumlah_brondol ?? 0} kg
+              Brondol (kg): {d.jumlah_brondol ?? '—'}
             </Text>
             {d.note ? (
               <Text style={styles.detailCardNote}>Catatan: {d.note}</Text>
@@ -266,7 +279,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
         </TouchableOpacity>
 
         <Button
-          title="Submit BKM"
+          title={policy.submit ? 'Submit BKM' : 'Simpan draft'}
           onPress={handleSubmit}
           variant="primary"
           disabled={!confirmed}

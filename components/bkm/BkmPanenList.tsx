@@ -1,3 +1,4 @@
+import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
 import { FAB } from '@/components/core/FAB';
 import { ListEmptyState } from '@/components/core/ListEmptyState';
 import { PageHeader } from '@/components/home';
@@ -36,6 +37,7 @@ interface BkmPanenListProps {
  *  - long-press delete of DRAFT is mandor-only (asisten has no delete permission)
  */
 export function BkmPanenList({ onCardPress, onCreatePress, emptyHint, initialStatus = null, onStatusChange }: BkmPanenListProps) {
+  const policy = useOperationalPolicy('bkmPanen', 'DRAFT');
   const [showFilter, setShowFilter] = useState(false);
   const [filterState, setFilterState] = useState<FilterSortState>({
     sort: 'tanggal_laporan:desc',
@@ -86,7 +88,7 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint, initialSta
 
   const handleLongPress = useCallback(
     (item: BkmPanen) => {
-      if (item.status !== 'DRAFT') return;
+      if (item.status !== 'DRAFT' || !policy.delete) return;
 
       Alert.alert('Hapus BKM Panen?', 'Data akan dihapus permanen.', [
         { text: 'Batal', style: 'cancel' },
@@ -107,12 +109,12 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint, initialSta
               );
               return;
             }
-            deleteMutation.mutate(item.id);
+            deleteMutation.mutate(item.id, { onSuccess: () => Alert.alert('Draft dihapus', 'Riwayat tetap tersedia.', [{ text: 'Tutup' }, { text: 'Lihat riwayat', onPress: () => onCardPress(item.id) }]) });
           },
         },
       ]);
     },
-    [isOnline, deleteMutation, addToQueue],
+    [isOnline, deleteMutation, addToQueue, policy.delete, onCardPress],
   );
 
   return (
@@ -125,7 +127,7 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint, initialSta
           <PanenCard
             item={item}
             onPress={() => onCardPress(item.id)}
-            onLongPress={onCreatePress ? () => handleLongPress(item) : undefined}
+            onLongPress={policy.delete ? () => handleLongPress(item) : undefined}
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -138,7 +140,7 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint, initialSta
                 <Text style={styles.headerSubtitle}>
                   {totalItems > 0 ? totalItems : panenList.length} dokumen panen
                 </Text>
-                {hasDraft && onCreatePress && (
+                {hasDraft && policy.delete && (
                   <Text style={styles.headerHint}>
                     Tekan lama untuk menghapus DRAFT
                   </Text>
@@ -181,7 +183,7 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint, initialSta
         }
       />
 
-      {onCreatePress && <FAB onPress={onCreatePress} />}
+      {onCreatePress && policy.create && <FAB onPress={onCreatePress} />}
 
       <FilterSortSheet
         visible={showFilter}

@@ -19,6 +19,7 @@ import { useCreateBkmRawat } from '@/hooks/useBkmRawat';
 import { useBkmRawatLookups } from '@/hooks/useBkmRawat';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
+import { agronomyLabel, operationalLands } from '@/utils/plantation';
 
 interface Props {
   onSuccess: (id: string) => void;
@@ -70,8 +71,8 @@ export function BKMRawatForm({ onSuccess }: Props) {
 
   const blokOptions = useMemo(
     () =>
-      (blokList?.data ?? rawatLookups?.blocks.filter((b) => b.kelompok_lahan_id === kelompokLahanId) ?? []).map((b) => ({
-        label: b.nama,
+      (blokList?.data ?? rawatLookups?.blocks ?? []).filter((b) => b.kelompok_lahan_id === kelompokLahanId).map((b) => ({
+        label: agronomyLabel(b),
         value: b.id,
       })),
     [blokList, rawatLookups, kelompokLahanId],
@@ -80,8 +81,8 @@ export function BKMRawatForm({ onSuccess }: Props) {
   const lahanOptions = useMemo(
     () => [
       { label: 'Tanpa Lahan', value: '' },
-      ...(lahanList?.data ?? rawatLookups?.lands.filter((l) => l.blok_id === blokId) ?? []).map((l) => ({
-        label: l.nama,
+      ...operationalLands(lahanList?.data ?? rawatLookups?.lands ?? [], blokId).map((l) => ({
+        label: agronomyLabel(l),
         value: l.id,
       })),
     ],
@@ -92,10 +93,13 @@ export function BKMRawatForm({ onSuccess }: Props) {
     const nextErrors: FormErrors = {};
 
     if (!kelompokLahanId) {
-      nextErrors.kelompok_lahan_id = 'Kelompok lahan wajib dipilih';
+      nextErrors.kelompok_lahan_id = 'Kebun wajib dipilih';
     }
     if (!blokId) {
       nextErrors.blok_id = 'Blok wajib dipilih';
+    }
+    if (lahanId && !lahanOptions.some((l) => l.value === lahanId)) {
+      nextErrors.lahan_id = 'Pilih lahan yang terhubung ke blok ini';
     }
     if (!tanggal) {
       nextErrors.tanggal = 'Tanggal pelaksanaan wajib diisi';
@@ -112,7 +116,7 @@ export function BKMRawatForm({ onSuccess }: Props) {
       nama_pengawas: true,
     });
     return Object.keys(nextErrors).length === 0;
-  }, [kelompokLahanId, blokId, tanggal, namaPengawas]);
+  }, [kelompokLahanId, blokId, lahanId, lahanOptions, tanggal, namaPengawas]);
 
   const handleKelompokChange = useCallback((value: string) => {
     setKelompokLahanId(value);
@@ -213,7 +217,8 @@ export function BKMRawatForm({ onSuccess }: Props) {
   ]);
 
   const isValid =
-    !!kelompokLahanId && !!blokId && !!tanggal && !!namaPengawas.trim();
+    !!kelompokLahanId && !!blokId && !!tanggal && !!namaPengawas.trim()
+    && (!lahanId || lahanOptions.some((l) => l.value === lahanId));
 
   return (
     <KeyboardAvoidingView
@@ -231,8 +236,8 @@ export function BKMRawatForm({ onSuccess }: Props) {
         showsVerticalScrollIndicator={false}
       >
         <FormSelect
-          label="Kelompok Lahan"
-          placeholder="Pilih kelompok lahan kebun"
+          label="Kebun"
+          placeholder="Pilih kebun"
           value={kelompokLahanId}
           options={kelompokLahanOptions}
           onSelect={handleKelompokChange}
@@ -247,7 +252,7 @@ export function BKMRawatForm({ onSuccess }: Props) {
               ? isFetchingBlok
                 ? 'Memuat blok...'
                 : 'Pilih blok kebun'
-              : 'Pilih kelompok lahan terlebih dahulu'
+              : 'Pilih kebun terlebih dahulu'
           }
           value={blokId}
           options={blokOptions}

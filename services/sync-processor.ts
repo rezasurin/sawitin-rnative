@@ -1,14 +1,24 @@
 import { isAxiosError } from 'axios';
+import * as FileSystem from 'expo-file-system/legacy';
 import { apiClient } from './api';
 import { bkmPanenApi } from './bkm-panen.service';
 import { bkmCheckerApi } from './bkm-checker.service';
 import { bkmRawatApi } from './bkm-rawat.service';
-import { uploadApi } from './upload.service';
+import { observasiApi } from './observasi.service';
+import { pemakaianKendaraanApi } from './vehicle-usage.service';
+import { kraniTimbangApi } from './krani-timbang.service';
+import { uploadApi, type UploadFolder } from './upload.service';
+import { tiketPksApi } from './tiket-pks.service';
+import { sameFiledTicket } from '@/utils/tiket-pks';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import type { CreateBkmPanenDetailPayload, CreateBkmPanenPayload, UpdateBkmPanenPayload } from '@/types/bkm-panen';
 import type { CreateBkmCheckerDetailPayload, CreateBkmCheckerPayload, UpdateBkmCheckerPayload } from '@/types/bkm-checker';
 import type { CreateBkmRawatDetailPayload, QueuedBkmRawatPayload, UpdateBkmRawatDetailPayload, UpdateBkmRawatPayload } from '@/types/bkm-rawat';
 import type { SyncQueueItem } from '@/types/sync';
+import type { CreateObservasiPayload } from '@/types/observasi';
+import type { CreatePemakaianKendaraanPayload } from '@/types/vehicle-usage';
+import type { CreateTiketPksPayload } from '@/types/tiket-pks';
+import { isSupportedSyncAction } from '@/utils/sync-support';
 
 interface BkmPanenQueuePayload {
   header: CreateBkmPanenPayload;
@@ -24,12 +34,16 @@ interface BkmPanenUpdateQueuePayload extends BkmPanenQueuePayload {
 interface BkmCheckerQueuePayload {
   header: CreateBkmCheckerPayload;
   details: Omit<CreateBkmCheckerDetailPayload, 'bkm_checker_id'>[];
+  server_id?: string;
 }
 
 interface ProcessorDependencies {
   panenApi: typeof bkmPanenApi;
   checkerApi: typeof bkmCheckerApi;
   rawatApi: typeof bkmRawatApi;
+  observasiApi: typeof observasiApi;
+  usageApi: typeof pemakaianKendaraanApi;
+  ticketApi: typeof tiketPksApi;
   upload: typeof uploadApi;
   updateQueuePayload: (id: string, payload: Record<string, unknown>) => Promise<void>;
 }
@@ -38,6 +52,9 @@ const defaultDependencies: ProcessorDependencies = {
   panenApi: bkmPanenApi,
   checkerApi: bkmCheckerApi,
   rawatApi: bkmRawatApi,
+  observasiApi,
+  usageApi: pemakaianKendaraanApi,
+  ticketApi: tiketPksApi,
   upload: uploadApi,
   updateQueuePayload: (id, payload) => useSyncQueueStore.getState().updatePayload(id, payload),
 };
@@ -56,19 +73,27 @@ async function ignoreAlreadyDeleted(action: () => Promise<unknown>) {
  * Upload local images one at a time and persist every returned URL in SQLite
  * before continuing. A later API failure or app restart therefore reuses the
  * uploaded object instead of creating an unreferenced duplicate.
+ *
+ * The hash and byte size come back with the URL and are carried onto the detail
+ * row, so a stored object can later be checked against the record that points
+ * at it. The server keys objects by that hash, so an interrupted upload retried
+ * whole costs one object, not two.
  */
-export async function uploadAndCheckpoint<T extends { foto_url?: string }>(
+export async function uploadAndCheckpoint<
+  T extends { foto_url?: string | null; foto_hash?: string | null; foto_bytes?: number | null },
+>(
   itemId: string,
   details: T[],
   buildPayload: (details: T[]) => Record<string, unknown>,
   dependencies: Pick<ProcessorDependencies, 'upload' | 'updateQueuePayload'> = defaultDependencies,
+  folder: UploadFolder = 'bkm-panen',
 ): Promise<T[]> {
   const checkpointed = details.map((detail) => ({ ...detail }));
   for (let index = 0; index < checkpointed.length; index++) {
     const detail = checkpointed[index];
     if (!detail.foto_url?.startsWith('file://')) continue;
-    const { url } = await dependencies.upload.uploadImage(detail.foto_url, 'bkm-panen');
-    checkpointed[index] = { ...detail, foto_url: url };
+    const { url, hash, bytes } = await dependencies.upload.uploadImage(detail.foto_url, folder);
+    checkpointed[index] = { ...detail, foto_url: url, foto_hash: hash, foto_bytes: bytes };
     await dependencies.updateQueuePayload(itemId, buildPayload(checkpointed));
   }
   return checkpointed;
@@ -78,8 +103,69 @@ export async function processItem(
   item: SyncQueueItem,
   dependencies: ProcessorDependencies = defaultDependencies,
 ) {
+  // Old unsupported rows can still exist on a device. Mark them for recovery
+  // immediately instead of retrying an operation that has no API route.
+  if (!isSupportedSyncAction(item.module, item.action)) {
+    throw Object.assign(new Error(`Pekerjaan offline ${item.module}/${item.action} belum didukung.`), { status: 422 });
+  }
   if (!item.payload) throw new Error(`Sync item ${item.id} has no payload`);
+  if ((item.payload.data as { status?: string } | undefined)?.status === 'CANCELLED' || /\/(approve|reject)$/.test(item.endpoint)) {
+    throw Object.assign(new Error('Keputusan offline tidak didukung. Periksa dokumen saat online.'), { status: 409 });
+  }
   const { panenApi, checkerApi, rawatApi } = dependencies;
+
+  if (item.module === 'tiket_pks' && item.action === 'CREATE') {
+    const [draft] = await uploadAndCheckpoint(item.id, [item.payload as unknown as CreateTiketPksPayload],
+      (rows) => rows[0] as unknown as Record<string, unknown>, dependencies, 'tiket-pks');
+    const { local_photo_uri: localPhoto, foto_hash: _photoHash, foto_bytes: _photoBytes, ...data } =
+      draft as CreateTiketPksPayload & { local_photo_uri?: string; foto_hash?: string; foto_bytes?: number };
+    const cleanup = async () => {
+      if (localPhoto?.startsWith('file://')) await FileSystem.deleteAsync(localPhoto, { idempotent: true }).catch(() => undefined);
+    };
+    const existing = await dependencies.ticketApi.byTrip(data.krani_timbang_id);
+    if (existing) {
+      if (!sameFiledTicket(existing, data)) {
+        throw Object.assign(new Error('Trip ini sudah memiliki tiket PKS berbeda. Periksa tiket di server.'), { status: 409 });
+      }
+      await cleanup();
+      return existing;
+    }
+    try {
+      const created = await dependencies.ticketApi.create(data);
+      await cleanup();
+      return created;
+    } catch (error) {
+      if ((error as { status?: number }).status !== 409) throw error;
+      const filed = await dependencies.ticketApi.byTrip(data.krani_timbang_id);
+      if (sameFiledTicket(filed, data)) { await cleanup(); return filed; }
+      throw error;
+    }
+  }
+
+  if (item.module === 'observasi' && item.action === 'CREATE') {
+    const [data] = await uploadAndCheckpoint(item.id, [item.payload as unknown as CreateObservasiPayload],
+      (rows) => rows[0] as unknown as Record<string, unknown>, dependencies, 'observasi');
+    const created = await dependencies.observasiApi.create({ ...data, client_request_id: data.client_request_id ?? item.id });
+    if (data.client_request_id?.startsWith('observasi_') && /^[\w-]+$/.test(data.client_request_id) && FileSystem.documentDirectory) {
+      await FileSystem.deleteAsync(`${FileSystem.documentDirectory}${data.client_request_id}.jpg`, { idempotent: true }).catch(() => undefined);
+    }
+    return created;
+  }
+
+  if (item.module === 'pemakaian_kendaraan') {
+    if (item.action === 'CREATE') {
+      const { data, submit } = item.payload as unknown as { data: CreatePemakaianKendaraanPayload; submit: boolean };
+      const record = await dependencies.usageApi.create({ ...data, client_request_id: data.client_request_id ?? item.id });
+      if (submit && record.status === 'DRAFT') await dependencies.usageApi.update(record.id, { status: 'SUBMITTED' });
+      return;
+    }
+    if (item.action === 'UPDATE') {
+      const { id, data } = item.payload as unknown as { id: string; data: { status: 'SUBMITTED' } };
+      const current = await dependencies.usageApi.getById(id);
+      if (current.status === 'SUBMITTED' || current.status === 'APPROVED') return;
+      return dependencies.usageApi.update(id, data);
+    }
+  }
 
   if (item.module === 'bkm_panen') {
     if (item.action === 'CREATE') {
@@ -87,14 +173,14 @@ export async function processItem(
       const uploaded = await uploadAndCheckpoint(
         item.id,
         details,
-        (nextDetails) => ({ header, details: nextDetails }),
+        (nextDetails) => ({ ...item.payload, header, details: nextDetails }),
         dependencies,
       );
       const panen = await panenApi.create({ ...header, client_request_id: item.id });
       await Promise.all(uploaded.map((detail, index) =>
         panenApi.addDetail({ ...detail, client_detail_id: `${item.id}:${index}`, bkm_panen_id: panen.id })
       ));
-      if (panen.status === 'DRAFT') await panenApi.update(panen.id, { status: 'SUBMITTED' });
+      if (item.payload.submit !== false && panen.status === 'DRAFT') await panenApi.update(panen.id, { status: 'SUBMITTED' });
     } else if (item.action === 'UPDATE') {
       const payload = item.payload as unknown as BkmPanenUpdateQueuePayload | { id: string; data: UpdateBkmPanenPayload };
       if ('header' in payload && 'details' in payload) {
@@ -102,12 +188,14 @@ export async function processItem(
         const uploaded = await uploadAndCheckpoint(
           item.id,
           details,
-          (nextDetails) => ({ id, header, details: nextDetails, deletedDetailIds }),
+          (nextDetails) => ({ ...item.payload, id, header, details: nextDetails, deletedDetailIds }),
           dependencies,
         );
         const current = (await apiClient.get<{ status: string }>(`/bkmPanen/${id}`)).data;
-        if (current.status === 'SUBMITTED') return;
-        await panenApi.update(id, header);
+        if (current.status !== 'DRAFT') {
+          throw Object.assign(new Error('Dokumen berubah. Periksa perubahan lokal sebelum mencoba kembali.'), { status: 409 });
+        }
+        await panenApi.update(id, header, item.precondition);
         await Promise.all((deletedDetailIds ?? []).map((detailId) =>
           ignoreAlreadyDeleted(() => panenApi.deleteDetail(detailId))
         ));
@@ -119,7 +207,7 @@ export async function processItem(
         }));
         await panenApi.update(id, { status: 'SUBMITTED' });
       } else {
-        await panenApi.update(payload.id, payload.data);
+        return panenApi.update(payload.id, payload.data, item.precondition);
       }
     } else if (item.action === 'DELETE') {
       await ignoreAlreadyDeleted(() => panenApi.delete((item.payload as { id: string }).id));
@@ -130,14 +218,16 @@ export async function processItem(
   if (item.module === 'bkm_checker') {
     if (item.action === 'CREATE') {
       const { header, details } = item.payload as unknown as BkmCheckerQueuePayload;
-      const checker = await checkerApi.create({ ...header, client_request_id: item.id });
-      await Promise.all(details.map((detail, index) =>
-        checkerApi.addDetail({ ...detail, client_detail_id: `${item.id}:${index}`, bkm_checker_id: checker.id })
-      ));
-      if (checker.status === 'DRAFT') await checkerApi.update(checker.id, { status: 'SUBMITTED' });
+      const serverId = (item.payload as unknown as BkmCheckerQueuePayload).server_id;
+      const checker = serverId ? await checkerApi.getById(serverId) : await checkerApi.create({ ...header, client_request_id: item.id });
+      if (!serverId) await dependencies.updateQueuePayload(item.id, { ...item.payload, server_id: checker.id });
+      for (const [index, detail] of details.entries()) {
+        await checkerApi.addDetail({ ...detail, client_detail_id: `${item.id}:${index}`, bkm_checker_id: checker.id });
+      }
+      if (item.payload.submit !== false && checker.status === 'DRAFT') await checkerApi.update(checker.id, { status: 'SUBMITTED' });
     } else if (item.action === 'UPDATE') {
       const { id, data } = item.payload as unknown as { id: string; data: UpdateBkmCheckerPayload };
-      await checkerApi.update(id, data);
+      return checkerApi.update(id, data, item.precondition);
     } else if (item.action === 'DELETE') {
       await ignoreAlreadyDeleted(() => checkerApi.delete((item.payload as { id: string }).id));
     } else throw new Error(`Unsupported sync action ${item.module}/${item.action}`);
@@ -158,7 +248,7 @@ export async function processItem(
       if (submit && rawat.status === 'DRAFT') await rawatApi.update(rawat.id, { status: 'SUBMITTED' });
     } else if (item.action === 'UPDATE') {
       const { id, data } = item.payload as unknown as { id: string; data: UpdateBkmRawatPayload };
-      await rawatApi.update(id, data);
+      return rawatApi.update(id, data, item.precondition);
     } else if (item.action === 'DELETE') {
       await ignoreAlreadyDeleted(() => rawatApi.delete((item.payload as { id: string }).id));
     } else throw new Error(`Unsupported sync action ${item.module}/${item.action}`);
@@ -167,14 +257,30 @@ export async function processItem(
 
   if (item.module === 'bkm_rawat_detail') {
     if (item.action === 'CREATE') {
-      const data = item.payload as unknown as CreateBkmRawatDetailPayload;
+      const { documentId, expectedStatus, ...business } = item.payload;
+      const data = business as unknown as CreateBkmRawatDetailPayload;
       await rawatApi.addDetail({ ...data, client_detail_id: data.client_detail_id ?? item.id });
     } else if (item.action === 'UPDATE') {
       const { id, data } = item.payload as unknown as { id: string; data: UpdateBkmRawatDetailPayload };
-      await rawatApi.updateDetail(id, data);
+      return rawatApi.updateDetail(id, data, item.precondition);
     } else if (item.action === 'DELETE') {
       await ignoreAlreadyDeleted(() => rawatApi.deleteDetail((item.payload as { id: string }).id));
     } else throw new Error(`Unsupported sync action ${item.module}/${item.action}`);
+    return;
+  }
+
+  if (item.module === 'bkm_checker_detail' || item.module === 'krani_timbang_detail') {
+    const payload = item.payload as { id: string; data: Record<string, unknown> };
+    if (item.action !== 'UPDATE') throw new Error('Unsupported detail action');
+    if (item.module === 'bkm_checker_detail') return checkerApi.updateDetail(payload.id, payload.data, item.precondition);
+    return kraniTimbangApi.updateDetail(payload.id, payload.data);
+  }
+
+  if (item.module === 'krani_timbang') {
+    const payload = item.payload as { id: string; data: Parameters<typeof kraniTimbangApi.update>[1] };
+    if (item.action === 'UPDATE') return kraniTimbangApi.update(payload.id, payload.data);
+    else if (item.action === 'DELETE') await kraniTimbangApi.delete(payload.id);
+    else throw new Error('Unsupported manual weighing sync action');
     return;
   }
 

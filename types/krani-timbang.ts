@@ -16,6 +16,11 @@ export interface KraniTimbang extends TimestampFields {
   timbang_isi: number | null;
   netto: number | null;
   status: DocumentStatus;
+  approved_by: string | null;
+  approved_at: string | null;
+  rejected_by: string | null;
+  rejected_at: string | null;
+  rejection_note: string | null;
   keterangan: string | null;
   origin_source: OriginSource;
   supir?: Supir;
@@ -24,10 +29,11 @@ export interface KraniTimbang extends TimestampFields {
 }
 
 export interface CreateKraniTimbangPayload {
-  nama_supir: string;
-  nomor_kendaraan: string;
-  supir_id?: string;
-  kendaraan_id?: string;
+  nama_supir?: string;
+  nomor_kendaraan?: string;
+  supir_id?: string | null;
+  kendaraan_id?: string | null;
+  nomor_dokumen?: string;
   tujuan_kirim: string;
   tanggal: string;
   timbang_kosong?: number;
@@ -44,7 +50,7 @@ export interface CreateKraniTimbangPayload {
   }[];
 }
 
-export type UpdateKraniTimbangPayload = Partial<CreateKraniTimbangPayload>;
+export type UpdateKraniTimbangPayload = Partial<CreateKraniTimbangPayload> & { status?: DocumentStatus };
 
 export interface DetailKraniTimbang extends TimestampFields {
   id: string;

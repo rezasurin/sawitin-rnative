@@ -21,7 +21,7 @@ export default function AdminMenuScreen() {
             <Pressable key={item.route} accessibilityRole="button" disabled={!allowed}
               accessibilityLabel={item.title} accessibilityState={{ disabled: !allowed }}
               accessibilityHint={allowed ? item.description : 'Anda tidak memiliki izin untuk modul ini'}
-              onPress={() => router.navigate(`/(admin)/${item.route}`)}
+              onPress={() => router.navigate(`/(admin)/${item.route}` as never)}
               style={({ pressed }) => [styles.row, (pressed || !allowed) && styles.dimmed]}>
               <View style={styles.icon}><FontAwesome name={item.icon} size={23} color={BrandColors.primary} /></View>
               <View style={styles.labels}>

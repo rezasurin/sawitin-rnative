@@ -5,7 +5,6 @@ export { useSyncProcessor } from './useSyncProcessor';
 export { useSync } from './useSync';
 export { useImageCapture } from './useImageCapture';
 export { useLocation } from './useLocation';
-export { useBkmPanenActions } from './useBkmPanenActions';
 export {
   useBkmPanenList,
   useBkmPanenInfinite,

@@ -47,6 +47,10 @@ export interface DetailBkmRawat extends TimestampFields {
   kategori_pekerjaan_id: string;
   satuan_hasil: string | null;
   hasil_pekerjaan: number | null;
+  luas_ha: number | null;
+  jumlah_pokok: number | null;
+  metode: string | null;
+  kondisi: string | null;
   keterangan: string | null;
   pekerja?: Pekerja;
   tipe_pekerjaan?: TipePekerjaan;
@@ -66,8 +70,12 @@ export interface CreateDetailBkmRawatPayload {
   kategori_pekerjaan_id: string;
   satuan_hasil?: string;
   hasil_pekerjaan?: number;
+  luas_ha?: number;
+  jumlah_pokok?: number;
+  metode?: string;
+  kondisi?: string;
   keterangan?: string;
-  materials?: { material_id: string; jumlah: number }[];
+  materials?: { material_id: string; jumlah: number; dosis?: number; satuan_dosis?: string }[];
 }
 
 export type UpdateDetailBkmRawatPayload = Partial<Omit<CreateDetailBkmRawatPayload, 'bkm_rawat_id'>>;
@@ -76,7 +84,9 @@ export interface BkmRawatLookups {
   types: { id: string; nama: string }[];
   categories: { id: string; nama: string }[];
   items: { id: string; nama: string; kategori_pekerjaan_id: string }[];
-  materials: { id: string; nama: string; satuan: string }[];
+  materials: { id: string; nama: string; satuan: string; bahan_aktif?: string | null; konsentrasi?: string | null }[];
+  vehicles?: { id: string; nomor_kendaraan: string; jenis_kendaraan: string; status: 'ACTIVE' | 'INACTIVE' }[];
+  drivers?: { id: string; nama: string; status: 'ACTIVE' | 'INACTIVE' }[];
   groups: { id: string; nama: string }[];
   blocks: { id: string; nama: string; kelompok_lahan_id: string }[];
   lands: { id: string; nama: string; blok_id: string | null }[];
@@ -98,7 +108,9 @@ export interface DetailBkmRawatMaterial extends TimestampFields {
   detail_bkm_rawat_id: string;
   material_id: string;
   jumlah: number;
-  material?: { id: string; nama: string; satuan: string };
+  dosis: number | null;
+  satuan_dosis: string | null;
+  material?: { id: string; nama: string; satuan: string; bahan_aktif?: string | null; konsentrasi?: string | null };
 }
 
 export type BkmRawatDetail = DetailBkmRawat;

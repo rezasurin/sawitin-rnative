@@ -75,7 +75,7 @@ test('Krani scan, input and detail share the Timbangan stack', () => {
   const krani = routes.children.find((node) => node.route === '(krani)');
   const weighing = krani.children.find((node) => node.route === 'timbangan');
   assert.equal(weighing.type, 'layout');
-  assert.deepEqual(weighing.children.map((node) => node.route).sort(), ['[detailId]', 'add', 'index', 'scan']);
+  assert.deepEqual(weighing.children.map((node) => node.route).sort(), ['[detailId]', 'add', 'index', 'scan', 'tiket/[tripId]', 'trace/[tripId]']);
 });
 
 test('Permission guard remains active', () => {
@@ -107,7 +107,7 @@ test('Administrator exposes every implemented module in its own route group', ()
     compilerOptions: { module: ts.ModuleKind.CommonJS },
   }).outputText, { exports });
   assert.deepEqual(Array.from(exports.ADMIN_MODULES, (item) => item.route).sort(),
-    ['bkm', 'checker', 'material', 'rawat', 'timbangan']);
+    ['bkm', 'checker', 'material', 'observasi', 'pemakaian-kendaraan', 'rawat', 'stock-opname', 'timbangan']);
   for (const item of exports.ADMIN_MODULES) {
     assert.ok(admin.children.some((node) => node.route === item.route), item.route);
   }
@@ -116,6 +116,76 @@ test('Administrator exposes every implemented module in its own route group', ()
     const shared = admin.children.find((node) => node.route === module);
     assert.deepEqual(shared.children.map((node) => node.route).sort(), original.children.map((node) => node.route).sort());
   }
+});
+
+test('deferred planning and attendance stay out of routes, quick actions, menu and dashboard even with grants', () => {
+  authorized = true; // The RoleTabs mock grants every module, including the deferred ones.
+  const deferred = /absensi|attendance|planning|work[_-]?order|plan[_-]?versus/i;
+  const visit = (nodes) => {
+    for (const node of nodes ?? []) {
+      assert.doesNotMatch(node.route, deferred);
+      visit(node.children);
+    }
+  };
+  visit(routes.children);
+  for (const group of Object.keys(expected)) {
+    segments = [group];
+    const screens = React.Children.toArray(moduleExports.RoleTabs({ group }).props.children);
+    for (const screen of screens) {
+      assert.doesNotMatch(screen.props.name, deferred);
+      assert.doesNotMatch(screen.props.options.title ?? '', deferred);
+    }
+  }
+
+  const menu = {};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(root, 'constants/adminMenu.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS },
+  }).outputText, { exports: menu });
+  for (const item of [...menu.ADMIN_MODULES, ...menu.UNAVAILABLE_ADMIN_MODULES]) {
+    assert.doesNotMatch(typeof item === 'string' ? item : `${item.route} ${item.title}`, deferred);
+  }
+
+  const quick = {};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(root, 'components/home/QuickActions.tsx'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
+  }).outputText, {
+    exports: quick,
+    require: (name) => ({
+      'react-native': { StyleSheet: { create: (value) => value } },
+      '@/constants/Colors': { BrandColors: {} },
+      '@/stores/useAuthStore': {},
+      'expo-router': {},
+      '@expo/vector-icons/FontAwesome': {},
+    })[name] ?? require(name),
+  });
+  for (const action of Object.values(quick.ROLE_ACTIONS).flat()) {
+    assert.doesNotMatch(`${action.id} ${action.label} ${action.route}`, deferred);
+  }
+
+  const dashboard = {};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(root, 'components/home/DashboardScreen.tsx'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
+  }).outputText, {
+    exports: dashboard,
+    require: (name) => ({
+      'react': { useState: () => [false, () => {}], useRef: (value) => ({ current: value }),
+        useEffect: () => {}, useCallback: (callback) => callback },
+      'react-native': { StyleSheet: { create: (value) => value }, ScrollView: 'ScrollView', View: 'View',
+        RefreshControl: 'RefreshControl', AppState: { currentState: 'active' } },
+      '@/components/home': {
+        PageHeader: 'PageHeader', QuickActions: 'QuickActions', TodaySummary: 'TodaySummary',
+        HargaTbsCard: 'HargaTbsCard', UserGreeting: 'UserGreeting',
+      },
+      '@/constants/Colors': { BrandColors: {} },
+      '@/hooks/useFieldSummary': { useFieldSummary: () => ({ refresh: async () => {} }) },
+      'expo-router': { useSegments: () => ['(mandor)'] },
+    })[name] ?? require(name),
+  });
+  const collectTypes = (element) => {
+    if (!React.isValidElement(element)) return [];
+    return [element.type, ...React.Children.toArray(element.props.children).flatMap(collectTypes)];
+  };
+  for (const type of collectTypes(dashboard.DashboardScreen())) assert.doesNotMatch(String(type), deferred);
 });
 
 test('Shared module links stay in Administrator and preserve original role routes', () => {

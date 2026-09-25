@@ -1,7 +1,10 @@
 import { Text, View } from '@/components/Themed';
+import { OperationalActions } from '@/components/bkm/OperationalActions';
+import { OperationalDraftEditor } from '@/components/bkm/OperationalDraftEditor';
+import { OperationalHistory } from '@/components/bkm/OperationalHistory';
 import { PageHeader } from '@/components/home';
 import { BrandColors } from '@/constants/Colors';
-import { useBkmCheckerDetail, useApproveBkmChecker } from '@/hooks/useBkmChecker';
+import { useBkmCheckerDetail } from '@/hooks/useBkmChecker';
 import { useLocalSearchParams, router } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
@@ -16,12 +19,16 @@ import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 import { bkmCheckerApi } from '@/services/bkm-checker.service';
+import { useModuleGroup } from '@/hooks/useModuleGroup';
+import { Button } from '@/components/core/Button';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { useQuery } from '@tanstack/react-query';
 
 export default function CheckerDetailScreen() {
+  const group = useModuleGroup('(mandor)');
+  const canCreate = useAuthStore((state) => state.hasPermission('mod_bkm_checker', 'write'));
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading, isError, refetch } = useBkmCheckerDetail(id);
-  const approveMutation = useApproveBkmChecker();
   const spb = useQuery({
     queryKey: ['bkmChecker', id, 'spb'],
     queryFn: () => bkmCheckerApi.getSpb(id),
@@ -43,32 +50,13 @@ export default function CheckerDetailScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.errorText}>Gagal memuat data</Text>
+        <OperationalHistory module="bkmChecker" id={id} />
         <TouchableOpacity onPress={() => refetch()} style={styles.retryButton}>
           <Text style={styles.retryText}>Coba Lagi</Text>
         </TouchableOpacity>
       </View>
     );
   }
-
-  const handleApprove = () => {
-    Alert.alert('Setujui Checker?', 'Data akan disetujui dan siap untuk ditimbang.', [
-      { text: 'Batal', style: 'cancel' },
-      {
-        text: 'Setujui',
-        onPress: () => {
-          approveMutation.mutate(id, {
-            onSuccess: () => {
-              Alert.alert('Berhasil', 'BKM Checker telah disetujui.');
-              refetch();
-            },
-            onError: (err) => {
-              Alert.alert('Gagal', err instanceof Error ? err.message : 'Terjadi kesalahan');
-            },
-          });
-        },
-      },
-    ]);
-  };
 
   const handleShareSpb = async () => {
     try {
@@ -94,7 +82,6 @@ export default function CheckerDetailScreen() {
     }
   };
 
-  const canApprove = data.status === 'SUBMITTED';
 
   const totalJanjang = data.details?.reduce((acc, curr) => acc + curr.jumlah_janjang, 0) ?? 0;
 
@@ -134,7 +121,7 @@ export default function CheckerDetailScreen() {
                 <Row label="Tanggal" value={data.tanggal_laporan} />
                 {data.details?.[0] && (
                   <>
-                    <Row label="No. Truk" value={data.details[0].nomor_truk || '-'} />
+                    <Row label="No. Truk" value={data.details[0].kendaraan?.nomor_kendaraan || data.details[0].nomor_truk || '-'} />
                     <Row label="Sopir" value={data.details[0].nama_sopir || '-'} />
                     <Row label="Tujuan" value={data.details[0].tujuan_kirim || '-'} />
                   </>
@@ -165,9 +152,17 @@ export default function CheckerDetailScreen() {
           <Row label="TPH" value={data.tph?.nama ?? data.tph_id} />
           <Row label="Tanggal" value={data.tanggal_laporan} />
           <Row label="Status" value={data.status} />
+          <Row label="Truk dokumen" value={data.details?.find((row) => row.tipe_pengiriman !== 'RESTAN')?.kendaraan?.nomor_kendaraan
+            || data.details?.find((row) => row.tipe_pengiriman !== 'RESTAN')?.nomor_truk || '-'} />
           {data.bkm_panen_id && <Row label="BKM Panen" value={data.bkm_panen_id} />}
           {data.keterangan && <Row label="Keterangan" value={data.keterangan} />}
         </View>
+
+        {canCreate && <Button title="Buat dokumen baru untuk truk lain" variant="secondary" onPress={() => router.push({
+          pathname: `/${group}/checker/add` as never,
+          params: { blok_id: data.blok_id, tph_id: data.tph_id, lahan_id: data.lahan_id || '',
+            bkm_panen_id: data.bkm_panen_id || '', tanggal_laporan: data.tanggal_laporan },
+        })} />}
 
         <Text style={styles.sectionTitle}>Detail ({data.details?.length ?? 0})</Text>
         {(data.details ?? []).map((d) => (
@@ -179,7 +174,7 @@ export default function CheckerDetailScreen() {
               Sopir: {d.nama_sopir || '-'} · Tujuan: {d.tujuan_kirim || '-'}
             </Text>
             <Text style={styles.detailValue}>
-              Normal: {d.janjang_normal} | Mentah: {d.buah_mentah} | Over: {d.over_ripe} | Brondol: {d.jumlah_brondol} kg
+              Normal: {d.janjang_normal} | Mentah: {d.buah_mentah} | Over: {d.over_ripe} | Brondol (kg): {d.jumlah_brondol}
             </Text>
             <Text style={styles.detailValue}>
               Total Janjang: {d.jumlah_janjang}
@@ -187,20 +182,9 @@ export default function CheckerDetailScreen() {
           </View>
         ))}
 
-        {canApprove && (
-          <TouchableOpacity
-            style={styles.approveButton}
-            onPress={handleApprove}
-            disabled={approveMutation.isPending}
-            activeOpacity={0.7}
-          >
-            {approveMutation.isPending ? (
-              <ActivityIndicator color={BrandColors.white} />
-            ) : (
-              <Text style={styles.approveButtonText}>Setujui Checker</Text>
-            )}
-          </TouchableOpacity>
-        )}
+        <OperationalActions module="bkmChecker" document={data} />
+        <OperationalDraftEditor module="bkmChecker" document={data} />
+        <OperationalHistory module="bkmChecker" id={id} />
       </ScrollView>
     </View>
   );

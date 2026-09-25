@@ -1,5 +1,7 @@
 import { FormDateField, FormField, FormSelect } from '@/components/form';
 import { Button } from '@/components/core/Button';
+import { agronomyLabel, operationalTphs, tphLabel } from '@/utils/plantation';
+import { TphLocation } from './TphLocation';
 import { blokApi, lahanApi, tphApi } from '@/services';
 import { bkmPanenApi } from '@/services/bkm-panen.service';
 import { useBkmCheckerStore } from '@/stores/useBkmCheckerStore';
@@ -49,23 +51,19 @@ export function BKMCheckerFormStep1({ onNext }: Props) {
   });
 
   const blokOptions = (blokData?.data ?? []).map((b) => ({
-    label: b.nama,
+    label: agronomyLabel(b),
     value: b.id,
   }));
 
-  const lahanBlokMap = new Map<string, string | null>();
-  (lahanData?.data ?? []).forEach((l) => lahanBlokMap.set(l.id, l.blok_id));
-
-  const tphOptions = (tphData?.data ?? [])
-    .filter((t) => !header.blok_id || lahanBlokMap.get(t.lahan_id) === header.blok_id)
-    .map((t) => ({ label: t.nama, value: t.id }));
+  const tphOptions = operationalTphs(tphData?.data ?? [], lahanData?.data ?? [], header.blok_id)
+    .map((t) => ({ label: tphLabel(t), value: t.id }));
 
   const panenOptions = (panenData?.data ?? []).map((p) => ({
     label: `${p.blok?.nama ?? p.blok_id} — ${formatLaporanDate(p.tanggal_laporan)}`,
     value: p.id,
   }));
 
-  const isValid = !!header.blok_id && !!header.tph_id && !!header.tanggal_laporan;
+  const isValid = !!header.blok_id && tphOptions.some((t) => t.value === header.tph_id) && !!header.tanggal_laporan;
 
   return (
     <ScrollView
@@ -99,9 +97,12 @@ export function BKMCheckerFormStep1({ onNext }: Props) {
         value={header.tph_id}
         options={tphOptions}
         onSelect={(val) => setHeader({ tph_id: val })}
-        placeholder="Pilih TPH"
+        placeholder={header.blok_id ? 'Pilih TPH' : 'Pilih Blok terlebih dahulu'}
+        disabled={!header.blok_id}
         searchable
       />
+
+      <TphLocation key={header.tph_id} tph={tphData?.data?.find((t) => t.id === header.tph_id)} />
 
       <FormDateField
         label="Tanggal Laporan"

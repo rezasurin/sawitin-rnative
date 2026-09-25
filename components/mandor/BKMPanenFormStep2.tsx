@@ -1,8 +1,11 @@
 import { Button } from '@/components/core/Button';
+import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
 import { FormSelect } from '@/components/form';
 import { Text, View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
-import { pekerjaApi, tphApi, tipePekerjaanApi } from '@/services';
+import { pekerjaApi, tphApi, tipePekerjaanApi, lahanApi } from '@/services';
+import { memberLabel, operationalTphs, tphLabel } from '@/utils/plantation';
+import { TphLocation } from './TphLocation';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
 import type { Pekerja } from '@/types/master-data';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +33,8 @@ interface DetailFormLocal {
   jenis_pekerjaan: string;
   lat: number | null;
   lng: number | null;
+  gps_accuracy: number | null;
+  captured_at: string | null;
 }
 
 const emptyDetailForm: DetailFormLocal = {
@@ -38,10 +43,13 @@ const emptyDetailForm: DetailFormLocal = {
   jenis_pekerjaan: '',
   lat: null,
   lng: null,
+  gps_accuracy: null,
+  captured_at: null,
 };
 
 export function BKMPanenFormStep2({ onNext, onBack }: Props) {
-  const { header, details, addDetail, removeDetail, updateDetail } = useBkmPanenStore();
+  const { header, details, addDetail, removeDetail, updateDetail, isEditing } = useBkmPanenStore();
+  const policy = useOperationalPolicy('bkmPanen', 'DRAFT', details.length);
   const [form, setForm] = useState<DetailFormLocal>({ ...emptyDetailForm });
   const [editingTempId, setEditingTempId] = useState<string | null>(null);
   const { captureLocation, loading: locationLoading } = useLocation();
@@ -58,6 +66,11 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
     queryFn: () => tphApi.getAll({ limit: 200 }),
   });
 
+  const { data: lahanData } = useQuery({
+    queryKey: ['lahan', 'all'],
+    queryFn: () => lahanApi.getAll({ limit: 200 }),
+  });
+
   const { data: tipePekerjaanData } = useQuery({
     queryKey: ['tipePekerjaan', 'all'],
     queryFn: () => tipePekerjaanApi.getAll({ limit: 200 }),
@@ -70,12 +83,12 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
   }, [pekerjaData]);
 
   const pekerjaOptions = (pekerjaData?.data ?? []).map((p) => ({
-    label: p.member?.nama ?? p.id,
+    label: memberLabel(p.member, p.id),
     value: p.id,
   }));
 
-  const tphOptions = (tphData?.data ?? []).map((t) => ({
-    label: t.nama,
+  const tphOptions = operationalTphs(tphData?.data ?? [], lahanData?.data ?? [], header.blok_id, header.lahan_id).map((t) => ({
+    label: tphLabel(t),
     value: t.id,
   }));
 
@@ -85,10 +98,10 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
   }));
 
   const detailFormValid =
-    !!form.pekerja_id && !!form.tph_id && !!form.jenis_pekerjaan;
+    !!form.pekerja_id && tphOptions.some((t) => t.value === form.tph_id) && !!form.jenis_pekerjaan;
 
   const handleSaveDetail = useCallback(() => {
-    if (!detailFormValid) return;
+    if (!detailFormValid || !editingTempId && !policy.addDetail) return;
     if (editingTempId) {
       updateDetail(editingTempId, {
         pekerja_id: form.pekerja_id,
@@ -96,6 +109,8 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
         jenis_pekerjaan: form.jenis_pekerjaan,
         lat: form.lat ?? undefined,
         lng: form.lng ?? undefined,
+        gps_accuracy: form.gps_accuracy ?? undefined,
+        captured_at: form.captured_at ?? undefined,
       });
       setEditingTempId(null);
     } else {
@@ -113,11 +128,13 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
         jumlah_janjang: 0,
         lat: form.lat ?? undefined,
         lng: form.lng ?? undefined,
+        gps_accuracy: form.gps_accuracy ?? undefined,
+        captured_at: form.captured_at ?? undefined,
       });
     }
     setForm({ ...emptyDetailForm });
     setGpsCaptured(false);
-  }, [form, detailFormValid, addDetail, updateDetail, editingTempId]);
+  }, [form, detailFormValid, addDetail, updateDetail, editingTempId, policy.addDetail]);
 
   const handleEditDetail = useCallback((item: any) => {
     setForm({
@@ -126,6 +143,8 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
       jenis_pekerjaan: item.jenis_pekerjaan,
       lat: item.lat ?? null,
       lng: item.lng ?? null,
+      gps_accuracy: item.gps_accuracy ?? null,
+      captured_at: item.captured_at ?? null,
     });
     setGpsCaptured(!!item.lat && !!item.lng);
     setEditingTempId(item._tempId);
@@ -141,7 +160,15 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
     setGpsCaptured(false);
     const loc = await captureLocation();
     if (loc) {
-      setForm((f) => ({ ...f, lat: loc.latitude, lng: loc.longitude }));
+      // Accuracy and capture time travel with the position. The capture time is
+      // the platform's, not the moment this row is finally uploaded.
+      setForm((f) => ({
+        ...f,
+        lat: loc.latitude,
+        lng: loc.longitude,
+        gps_accuracy: loc.accuracy,
+        captured_at: loc.capturedAt,
+      }));
       setGpsCaptured(true);
     }
   }, [captureLocation]);
@@ -174,6 +201,8 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
         searchable
       />
 
+      <TphLocation key={form.tph_id} tph={tphData?.data?.find((t) => t.id === form.tph_id)} />
+
       <FormSelect
         label="Jenis Pekerjaan"
         value={form.jenis_pekerjaan}
@@ -197,7 +226,7 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
           {locationLoading
             ? 'Mengambil lokasi...'
             : gpsCaptured
-              ? `GPS: ${form.lat?.toFixed(5)}, ${form.lng?.toFixed(5)}`
+              ? `GPS: ${form.lat?.toFixed(5)}, ${form.lng?.toFixed(5)}${form.gps_accuracy ? ` · ±${Math.round(form.gps_accuracy)} m` : ''}`
               : 'Ambil Lokasi GPS'}
         </Text>
       </TouchableOpacity>
@@ -218,7 +247,7 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
             !detailFormValid && styles.addButtonDisabled,
           ]}
           onPress={handleSaveDetail}
-          disabled={!detailFormValid}
+          disabled={!detailFormValid || !editingTempId && !policy.addDetail}
           activeOpacity={0.7}
         >
           <Ionicons name={editingTempId ? "checkmark-circle" : "add-circle"} size={20} color={BrandColors.white} />
@@ -242,7 +271,7 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
                 <View style={styles.detailCard}>
                   <View style={styles.detailInfo}>
                     <Text style={styles.detailName}>
-                      {p?.member?.nama ?? item.pekerja_id}
+                      {memberLabel(p?.member, item.pekerja_id)}
                     </Text>
                     <Text style={styles.detailMeta}>
                       TPH: {tphData?.data?.find((t) => t.id === item.tph_id)?.nama ?? item.tph_id}
@@ -269,7 +298,8 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
                       />
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() => removeDetail(item._tempId)}
+                      disabled={isEditing && !!item.serverId && !policy.deleteDetail}
+                      onPress={() => { if (!isEditing || !item.serverId || policy.deleteDetail) removeDetail(item._tempId); }}
                       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                     >
                       <Ionicons
@@ -317,7 +347,7 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
         <Button
           title="Lanjutkan ke Grading"
           onPress={onNext}
-          disabled={details.length === 0}
+          disabled={details.length === 0 || details.some((d) => !tphOptions.some((t) => t.value === d.tph_id))}
           variant="primary"
           style={{ flex: 2 }}
         />

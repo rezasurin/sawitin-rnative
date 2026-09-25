@@ -21,6 +21,9 @@ export interface PendingTimbangLog {
 
 export interface SubmitStagingPayload {
   qr_payload: string;
+  kendaraan_id?: string;
+  supir_id?: string;
+  nomor_dokumen?: string;
   nama_supir: string;
   nomor_kendaraan: string;
   tujuan_kirim: string;

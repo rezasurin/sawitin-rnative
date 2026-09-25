@@ -1,4 +1,6 @@
 import { BKMPanenForm } from '@/components/mandor/BKMPanenForm';
+import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
+import { Text } from 'react-native';
 import { PageHeader } from '@/components/home';
 import { View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
@@ -12,10 +14,11 @@ export default function EditBkmScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { data: panen, isLoading } = useBkmPanenDetail(id ?? '');
+  const policy = useOperationalPolicy('bkmPanen', panen?.status, panen?.details?.length);
   const startEditing = useBkmPanenStore((s) => s.startEditing);
 
   useEffect(() => {
-    if (panen && id) {
+    if (panen && id && policy.edit) {
       const header = {
         blok_id: panen.blok_id ?? '',
         lahan_id: panen.lahan_id ?? '',
@@ -43,9 +46,11 @@ export default function EditBkmScreen() {
         _tempId: d.id,
         serverId: d.id,
       }));
-      startEditing(id, header, details);
+      // The baseline this edit is against; it rides with a queued update as
+      // If-Unmodified-Since so a stale change is refused rather than applied.
+      startEditing(id, header, details, panen.modified_at ?? null);
     }
-  }, [panen, id, startEditing]);
+  }, [panen, id, startEditing, policy.edit]);
 
   if (!id || isLoading || !panen) {
     return (
@@ -69,7 +74,7 @@ export default function EditBkmScreen() {
         showBackButton
         onBack={() => router.back()}
       />
-      <BKMPanenForm onSuccess={() => router.back()} />
+      {policy.edit ? <BKMPanenForm onSuccess={() => router.back()} /> : <Text>Hanya dokumen DRAFT dengan izin ubah dapat diedit. Buka kembali dokumen revisi terlebih dahulu.</Text>}
     </View>
   );
 }

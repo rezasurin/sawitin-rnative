@@ -1,3 +1,4 @@
+import { OperationalCreateGuard } from '@/components/core/OperationalCreateGuard';
 import { BKMPanenForm } from '@/components/mandor/BKMPanenForm';
 import { PageHeader } from '@/components/home';
 import { View } from '@/components/Themed';
@@ -22,7 +23,7 @@ export default function AddBkmScreen() {
         showBackButton
         onBack={() => router.back()}
       />
-      <BKMPanenForm onSuccess={() => router.back()} />
+      <OperationalCreateGuard module="bkmPanen"><BKMPanenForm onSuccess={() => router.back()} /></OperationalCreateGuard>
     </View>
   );
 }

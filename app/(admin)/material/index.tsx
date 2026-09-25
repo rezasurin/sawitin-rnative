@@ -9,6 +9,8 @@ import { useMaterialList, useDeleteMaterial } from '@/hooks/useMaterial';
 import type { Material, GlobalStatus } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useAuthStore } from '@/stores/useAuthStore';
+import { Button } from '@/components/core/Button';
 import React from 'react';
 import {
   Alert,
@@ -33,10 +35,12 @@ function MaterialCard({
   item,
   onPress,
   onDelete,
+  canDelete,
 }: {
   item: Material;
   onPress: () => void;
   onDelete: () => void;
+  canDelete: boolean;
 }) {
   return (
     <Card>
@@ -52,6 +56,8 @@ function MaterialCard({
           <Text style={styles.cardMeta}>Kode: {item.kode}</Text>
           <Text style={styles.cardMeta}>Kategori: {item.kategori}</Text>
           <Text style={styles.cardMeta}>Satuan: {item.satuan}</Text>
+          {!!item.bahan_aktif && <Text style={styles.cardMeta}>Bahan aktif: {item.bahan_aktif}</Text>}
+          {!!item.konsentrasi && <Text style={styles.cardMeta}>Konsentrasi: {item.konsentrasi}</Text>}
           {item.harga_satuan !== null && (
             <Text style={styles.cardMeta}>
               Harga: Rp {item.harga_satuan.toLocaleString('id-ID')}
@@ -62,9 +68,9 @@ function MaterialCard({
           )}
         </View>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} activeOpacity={0.7}>
+      {canDelete && <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} activeOpacity={0.7}>
         <Ionicons name="trash-outline" size={18} color={BrandColors.error} />
-      </TouchableOpacity>
+      </TouchableOpacity>}
     </Card>
   );
 }
@@ -73,6 +79,9 @@ export default function MaterialScreen() {
   const router = useRouter();
   const { data, isLoading, isError, refetch, isRefetching } = useMaterialList();
   const deleteMutation = useDeleteMaterial();
+  const canWrite = useAuthStore((state) => state.hasPermission('mod_material', 'write'));
+  const canUpdate = useAuthStore((state) => state.hasPermission('mod_material', 'update'));
+  const canDelete = useAuthStore((state) => state.hasPermission('mod_material', 'delete'));
 
   const materialList = data?.data ?? [];
 
@@ -112,8 +121,9 @@ export default function MaterialScreen() {
         renderItem={({ item }) => (
           <MaterialCard
             item={item}
-            onPress={() => handleCardPress(item.id)}
-            onDelete={() => handleDelete(item)}
+            onPress={() => canUpdate && handleCardPress(item.id)}
+            onDelete={() => canDelete && handleDelete(item)}
+            canDelete={canDelete}
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -137,7 +147,8 @@ export default function MaterialScreen() {
         }
       />
 
-      <FAB onPress={() => router.push('/(admin)/material/add')} />
+      <Button title="Lihat stok opname" variant="secondary" onPress={() => router.push('/(admin)/stock-opname' as never)} />
+      {canWrite && <FAB onPress={() => router.push('/(admin)/material/add')} />}
     </View>
   );
 }

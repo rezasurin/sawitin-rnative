@@ -3,6 +3,9 @@ import { FormField, FormSelect } from '@/components/form';
 import { Text, View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { useBkmCheckerStore } from '@/stores/useBkmCheckerStore';
+import { useFleetChoices } from '@/hooks/useFleetChoices';
+import { checkerLoadConflict } from '@/utils/transport';
+import { isWholeKg } from '@/utils/field-summary';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useRef, useState } from 'react';
 import {
@@ -36,6 +39,10 @@ const GRADING_FIELDS = [
 
 interface DetailFormLocal {
   tipe_pengiriman: 'LANGSUNG' | 'TITIP' | 'RESTAN';
+  kendaraan_id: string;
+  supir_id: string;
+  manualVehicle: boolean;
+  manualDriver: boolean;
   nomor_truk: string;
   nama_sopir: string;
   tujuan_kirim: string;
@@ -43,6 +50,10 @@ interface DetailFormLocal {
 
 const emptyDetailForm: DetailFormLocal = {
   tipe_pengiriman: 'LANGSUNG',
+  kendaraan_id: '',
+  supir_id: '',
+  manualVehicle: false,
+  manualDriver: false,
   nomor_truk: '',
   nama_sopir: '',
   tujuan_kirim: '',
@@ -133,7 +144,7 @@ function GradingRow({ detail, onUpdate, onEdit, onDelete }: GradingRowProps) {
       </View>
 
       <View style={styles.brondolRow}>
-        <Text style={styles.brondolLabel}>Brondolan (kg)</Text>
+        <Text style={styles.brondolLabel}>Brondol (kg)</Text>
         <TextInput
           style={styles.brondolInput}
           value={String(detail.jumlah_brondol ?? '')}
@@ -141,8 +152,8 @@ function GradingRow({ detail, onUpdate, onEdit, onDelete }: GradingRowProps) {
           placeholder="0"
           placeholderTextColor={BrandColors.textMuted}
           onChangeText={(val) => {
-            const n = parseInt(val, 10);
-            onUpdate({ jumlah_brondol: isNaN(n) ? 0 : n });
+            if (val === '') onUpdate({ jumlah_brondol: 0 });
+            else if (isWholeKg(val)) onUpdate({ jumlah_brondol: Number(val) });
           }}
         />
       </View>
@@ -152,6 +163,7 @@ function GradingRow({ detail, onUpdate, onEdit, onDelete }: GradingRowProps) {
 
 export function BKMCheckerFormStep2({ onNext, onBack }: Props) {
   const { details, addDetail, updateDetail, removeDetail } = useBkmCheckerStore();
+  const fleet = useFleetChoices();
   const [form, setForm] = useState<DetailFormLocal>({ ...emptyDetailForm });
   const [editingId, setEditingId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -160,6 +172,10 @@ export function BKMCheckerFormStep2({ onNext, onBack }: Props) {
     (detail: (typeof details)[number]) => {
       setForm({
         tipe_pengiriman: detail.tipe_pengiriman,
+        kendaraan_id: detail.kendaraan_id ?? '',
+        supir_id: detail.supir_id ?? '',
+        manualVehicle: !detail.kendaraan_id,
+        manualDriver: !detail.supir_id,
         nomor_truk: detail.nomor_truk ?? '',
         nama_sopir: detail.nama_sopir ?? '',
         tujuan_kirim: detail.tujuan_kirim ?? '',
@@ -203,10 +219,18 @@ export function BKMCheckerFormStep2({ onNext, onBack }: Props) {
 
     const truckFields = {
       tipe_pengiriman: form.tipe_pengiriman,
+      kendaraan_id: form.kendaraan_id || undefined,
+      supir_id: form.supir_id || undefined,
       nomor_truk: form.nomor_truk || undefined,
       nama_sopir: form.nama_sopir || undefined,
       tujuan_kirim: form.tujuan_kirim || undefined,
     };
+
+    const candidate = editingId
+      ? details.map((row) => row._tempId === editingId ? { ...row, ...truckFields } : row)
+      : [...details, truckFields];
+    const conflict = checkerLoadConflict(candidate);
+    if (conflict) { Alert.alert('Muatan berbeda', conflict); return; }
 
     if (editingId) {
       updateDetail(editingId, truckFields);
@@ -266,19 +290,31 @@ export function BKMCheckerFormStep2({ onNext, onBack }: Props) {
           placeholder="Pilih Tipe"
         />
 
-        <FormField
-          label="Nomor Truk"
-          value={form.nomor_truk}
-          onChangeText={(val) => setForm((f) => ({ ...f, nomor_truk: val }))}
-          placeholder="B 1234 XY"
-        />
+        <FormSelect label="Kendaraan" searchable
+          value={form.manualVehicle ? '__manual__' : form.kendaraan_id}
+          options={[...fleet.vehicles.map((row) => ({ label: row.nomor_kendaraan, value: row.id })), { label: 'Ketik manual', value: '__manual__' }]}
+          onSelect={(id) => {
+            const row = fleet.vehicles.find((vehicle) => vehicle.id === id);
+            setForm((current) => ({ ...current, manualVehicle: id === '__manual__',
+              kendaraan_id: row?.id ?? '', nomor_truk: row?.nomor_kendaraan ?? (id === '__manual__' ? current.nomor_truk : '') }));
+          }} placeholder="Pilih kendaraan atau ketik manual" />
+        {(form.manualVehicle || !fleet.vehicles.length) && <FormField
+          label="Nomor Truk" value={form.nomor_truk}
+          onChangeText={(val) => setForm((f) => ({ ...f, kendaraan_id: '', manualVehicle: true, nomor_truk: val }))}
+          placeholder="B 1234 XY" />}
 
-        <FormField
-          label="Nama Sopir"
-          value={form.nama_sopir}
-          onChangeText={(val) => setForm((f) => ({ ...f, nama_sopir: val }))}
-          placeholder="Nama sopir"
-        />
+        <FormSelect label="Sopir" searchable
+          value={form.manualDriver ? '__manual__' : form.supir_id}
+          options={[...fleet.drivers.map((row) => ({ label: row.nama, value: row.id })), { label: 'Ketik manual', value: '__manual__' }]}
+          onSelect={(id) => {
+            const row = fleet.drivers.find((driver) => driver.id === id);
+            setForm((current) => ({ ...current, manualDriver: id === '__manual__',
+              supir_id: row?.id ?? '', nama_sopir: row?.nama ?? (id === '__manual__' ? current.nama_sopir : '') }));
+          }} placeholder="Pilih sopir atau ketik manual" />
+        {(form.manualDriver || !fleet.drivers.length) && <FormField
+          label="Nama Sopir" value={form.nama_sopir}
+          onChangeText={(val) => setForm((f) => ({ ...f, supir_id: '', manualDriver: true, nama_sopir: val }))}
+          placeholder="Nama sopir" />}
 
         <FormField
           label="Tujuan Kirim"

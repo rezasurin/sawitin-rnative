@@ -1,3 +1,4 @@
+import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
 import { FAB } from '@/components/core/FAB';
 import { ListEmptyState } from '@/components/core/ListEmptyState';
 import { PageHeader } from '@/components/home';
@@ -29,6 +30,7 @@ const todayStr = () => {
 };
 
 export function KraniTimbangHistory({ onCardPress, onScanPress }: KraniTimbangHistoryProps) {
+  const policy = useOperationalPolicy('kraniTimbang');
   const { data, isLoading, isError, refetch, isRefetching } = useKraniTimbangList({
     page: 1,
     limit: 100,
@@ -74,7 +76,7 @@ export function KraniTimbangHistory({ onCardPress, onScanPress }: KraniTimbangHi
         }
       />
 
-      <FAB label="Pindai QR untuk timbangan baru" onPress={onScanPress} />
+      {policy.create && <FAB label="Pindai QR untuk timbangan baru" onPress={onScanPress} />}
     </View>
   );
 }
@@ -90,6 +92,7 @@ function TimbangCard({ item, onPress }: { item: KraniTimbang; onPress: () => voi
         <DocStatusBadge status={item.status} />
       </View>
       <Text style={styles.meta}>Kendaraan: {item.nomor_kendaraan}</Text>
+      {!!item.nomor_dokumen && <Text style={styles.meta}>Dokumen: {item.nomor_dokumen}</Text>}
       <Text style={styles.meta}>Tujuan: {item.tujuan_kirim}</Text>
       <Text style={styles.netto}>
         Netto: {item.netto?.toLocaleString('id-ID') ?? 0} kg

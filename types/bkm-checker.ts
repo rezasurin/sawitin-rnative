@@ -1,5 +1,5 @@
 import { DocumentStatus, TipePengiriman, TimestampFields } from './common';
-import { Lahan, Blok, Tph, Pekerja } from './master-data';
+import { Lahan, Blok, Tph, Pekerja, Kendaraan, Supir } from './master-data';
 
 export interface BkmChecker extends TimestampFields {
   id: string;
@@ -40,6 +40,8 @@ export interface BkmCheckerDetail extends TimestampFields {
   id: string;
   bkm_checker_id: string;
   pekerja_id: string | null;
+  kendaraan_id: string | null;
+  supir_id: string | null;
   nomor_truk: string | null;
   nama_sopir: string | null;
   tipe_pengiriman: TipePengiriman;
@@ -53,12 +55,16 @@ export interface BkmCheckerDetail extends TimestampFields {
   janjang_kosong: number;
   jumlah_janjang: number;
   pekerja?: Pekerja;
+  kendaraan?: Kendaraan | null;
+  supir?: Supir | null;
 }
 
 export interface CreateBkmCheckerDetailPayload {
   client_detail_id?: string;
   bkm_checker_id: string;
   pekerja_id?: string;
+  kendaraan_id?: string | null;
+  supir_id?: string | null;
   nomor_truk?: string;
   nama_sopir?: string;
   tipe_pengiriman: TipePengiriman;

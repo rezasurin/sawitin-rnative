@@ -11,6 +11,8 @@ export default function TimbanganLayout() {
       <Stack.Screen name="scan" />
       <Stack.Screen name="add" />
       <Stack.Screen name="[detailId]" />
+      <Stack.Screen name="tiket/[tripId]" />
+      <Stack.Screen name="trace/[tripId]" />
     </Stack>
     </AdminModuleGuard>
   );

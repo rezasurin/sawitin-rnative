@@ -56,3 +56,63 @@ export async function readThroughCache<T>(
     throw error;
   }
 }
+
+/** Delta model name -> the resource key the read-through cache stores under. */
+const DELTA_RESOURCE_KEYS: Record<string, string[]> = {
+  kelompok_lahan: ['kelompokLahan'],
+  blok: ['blok'],
+  lahan: ['lahan'],
+  tph: ['tph'],
+  pekerja: ['pekerja'],
+  material: ['material'],
+  kendaraan: ['kendaraan'],
+  supir: ['supir'],
+};
+
+export interface DeltaSyncDeps {
+  fetchDelta: (since?: string, limit?: number) => Promise<{
+    changed: Record<string, unknown[]>;
+    cursor: string;
+    has_more: boolean;
+  }>;
+  readCursor: (userId: string) => Promise<string | undefined>;
+  saveCursor: (userId: string, cursor: string) => Promise<void>;
+  invalidateResource: (userId: string, resource: string) => Promise<void>;
+}
+
+/**
+ * Incremental master-data pull.
+ *
+ * Every sync used to refetch all eight master lists. Now one small call asks
+ * what has moved since the stored cursor, and only the resources that actually
+ * changed are invalidated so their next read refetches them.
+ *
+ * ponytail: incremental at resource granularity, not row granularity. The cache
+ * holds whole response payloads keyed by request params, so applying rows in
+ * place would mean understanding every endpoint's envelope. One changed block
+ * therefore refetches the block list — still far less than refetching all eight
+ * lists every time. Move to a row store if a single list ever grows large
+ * enough that refetching it is the cost that matters.
+ */
+export async function pullMasterDelta(userId: string, deps: DeltaSyncDeps): Promise<string[]> {
+  let cursor = await deps.readCursor(userId);
+  const invalidated = new Set<string>();
+
+  // Bounded: a device returning after a long absence pages through, but a
+  // broken `has_more` must never spin forever.
+  for (let page = 0; page < 20; page++) {
+    const delta = await deps.fetchDelta(cursor);
+    for (const [model, rows] of Object.entries(delta.changed)) {
+      if (!rows?.length) continue;
+      for (const resource of DELTA_RESOURCE_KEYS[model] ?? []) invalidated.add(resource);
+    }
+    cursor = delta.cursor;
+    if (!delta.has_more) break;
+  }
+
+  for (const resource of invalidated) {
+    await deps.invalidateResource(userId, resource);
+  }
+  if (cursor) await deps.saveCursor(userId, cursor);
+  return [...invalidated];
+}

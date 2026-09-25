@@ -9,6 +9,8 @@ export interface Material extends TimestampFields {
   satuan: string;
   harga_satuan: number | null;
   stok: number | null;
+  bahan_aktif: string | null;
+  konsentrasi: string | null;
   status: GlobalStatus;
 }
 
@@ -19,10 +21,12 @@ export interface CreateMaterialPayload {
   satuan: string;
   harga_satuan?: number;
   stok?: number;
+  bahan_aktif?: string | null;
+  konsentrasi?: string | null;
   status?: GlobalStatus;
 }
 
-export type UpdateMaterialPayload = Partial<CreateMaterialPayload>;
+export type UpdateMaterialPayload = Partial<Omit<CreateMaterialPayload, 'stok'>>;
 
 export interface MaterialTransaction {
   id: string;

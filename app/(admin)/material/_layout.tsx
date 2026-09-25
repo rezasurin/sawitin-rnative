@@ -1,10 +1,11 @@
 import { Stack } from 'expo-router';
+import { ModulePermissionGuard } from '@/components/core/ModulePermissionGuard';
 
 export default function MaterialLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <ModulePermissionGuard module="mod_material"><Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="add" />
-    </Stack>
+    </Stack></ModulePermissionGuard>
   );
 }

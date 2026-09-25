@@ -14,11 +14,13 @@ interface QuickAction {
   permissionAction?: "write" | "read";
 }
 
-const ROLE_ACTIONS: Record<string, QuickAction[]> = {
+export const ROLE_ACTIONS: Record<string, QuickAction[]> = {
   "(admin)": [
     { id: "bkm-add", label: "Buat BKM Panen", icon: "book", route: "/(admin)/bkm/add", permission: "mod_bkm_panen", permissionAction: "write" },
     { id: "checker-add", label: "Input Checker", icon: "check-square-o", route: "/(admin)/checker/add", permission: "mod_bkm_checker", permissionAction: "write" },
     { id: "timbangan-scan", label: "Pindai Timbangan", icon: "qrcode", route: "/(admin)/timbangan/scan", permission: "mod_krani_timbang", permissionAction: "write" },
+    { id: "observasi-add", label: "Catat Observasi", icon: "eye", route: "/(admin)/observasi/add" as Href, permission: "mod_bkm_rawat", permissionAction: "write" },
+    { id: "usage-list", label: "Pemakaian Kendaraan", icon: "truck", route: "/(admin)/pemakaian-kendaraan" as Href, permission: "mod_bkm_rawat", permissionAction: "read" },
   ],
   "(mandor)": [
     {
@@ -33,6 +35,14 @@ const ROLE_ACTIONS: Record<string, QuickAction[]> = {
       icon: "check-square-o",
       route: "/(mandor)/checker/add",
     },
+    { id: "observasi-add", label: "Catat Observasi", icon: "eye", route: "/(mandor)/observasi/add" as Href, permission: "mod_bkm_rawat", permissionAction: "write" },
+    { id: "observasi-list", label: "Riwayat Observasi", icon: "list", route: "/(mandor)/observasi" as Href, permission: "mod_bkm_rawat", permissionAction: "read" },
+    { id: "usage-list", label: "Pemakaian Kendaraan", icon: "truck", route: "/(mandor)/pemakaian-kendaraan" as Href, permission: "mod_bkm_rawat", permissionAction: "read" },
+  ],
+  "(asisten)": [
+    { id: "observasi-list", label: "Observasi Lapangan", icon: "eye", route: "/(asisten)/observasi" as Href, permission: "mod_bkm_rawat", permissionAction: "read" },
+    { id: "usage-list", label: "Pemakaian Kendaraan", icon: "truck", route: "/(asisten)/pemakaian-kendaraan" as Href, permission: "mod_bkm_rawat", permissionAction: "read" },
+    { id: "stock-list", label: "Stok Opname", icon: "list-alt", route: "/(asisten)/stock-opname" as Href, permission: "mod_material", permissionAction: "read" },
   ],
 };
 

@@ -4,6 +4,16 @@ import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { performSync, formatSyncResult } from '@/services/sync.service';
 import type { SyncPhase, SyncResult } from '@/services/sync.service';
 
+/** A result for a pass that never ran. */
+const idleResult = (error: string): SyncResult => ({
+  pushed: 0,
+  pushFailed: 0,
+  deadLettered: 0,
+  conflicts: 0,
+  pulled: false,
+  error,
+});
+
 /**
  * useSync Hook
  * Provides a manual sync trigger with reactive progress state.
@@ -12,8 +22,7 @@ import type { SyncPhase, SyncResult } from '@/services/sync.service';
  */
 export function useSync() {
   const queryClient = useQueryClient();
-  const { queue, removeFromQueue, incrementRetry, setProcessing } =
-    useSyncQueueStore();
+  const { queue, loadQueue, setProcessing } = useSyncQueueStore();
 
   const [syncPhase, setSyncPhase] = useState<SyncPhase>('idle');
   const [syncDetail, setSyncDetail] = useState('');
@@ -23,7 +32,7 @@ export function useSync() {
 
   const triggerSync = useCallback(async (): Promise<SyncResult> => {
     if (isSyncingRef.current || useSyncQueueStore.getState().isProcessing) {
-      return { pushed: 0, pushFailed: 0, pulled: false, error: 'Sinkronisasi sedang berjalan.' };
+      return idleResult('Sinkronisasi sedang berjalan.');
     }
 
     isSyncingRef.current = true;
@@ -31,9 +40,6 @@ export function useSync() {
 
     try {
       const result = await performSync({
-        syncQueue: [...queue],
-        removeFromQueue,
-        incrementRetry,
         queryClient,
         onProgress: (phase, detail) => {
           setSyncPhase(phase);
@@ -41,15 +47,15 @@ export function useSync() {
         },
       });
 
+      // The queue in SQLite is the truth; the store mirrors it afterwards so a
+      // dead-lettered item shows its reason without a second round of plumbing.
+      await loadQueue();
       setLastSyncResult(result);
       return result;
     } catch (err) {
-      const errorResult: SyncResult = {
-        pushed: 0,
-        pushFailed: 0,
-        pulled: false,
-        error: err instanceof Error ? err.message : 'Sinkronisasi gagal.',
-      };
+      const errorResult = idleResult(
+        err instanceof Error ? err.message : 'Sinkronisasi gagal.'
+      );
       setSyncPhase('error');
       setSyncDetail(errorResult.error!);
       setLastSyncResult(errorResult);
@@ -63,14 +69,15 @@ export function useSync() {
         setSyncDetail('');
       }, 3000);
     }
-  }, [queue, removeFromQueue, incrementRetry, queryClient, setProcessing]);
+  }, [loadQueue, queryClient, setProcessing]);
 
   return {
     triggerSync,
     syncPhase,
     syncDetail,
     lastSyncResult,
-    pendingCount: queue.length,
+    pendingCount: queue.filter((item) => item.status !== 'DEAD').length,
+    deadCount: queue.filter((item) => item.status === 'DEAD').length,
   };
 }
 

@@ -1,3 +1,4 @@
+import { OperationalCreateGuard } from '@/components/core/OperationalCreateGuard';
 import { BKMRawatForm } from '@/components/mandor/BKMRawatForm';
 import { PageHeader } from '@/components/home';
 import { View } from '@/components/Themed';
@@ -18,7 +19,7 @@ export default function AddRawatScreen() {
         showBackButton
         onBack={() => router.back()}
       />
-      <BKMRawatForm onSuccess={(id) => router.replace(`/${group}/rawat/${id}` as never)} />
+      <OperationalCreateGuard module="bkmRawat"><BKMRawatForm onSuccess={(id) => router.replace(`/${group}/rawat/${id}` as never)} /></OperationalCreateGuard>
     </View>
   );
 }
