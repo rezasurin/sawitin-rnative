@@ -1,7 +1,8 @@
 # Phase 1 frontend notes — operational workflow hardening
 
-**Backend contract date:** 22 September 2026  
-**Audience:** Sawitin web and mobile maintainers  
+**Backend contract date:** 22 September 2026
+
+**Audience:** Sawitin web and mobile maintainers
 **Phase status:** In progress; this note covers the workflow/audit backend slice and is not Phase 1 sign-off.
 
 ## Contract shared by web and mobile
@@ -65,3 +66,5 @@ The UI rule is only presentation. Always send the request and handle `401`, `403
 - Approve and reject continue to require only `approve`; they do not require `write` in addition.
 - Existing code that assumes rejection immediately makes a document editable must change: editing starts only after the explicit `REVISION_REQUESTED -> DRAFT` transition.
 - The backend migration `20260922100000_operational_workflow_audit` must be deployed before clients call history endpoints or depend on Krani approval metadata.
+
+Mobile implementation evidence and remaining device UAT: [Phase 1 mobile implementation](../phase-1-mobile-implementation.md).

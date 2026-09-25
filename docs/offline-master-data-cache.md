@@ -1,5 +1,7 @@
 # Offline master data cache
 
+**Update, 23 September 2026:** Phase 2 nullable/legacy JSON restart coverage and hierarchy filtering are recorded in [Phase 2 mobile implementation](phase-2-mobile-implementation.md). Cache keys and SQLite schema remain unchanged. The transactional-cache discussion below describes the original implementation; later operational caching is covered in [Phase 1 mobile implementation](phase-1-mobile-implementation.md).
+
 **Date:** 22 September 2026
 **Roadmap item:** Phase 2, "Cache all required master data for offline field forms"
 

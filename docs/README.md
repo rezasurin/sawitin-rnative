@@ -4,7 +4,21 @@ Welcome to the documentation hub for the `sawitin` React Native mobile applicati
 
 > **Current feature decision (20 September 2026):** Absensi is deferred. No mobile role has an Absensi route, tab, menu item, quick action, or dashboard attendance card. The local SQLite attendance table and dormant `AbsensiScreen` are retained for a later implementation, but there is no backend Absensi API or attendance synchronization. Older persona and audit documents below are historical design notes; use the current route tree and `components/core/RoleTabs.tsx` for current navigation.
 
-> **Planning and Laporan are also deferred.** Neither has a backend API. Planning has no mobile workflow, and the empty Asisten Laporan screen and Admin placeholder have been removed. `organization.plan_type` is metadata only; it does not gate features or apply usage limits.
+> **Planning remains deferred.** Planning has no backend API or mobile workflow. Phase 7 adds one planned mobile report, the R11 field summary; the aggregate Laporan pages remain web work and the mobile Laporan route remains absent. The empty Asisten Laporan screen and Admin placeholder have been removed. `organization.plan_type` is metadata only; it does not gate features or apply usage limits.
+
+The [Phase 3 mobile implementation record](phase-3-mobile-implementation.md) covers the deferred navigation and sync boundary plus worker identity on Rawat details. Device and live-backend checks remain open.
+
+The [Phase 4 mobile implementation plan](phase-4-mobile-implementation-plan.md) sequences Rawat agronomy, offline field observations, vehicle and fuel usage, read-only stock counts, and the web-only consumption report boundary.
+
+The [Phase 4 mobile implementation record](phase-4-mobile-implementation.md) lists delivered code, passing checks, backend lookup dependencies, and remaining device verification.
+
+The [Phase 5 mobile implementation plan](phase-5-mobile-implementation-plan.md) covers one-truck Checker documents, vehicle/driver identity on QR weighings, photo-first PKS tickets, and a compact live trace. It identifies the staging API extension needed for new mobile weighings.
+
+The [Phase 5 mobile implementation record](phase-5-mobile-implementation.md) lists delivered mobile and backend changes, automated checks, and the remaining deployment and device verification.
+
+The [Phase 7 mobile implementation tasks](phase-7-mobile-implementation-plan.md) cover the R11 field summary, persistent offline snapshot, permission-aware navigation, and brondol kilogram correction. The other Phase 7 report screens are web work.
+
+The [Phase 7 mobile implementation record](phase-7-mobile-implementation.md) describes the delivered code, automated checks, and open device and backend verification.
 
 ---
 
