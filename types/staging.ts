@@ -10,6 +10,8 @@ export interface PendingTimbangLog {
   tujuan_kirim: string | null;
   jumlah_janjang_timbang: number;
   jumlah_brondol_timbang: number;
+  timbang_isi: string | number | null;
+  timbang_kosong: string | number | null;
   tph_id: string | null;
   kelompok_lahan_id: string | null;
   status: PendingStatus;
@@ -32,4 +34,6 @@ export interface SubmitStagingPayload {
   kelompok_lahan_id?: string;
   timbang_isi: number;
   timbang_kosong: number;
+  /** ISO time the truck was weighed; the server judges the SPB at this moment. */
+  weighed_at?: string;
 }

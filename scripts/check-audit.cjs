@@ -59,17 +59,16 @@ test('unsupported attendance and planning work never reaches SQLite', async () =
   for (const module of ['absensi', 'attendance', 'planning']) {
     await assert.rejects(store.getState().addToQueue({ module, action: 'CREATE', endpoint: `/${module}`, payload: {} }), /belum didukung/);
   }
-  await assert.rejects(store.getState().addToQueue({ module: 'krani_timbang', action: 'CREATE', endpoint: '/kraniTimbang', payload: {} }), /belum didukung/);
   assert.equal(saved.length, 0);
   for (const [module, action] of [
     ['bkm_panen', 'CREATE'], ['bkm_checker', 'CREATE'], ['bkm_rawat', 'CREATE'],
     ['bkm_rawat_detail', 'CREATE'], ['bkm_checker_detail', 'UPDATE'],
-    ['krani_timbang_detail', 'UPDATE'], ['krani_timbang', 'UPDATE'],
+    ['krani_timbang_detail', 'UPDATE'], ['krani_timbang', 'UPDATE'], ['krani_timbang', 'CREATE'],
   ]) {
     const payload = module.endsWith('_detail') ? { documentId: 'doc', expectedStatus: 'DRAFT' } : {};
     await store.getState().addToQueue({ module, action, endpoint: `/${module}`, payload });
   }
-  assert.equal(saved.length, 7);
+  assert.equal(saved.length, 8);
 });
 
 test('queued work is scoped to the signed-in user on a shared handset', async () => {

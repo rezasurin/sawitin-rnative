@@ -183,7 +183,10 @@ test('QR weighing submits the krani-entered truck brondol instead of Checker bro
     '@/hooks/useKraniTimbang': { useKraniTimbangDetail: () => ({}) },
     '@/hooks/useFleetChoices': { useFleetChoices: () => ({ vehicles: [], drivers: [] }) },
     '@/hooks/useOrgConfig': { useOrgConfig: () => ({ data: { bjr: 15 } }) },
-    '@/services/bkm-checker.service': { bkmCheckerApi: { getById: async () => checker } },
+    '@/services/operational.service': { readOperational: async () => checker },
+    '@/stores/useNetworkStore': { useNetworkStore: Object.assign((select) => select({ isOnline: true }), { getState: () => ({ isOnline: true }) }) },
+    '@/stores/useSyncQueueStore': { useSyncQueueStore: { getState: () => ({ queue: [] }) } },
+    '@/utils/qr': { parseQrPayload: () => ({ qty: 10 }) },
     '@/services/staging.service': { stagingApi: { submitPayload: async () => {} } },
     '@/utils/field-summary': display,
     '@/types': {},
@@ -207,6 +210,72 @@ test('QR weighing submits the krani-entered truck brondol instead of Checker bro
   await act(async () => { tree.root.findAllByType('Button').find((node) => node.props.title === 'Simpan Timbangan').props.onPress(); });
   assert.equal(posted.jumlah_brondol, 18);
   assert.notEqual(posted.jumlah_brondol, checker.details[0].jumlah_brondol);
+  await act(async () => { tree.unmount(); });
+});
+
+test('offline weighing of an uncached Checker queues the SPB with hand-entered transport', async () => {
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  const React = require('react');
+  const { act, create } = require('react-test-renderer');
+  let posted;
+  const queued = [];
+  const checker = { id: 'checker-1', details: [{ jumlah_janjang: 10, jumlah_brondol: 25,
+    nomor_truk: 'BK 1', nama_sopir: 'Sopir', tujuan_kirim: 'PKS' }], blok: { nama: 'B1' }, tph: { nama: 'TPH 1' } };
+  const { default: TimbanganScreen } = load('components/krani/TimbanganScreen.tsx', {
+    react: React,
+    'react-native': {
+      ActivityIndicator: 'ActivityIndicator', KeyboardAvoidingView: 'KeyboardAvoidingView',
+      Pressable: 'Pressable', ScrollView: 'ScrollView', Text: 'Text', View: 'View',
+      StyleSheet: { create: (value) => value }, Platform: { OS: 'android' },
+      Alert: { alert: () => {} }, Keyboard: { addListener: () => ({ remove: () => {} }) },
+    },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
+    '@/components/bkm/OperationalActions': { OperationalActions: 'OperationalActions' },
+    '@/components/bkm/OperationalHistory': { OperationalHistory: 'OperationalHistory' },
+    '@/components/bkm/OperationalDraftEditor': { OperationalDraftEditor: 'OperationalDraftEditor' },
+    '@/components/core/Button': { Button: 'Button' },
+    '@/components/form': { FormField: 'FormField', FormSelect: 'FormSelect' },
+    '@/components/home': { PageHeader: 'PageHeader' },
+    '@/constants/Colors': { BrandColors: { primary: '#654', error: 'red', textMuted: '#aaa' } },
+    '@/hooks/useOperationalPolicy': { useOperationalPolicy: () => ({ create: true }) },
+    '@/hooks/useModuleGroup': { useModuleGroup: () => '(krani)' },
+    '@/hooks/useKraniTimbang': { useKraniTimbangDetail: () => ({}) },
+    '@/hooks/useFleetChoices': { useFleetChoices: () => ({ vehicles: [], drivers: [] }) },
+    '@/hooks/useOrgConfig': { useOrgConfig: () => ({ data: { bjr: 15 } }) },
+    '@/services/operational.service': { readOperational: async () => { throw new Error('offline'); } },
+    '@/stores/useNetworkStore': { useNetworkStore: Object.assign((select) => select({ isOnline: false }), { getState: () => ({ isOnline: false }) }) },
+    '@/stores/useSyncQueueStore': { useSyncQueueStore: { getState: () => ({ queue: [], addToQueue: async (item) => { queued.push(item); } }) } },
+    '@/utils/qr': { parseQrPayload: () => ({ qty: 10 }) },
+    '@/services/staging.service': { stagingApi: { submitPayload: async () => {} } },
+    '@/utils/field-summary': display,
+    '@/types': {},
+    '@expo/vector-icons/FontAwesome': 'FontAwesome',
+    '@tanstack/react-query': {
+      useQuery: () => ({ data: undefined, isLoading: false, isError: true, refetch: async () => {} }),
+      useMutation: () => ({ mutate: (value) => { posted = value; }, isPending: false }),
+      useQueryClient: () => ({ invalidateQueries: async () => {} }),
+    },
+    'expo-router': { Redirect: 'Redirect', useLocalSearchParams: () => ({ checkerId: 'checker-1', qrPayload: 'qr' }),
+      useRouter: () => ({ dismissTo: () => {} }) },
+  });
+  let tree;
+  await act(async () => { tree = create(React.createElement(TimbanganScreen)); });
+  const field = (label) => tree.root.findAllByType('FormField').find((node) => node.props.label === label);
+  await act(async () => {
+    field('Nomor kendaraan').props.onChangeText('BK 1');
+    field('Nama sopir').props.onChangeText('Sopir');
+    field('Tujuan kirim').props.onChangeText('PKS');
+    field('Brondol di truk ini (kg)').props.onChangeText('18');
+    field('Timbang Isi (Gross) - kg').props.onChangeText('100');
+    field('Timbang Kosong (Tare) - kg').props.onChangeText('10');
+  });
+  await act(async () => { tree.root.findAllByType('Button').find((node) => node.props.title === 'Simpan Timbangan').props.onPress(); });
+  assert.equal(posted, undefined);
+  assert.equal(queued.length, 1);
+  assert.equal(queued[0].module, 'krani_timbang');
+  assert.equal(queued[0].action, 'CREATE');
+  assert.deepEqual([queued[0].payload.nomor_kendaraan, queued[0].payload.tujuan_kirim, queued[0].payload.qr_payload], ['BK 1', 'PKS', 'qr']);
+  assert.ok(!Number.isNaN(Date.parse(queued[0].payload.weighed_at)));
   await act(async () => { tree.unmount(); });
 });
 

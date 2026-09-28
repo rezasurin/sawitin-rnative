@@ -22,6 +22,7 @@ function loadSyncProcessor(api = {}) {
     './observasi.service': { observasiApi: {} },
     './vehicle-usage.service': { pemakaianKendaraanApi: {} },
     './tiket-pks.service': { tiketPksApi: {} },
+    './staging.service': { stagingApi: {} },
     './upload.service': { uploadApi: {} },
     '@/stores/useSyncQueueStore': { useSyncQueueStore: { getState: () => ({ updatePayload: async () => {} }) } },
     '@/utils/sync-support': supportExports,

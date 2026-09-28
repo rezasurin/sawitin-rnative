@@ -9,6 +9,7 @@ import { pemakaianKendaraanApi } from './vehicle-usage.service';
 import { kraniTimbangApi } from './krani-timbang.service';
 import { uploadApi, type UploadFolder } from './upload.service';
 import { tiketPksApi } from './tiket-pks.service';
+import { stagingApi } from './staging.service';
 import { sameFiledTicket } from '@/utils/tiket-pks';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import type { CreateBkmPanenDetailPayload, CreateBkmPanenPayload, UpdateBkmPanenPayload } from '@/types/bkm-panen';
@@ -18,6 +19,7 @@ import type { SyncQueueItem } from '@/types/sync';
 import type { CreateObservasiPayload } from '@/types/observasi';
 import type { CreatePemakaianKendaraanPayload } from '@/types/vehicle-usage';
 import type { CreateTiketPksPayload } from '@/types/tiket-pks';
+import type { SubmitStagingPayload } from '@/types/staging';
 import { isSupportedSyncAction } from '@/utils/sync-support';
 
 interface BkmPanenQueuePayload {
@@ -44,6 +46,7 @@ interface ProcessorDependencies {
   observasiApi: typeof observasiApi;
   usageApi: typeof pemakaianKendaraanApi;
   ticketApi: typeof tiketPksApi;
+  staging: typeof stagingApi;
   upload: typeof uploadApi;
   updateQueuePayload: (id: string, payload: Record<string, unknown>) => Promise<void>;
 }
@@ -55,6 +58,7 @@ const defaultDependencies: ProcessorDependencies = {
   observasiApi,
   usageApi: pemakaianKendaraanApi,
   ticketApi: tiketPksApi,
+  staging: stagingApi,
   upload: uploadApi,
   updateQueuePayload: (id, payload) => useSyncQueueStore.getState().updatePayload(id, payload),
 };
@@ -274,6 +278,23 @@ export async function processItem(
     if (item.action !== 'UPDATE') throw new Error('Unsupported detail action');
     if (item.module === 'bkm_checker_detail') return checkerApi.updateDetail(payload.id, payload.data, item.precondition);
     return kraniTimbangApi.updateDetail(payload.id, payload.data);
+  }
+
+  if (item.module === 'krani_timbang' && item.action === 'CREATE') {
+    const data = item.payload as unknown as SubmitStagingPayload;
+    try {
+      await dependencies.staging.submitPayload(data);
+      return;
+    } catch (error) {
+      // The server keys a weighing by its SPB. A duplicate with the same gross and
+      // tare is this item's own earlier POST whose response was lost; anything else
+      // is a different weighing of the same SPB and stays a conflict for review.
+      const existingId = ((error as { data?: { existing_id?: unknown } }).data)?.existing_id;
+      if ((error as { status?: number }).status !== 409 || typeof existingId !== 'string') throw error;
+      const filed = await dependencies.staging.getPendingLogById(existingId).catch(() => { throw error; });
+      if (Number(filed.timbang_isi) === data.timbang_isi && Number(filed.timbang_kosong) === data.timbang_kosong) return;
+      throw error;
+    }
   }
 
   if (item.module === 'krani_timbang') {

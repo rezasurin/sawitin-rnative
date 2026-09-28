@@ -10,10 +10,13 @@ import { BrandColors } from "@/constants/Colors";
 import { useKraniTimbangDetail } from "@/hooks/useKraniTimbang";
 import { useFleetChoices } from '@/hooks/useFleetChoices';
 import { useOrgConfig } from "@/hooks/useOrgConfig";
-import { bkmCheckerApi } from "@/services/bkm-checker.service";
+import { readOperational } from "@/services/operational.service";
 import { stagingApi } from "@/services/staging.service";
+import { useNetworkStore } from "@/stores/useNetworkStore";
+import { useSyncQueueStore } from "@/stores/useSyncQueueStore";
+import { parseQrPayload } from "@/utils/qr";
 import { isWholeKg } from '@/utils/field-summary';
-import type { KraniTimbang } from "@/types";
+import type { BkmChecker, KraniTimbang } from "@/types";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
@@ -53,6 +56,7 @@ export default function TimbanganScreen() {
   const [supirId, setSupirId] = useState('');
   const [nomorKendaraan, setNomorKendaraan] = useState('');
   const [namaSupir, setNamaSupir] = useState('');
+  const [tujuanKirim, setTujuanKirim] = useState('');
   const [manualVehicle, setManualVehicle] = useState(false);
   const [manualDriver, setManualDriver] = useState(false);
   const initializedCheckerId = useRef<string | null>(null);
@@ -81,7 +85,8 @@ export default function TimbanganScreen() {
     refetch,
   } = useQuery({
     queryKey: ["bkmChecker", checkerId],
-    queryFn: () => bkmCheckerApi.getById(checkerId!),
+    // Read-through cache: a Checker opened once while online stays usable offline.
+    queryFn: () => readOperational<BkmChecker>('bkmChecker', `/bkmChecker/${checkerId}`),
     enabled: !!checkerId,
   });
 
@@ -91,6 +96,12 @@ export default function TimbanganScreen() {
     isError: isDetailError,
     refetch: refetchDetail,
   } = useKraniTimbangDetail(detailId ?? "");
+
+  const isOnline = useNetworkStore((state) => state.isOnline);
+  // Offline with a Checker this device has never seen: the signed QR still carries
+  // the janjang, and the server matches truck, driver and destination on sync.
+  const offlineEntry = !checker && !isOnline;
+  const spbQty = qrPayload ? parseQrPayload(qrPayload)?.qty ?? 0 : 0;
 
   const queryClient = useQueryClient();
   const createMutation = useMutation({
@@ -110,7 +121,7 @@ export default function TimbanganScreen() {
     setNomorDokumen('');
     setBrondolTruk('');
     setKendaraanId(''); setSupirId('');
-    setNomorKendaraan(''); setNamaSupir('');
+    setNomorKendaraan(''); setNamaSupir(''); setTujuanKirim('');
   }, [checkerId]);
 
   useEffect(() => {
@@ -121,6 +132,7 @@ export default function TimbanganScreen() {
     setSupirId(first.supir_id ?? '');
     setNomorKendaraan(first.nomor_truk ?? '');
     setNamaSupir(first.nama_sopir ?? '');
+    setTujuanKirim(first.tujuan_kirim ?? '');
     setManualVehicle(!first.kendaraan_id);
     setManualDriver(!first.supir_id);
   }, [checker]);
@@ -140,8 +152,9 @@ export default function TimbanganScreen() {
   const isWeightInvalid = hasIsi && hasKosong && isiVal <= kosongVal;
   const nettoVal = isWeightInvalid ? 0 : Math.max(0, isiVal - kosongVal);
 
-  const totalJanjang =
-    checker?.details?.reduce((acc, curr) => acc + curr.jumlah_janjang, 0) ?? 0;
+  const totalJanjang = checker
+    ? checker.details?.reduce((acc, curr) => acc + curr.jumlah_janjang, 0) ?? 0
+    : spbQty;
   const totalBrondol =
     checker?.details?.reduce((acc, curr) => acc + curr.jumlah_brondol, 0) ?? 0;
   const estimatedKg = totalJanjang * bjr;
@@ -151,7 +164,7 @@ export default function TimbanganScreen() {
   const hasDiscrepancy = nettoVal > 0 && estimatedKg > 0 && diffPct > 20;
 
   const handleSubmit = () => {
-    if (!policy.create || !checker || !qrPayload) return;
+    if (!policy.create || (!checker && !offlineEntry) || !qrPayload) return;
     if (!hasIsi || !hasKosong) {
       Alert.alert(
         "Form Belum Lengkap",
@@ -173,9 +186,8 @@ export default function TimbanganScreen() {
       return;
     }
 
-    const firstDetail = checker.details?.[0];
-    if (!firstDetail || !namaSupir.trim() || !nomorKendaraan.trim()) {
-      Alert.alert('SPB tidak lengkap', 'Nomor truk dan nama sopir tidak tersedia pada Checker.');
+    if (!namaSupir.trim() || !nomorKendaraan.trim() || !tujuanKirim.trim()) {
+      Alert.alert('SPB tidak lengkap', 'Isi nomor truk, nama sopir, dan tujuan kirim sesuai SPB.');
       return;
     }
     const payload = {
@@ -185,12 +197,28 @@ export default function TimbanganScreen() {
       ...(nomorDokumen.trim() ? { nomor_dokumen: nomorDokumen.trim() } : {}),
       nama_supir: namaSupir.trim(),
       nomor_kendaraan: nomorKendaraan.trim(),
-      tujuan_kirim: firstDetail.tujuan_kirim ?? '',
+      tujuan_kirim: tujuanKirim.trim(),
       keterangan: keterangan || undefined,
       timbang_isi: isiVal,
       timbang_kosong: kosongVal,
       jumlah_brondol: Number(brondolTruk),
+      // Recorded now, so a weighing synced days later keeps its real date.
+      weighed_at: new Date().toISOString(),
     };
+
+    if (!useNetworkStore.getState().isOnline) {
+      const queue = useSyncQueueStore.getState();
+      if (queue.queue.some((item) => item.module === 'krani_timbang' && item.payload?.qr_payload === qrPayload)) {
+        Alert.alert('Sudah tersimpan', 'Timbangan untuk SPB ini sudah menunggu sinkronisasi.');
+        return;
+      }
+      queue.addToQueue({ module: 'krani_timbang', action: 'CREATE', endpoint: '/staging/krani-timbang', payload })
+        .then(() => Alert.alert('Tersimpan di perangkat',
+          `Netto ${nettoVal.toLocaleString('id-ID')} kg dikirim otomatis saat online. Jika ditolak server, periksa di menu Akun.`,
+          [{ text: 'OK', onPress: () => router.dismissTo(`/${group}/timbangan`) }]))
+        .catch((err: unknown) => Alert.alert('Gagal menyimpan', err instanceof Error ? err.message : 'Timbangan tidak tersimpan.'));
+      return;
+    }
 
     createMutation.mutate(payload, {
       onSuccess: () => {
@@ -244,7 +272,7 @@ export default function TimbanganScreen() {
           <ActivityIndicator size="large" color={BrandColors.primary} />
           <Text style={styles.loadingText}>Memuat data SPB...</Text>
         </View>
-      ) : isError || !checker ? (
+      ) : (isError || !checker) && !offlineEntry ? (
         <View style={styles.centerContent}>
           <FontAwesome
             name="exclamation-triangle"
@@ -268,29 +296,35 @@ export default function TimbanganScreen() {
               <Text style={styles.cardHeaderTitle}>Informasi Dokumen SPB</Text>
 
               <View style={styles.divider} />
+              {offlineEntry && (
+                <Text style={styles.estimateText}>
+                  Data Checker belum tersimpan di perangkat. Isi kendaraan, sopir, dan tujuan sesuai SPB fisik;
+                  server mencocokkannya dengan Checker saat sinkronisasi.
+                </Text>
+              )}
 
               <View style={styles.row}>
                 <Text style={styles.label}>Nama Sopir</Text>
                 <Text style={styles.value}>
-                  {checker.details?.[0]?.nama_sopir || "-"}
+                  {checker?.details?.[0]?.nama_sopir || "-"}
                 </Text>
               </View>
               <View style={styles.row}>
                 <Text style={styles.label}>Nomor Kendaraan</Text>
                 <Text style={styles.value}>
-                  {checker.details?.[0]?.nomor_truk || "-"}
+                  {checker?.details?.[0]?.nomor_truk || "-"}
                 </Text>
               </View>
               <View style={styles.row}>
                 <Text style={styles.label}>Tujuan Kirim</Text>
                 <Text style={styles.value}>
-                  {checker.details?.[0]?.tujuan_kirim || "-"}
+                  {checker?.details?.[0]?.tujuan_kirim || "-"}
                 </Text>
               </View>
               <View style={styles.row}>
                 <Text style={styles.label}>Blok / TPH Asal</Text>
                 <Text style={styles.value}>
-                  {checker.blok?.nama ?? "-"} / {checker.tph?.nama ?? "-"}
+                  {checker?.blok?.nama ?? "-"} / {checker?.tph?.nama ?? "-"}
                 </Text>
               </View>
               <View style={styles.row}>
@@ -326,6 +360,7 @@ export default function TimbanganScreen() {
                 }} />
               {(manualDriver || !fleet.drivers.length) && <FormField label="Nama sopir"
                 value={namaSupir} onChangeText={(value) => { setNamaSupir(value); setSupirId(''); setManualDriver(true); }} />}
+              {!checker && <FormField label="Tujuan kirim" value={tujuanKirim} onChangeText={setTujuanKirim} />}
               <FormField label="Nomor dokumen perjalanan (opsional)" value={nomorDokumen}
                 onChangeText={setNomorDokumen} placeholder="Nomor dari operasi" />
 

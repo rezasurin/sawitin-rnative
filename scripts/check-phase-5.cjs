@@ -27,6 +27,7 @@ function processor() {
     './vehicle-usage.service': { pemakaianKendaraanApi: {} },
     './krani-timbang.service': { kraniTimbangApi: {} },
     './tiket-pks.service': { tiketPksApi: {} },
+    './staging.service': { stagingApi: {} },
     './upload.service': { uploadApi: {} },
     '@/stores/useSyncQueueStore': { useSyncQueueStore: { getState: () => ({ updatePayload: async () => {} }) } },
     '@/utils/tiket-pks': ticketRules,
@@ -113,4 +114,18 @@ test('a different ticket on the same trip remains a terminal queue conflict', as
     upload: {}, updateQueuePayload: async () => {},
     ticketApi: { byTrip: async () => ({ ...payload, nomor_tiket: 'SERVER' }) },
   }), (error) => error.status === 409);
+});
+
+test('offline weighing replays once: a lost response resolves, a different weighing stays a conflict', async () => {
+  const processItem = processor();
+  const payload = { qr_payload: 'V1|c|t|10|1|sig', nama_supir: 'A', nomor_kendaraan: 'BK 1', tujuan_kirim: 'PKS',
+    timbang_isi: 6355, timbang_kosong: 5200, jumlah_brondol: 0 };
+  const item = { id: 'queue-w', module: 'krani_timbang', action: 'CREATE', payload };
+  const duplicate = Object.assign(new Error('Duplicate transaction'), { status: 409, data: { existing_id: 'log-1' } });
+  const deps = (filed) => ({ staging: { submitPayload: async () => { throw duplicate; }, getPendingLogById: async () => filed } });
+  await processItem(item, deps({ timbang_isi: '6355.00', timbang_kosong: '5200.00' }));
+  await assert.rejects(processItem(item, deps({ timbang_isi: '7000.00', timbang_kosong: '5200.00' })), (error) => error.status === 409);
+  let posted;
+  await processItem(item, { staging: { submitPayload: async (data) => { posted = data; } } });
+  assert.equal(posted.qr_payload, payload.qr_payload);
 });

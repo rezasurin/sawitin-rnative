@@ -17,7 +17,12 @@ import { formatSyncResult } from '@/services/sync.service';
  * Plain language for why an item stopped, because the person reading this is a
  * mandor in a block, not whoever wrote the API.
  */
-function describeError(errorClass: SyncErrorClass | null): string {
+function describeError(errorClass: SyncErrorClass | null, item?: Pick<SyncQueueItem, 'module' | 'action'>): string {
+  // A weighing is refused on the SPB itself, not because someone edited it, and
+  // re-sending the same numbers gets the same answer.
+  if (errorClass === 'CONFLICT' && item?.module === 'krani_timbang' && item.action === 'CREATE') {
+    return 'Timbangan ditolak server: truk, sopir, atau tujuan tidak cocok dengan Checker, SPB sudah ditimbang, atau jumlah janjang berbeda. Buang item ini lalu input ulang timbangan sesuai SPB.';
+  }
   switch (errorClass) {
     case 'CONFLICT':
       return 'Dokumen sudah diubah orang lain. Periksa versi terbaru sebelum mengirim ulang.';
@@ -141,7 +146,7 @@ export function AccountScreen() {
                   <Text style={styles.failedTitle}>
                     {describeModule(item.module)} · {item.action}
                   </Text>
-                  <Text style={styles.failedReason}>{item.status === 'DEAD' ? describeError(item.errorClass) : 'Menunggu perubahan sebelumnya diselesaikan.'}</Text>
+                  <Text style={styles.failedReason}>{item.status === 'DEAD' ? describeError(item.errorClass, item) : 'Menunggu perubahan sebelumnya diselesaikan.'}</Text>
                   {item.lastError ? (
                     <Text style={styles.secondary} numberOfLines={3}>{item.lastError}</Text>
                   ) : null}
