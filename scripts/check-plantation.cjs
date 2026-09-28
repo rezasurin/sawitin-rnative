@@ -16,6 +16,7 @@ function load(file, mocks = {}) {
 }
 
 const plantation = load('utils/plantation.ts');
+const estateDate = load('utils/estateDate.ts');
 const lands = [
   { id: 'valid', nama: 'Parcel', blok_id: 'b', user_pic_id: null, luas_lahan: null, nama_dokumen: null, maturitas: null, umur_tanam: null },
   { id: 'unassigned', nama: 'Unassigned', blok_id: null },
@@ -126,7 +127,7 @@ test('Rawat submits a sparse parcel online and queues it offline with the same h
       'react-native': { ...native, View: 'View', KeyboardAvoidingView: 'KeyboardAvoidingView', Platform: { OS: 'android' }, Alert: { alert() {} } },
       'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
       '@/components/form': controls, '@/components/core/Button': { Button: 'Button' },
-      '@/utils/plantation': plantation,
+      '@/utils/plantation': plantation, '@/utils/estateDate': estateDate,
       '@/hooks': {
         useKelompokLahanList: () => ({ data: { data: [{ id: 'estate', nama: 'Existing farm name' }] } }),
         useBlokList: () => ({ data: { data: [{ id: 'b', nama: 'B', kelompok_lahan_id: 'estate' }] } }),

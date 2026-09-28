@@ -14,6 +14,7 @@ import { usePekerjaList } from '@/hooks/usePekerja';
 import { useBkmRawatList, useBkmRawatLookups } from '@/hooks/useBkmRawat';
 import { kendaraanApi, supirApi, pemakaianKendaraanApi as usageApi } from '@/services/vehicle-usage.service';
 import type { CreatePemakaianKendaraanPayload, PemakaianKendaraan } from '@/types/vehicle-usage';
+import { estateDate } from '@/utils/estateDate';
 
 const listKey = ['pemakaianKendaraan', 'list'];
 const errText = (error: unknown) => error instanceof Error ? error.message : 'Coba lagi.';
@@ -62,7 +63,7 @@ export function VehicleUsageForm() {
   const key = useRef(`usage_${Date.now()}_${Math.random().toString(36).slice(2)}`);
   const [vehicleId, setVehicleId] = useState(''); const [driverId, setDriverId] = useState('');
   const [workerId, setWorkerId] = useState(''); const [rawatId, setRawatId] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(estateDate());
   const [meterStart, setMeterStart] = useState(''); const [meterEnd, setMeterEnd] = useState('');
   const [meterUnit, setMeterUnit] = useState('km'); const [fuelId, setFuelId] = useState('');
   const [fuelAmount, setFuelAmount] = useState(''); const [note, setNote] = useState('');

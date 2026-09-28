@@ -19,7 +19,8 @@ import {
   TouchableOpacity,
 } from 'react-native';
 
-const DISCREPANCY_TOLERANCE_PCT = 2;
+/** Offline fallback only; the server's value comes from `/orgConfig`. */
+const DEFAULT_TOLERANCE_PCT = 2;
 
 interface Props {
   onBack: () => void;
@@ -42,6 +43,7 @@ export function BKMCheckerFormStep3({ onBack, onSuccess, onSavingChange }: Props
 
   const { data: orgConfig } = useOrgConfig();
   const bjr = orgConfig?.bjr ?? 15;
+  const tolerancePct = orgConfig?.discrepancy_tolerance_pct ?? DEFAULT_TOLERANCE_PCT;
 
   const { data: linkedPanen } = useQuery({
     queryKey: ['bkmPanen', 'byId', header.bkm_panen_id],
@@ -70,7 +72,7 @@ export function BKMCheckerFormStep3({ onBack, onSuccess, onSavingChange }: Props
   const mismatchExceedsTolerance =
     !!header.bkm_panen_id &&
     !!linkedPanen &&
-    (panenJanjangForTph > 0 ? discrepancyPct > DISCREPANCY_TOLERANCE_PCT : totalJanjang > 0);
+    (panenJanjangForTph > 0 ? discrepancyPct > tolerancePct : totalJanjang > 0);
   const estimatedTons = (totalJanjang * bjr) / 1000;
 
   const handleSubmit = async () => {

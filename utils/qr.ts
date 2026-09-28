@@ -1,4 +1,5 @@
-const QR_EXPIRY_MS = 48 * 60 * 60 * 1000;
+/** Offline fallback only; the server's value comes from `/orgConfig`. */
+export const QR_EXPIRY_MS = 48 * 60 * 60 * 1000;
 const QR_CLOCK_SKEW_MS = 5 * 60 * 1000;
 export const QR_VERSION = 'V3';
 
@@ -24,7 +25,7 @@ export function parseQrPayload(payload: string): ParsedQrPayload | null {
   return { checkerId, tphId, qty, timestamp };
 }
 
-export function isQrFresh(timestamp: number, now: number = Date.now()): boolean {
+export function isQrFresh(timestamp: number, now: number = Date.now(), expiryMs: number = QR_EXPIRY_MS): boolean {
   const ageMs = now - timestamp;
-  return ageMs >= -QR_CLOCK_SKEW_MS && ageMs <= QR_EXPIRY_MS;
+  return ageMs >= -QR_CLOCK_SKEW_MS && ageMs <= expiryMs;
 }

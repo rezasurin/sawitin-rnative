@@ -8,10 +8,13 @@ import { useIsFocused } from 'expo-router/react-navigation';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { BrandColors } from '@/constants/Colors';
 import { PageHeader } from '@/components/home';
-import { parseQrPayload, isQrFresh } from '@/utils/qr';
+import { parseQrPayload, isQrFresh, QR_EXPIRY_MS } from '@/utils/qr';
+import { useOrgConfig } from '@/hooks/useOrgConfig';
 
 export default function ScanQrScreen() {
   const group = useModuleGroup('(krani)');
+  // Follow the server's SPB validity; the default covers a device that never reached it.
+  const expiryMs = useOrgConfig().data?.qr_expiry_ms ?? QR_EXPIRY_MS;
   const router = useRouter();
   const isFocused = useIsFocused();
   const handleBack = () => router.dismissTo(`/${group}/timbangan`);
@@ -105,10 +108,10 @@ export default function ScanQrScreen() {
       return;
     }
 
-    if (!isQrFresh(parsed.timestamp)) {
+    if (!isQrFresh(parsed.timestamp, Date.now(), expiryMs)) {
       Alert.alert(
         'QR Kadaluarsa',
-        'SPB ini sudah melewati masa berlaku (48 jam). Silakan minta SPB baru dari Mandor.',
+        `SPB ini sudah melewati masa berlaku (${Math.round(expiryMs / 3_600_000)} jam). Silakan minta SPB baru dari Mandor.`,
         [
           {
             text: 'Coba Lagi',
@@ -147,7 +150,7 @@ export default function ScanQrScreen() {
         },
       ]
     );
-  }, [hasScanned, router, group]);
+  }, [hasScanned, router, group, expiryMs]);
 
   // Setup Expo Camera barcode scannned handler
   const handleBarCodeScanned = useCallback(({ data }: { data: string }) => {

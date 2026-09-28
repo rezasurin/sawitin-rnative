@@ -20,6 +20,7 @@ import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { uploadApi } from '@/services/upload.service';
 import { observasiApi } from '@/services/observasi.service';
 import type { CreateObservasiPayload, JenisObservasi, Observasi, TingkatObservasi } from '@/types/observasi';
+import { estateDate } from '@/utils/estateDate';
 
 const TYPES: { value: JenisObservasi; label: string; measure: string; unit: string }[] = [
   { value: 'HAMA', label: 'Hama', measure: 'Pokok terdampak', unit: 'pokok' },
@@ -90,7 +91,7 @@ export function ObservationForm() {
   const [blockId, setBlockId] = useState('');
   const [landId, setLandId] = useState('');
   const [tphId, setTphId] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(estateDate());
   const [value, setValue] = useState('');
   const [unit, setUnit] = useState('mm');
   const [severity, setSeverity] = useState<TingkatObservasi | ''>('');

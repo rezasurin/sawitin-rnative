@@ -6,7 +6,7 @@ import { useBkmPanenStore } from "@/stores/useBkmPanenStore";
 import { useQuery } from "@tanstack/react-query";
 import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ScrollView, StyleSheet } from "react-native";
+import { ScrollView, StyleSheet, Text } from "react-native";
 
 interface Props {
   onNext: () => void;
@@ -47,6 +47,12 @@ export function BKMPanenFormStep1({ onNext }: Props) {
     value: g.id,
   }));
 
+  // Warn, not block: a first harvest on a block turning productive is legitimate,
+  // but most harvest recorded on immature (TBM) land is a wrong block or lahan.
+  const selectedLahan = lahanData?.data?.find((l) => l.id === header.lahan_id);
+  const selectedBlok = blokData?.data?.find((b) => b.id === header.blok_id);
+  const immature = (selectedLahan ?? selectedBlok)?.maturitas === 'TBM';
+
   const isValid = !!header.blok_id && !!header.tanggal_laporan
     && (!header.lahan_id || lahanOptions.some((l) => l.value === header.lahan_id));
 
@@ -80,6 +86,11 @@ export function BKMPanenFormStep1({ onNext }: Props) {
         searchable
         disabled={!header.blok_id}
       />
+      {immature && (
+        <Text style={styles.warning} accessibilityRole="alert">
+          {selectedLahan ? 'Lahan' : 'Blok'} ini tercatat TBM (belum menghasilkan). Pastikan blok dan lahan sudah benar, atau catat alasan panen di Keterangan.
+        </Text>
+      )}
 
       <FormDateField
         label="Tanggal Laporan"
@@ -120,4 +131,5 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "transparent" },
   scrollContent: { padding: 16 },
   nextButton: { marginTop: 24 },
+  warning: { color: '#E65100', backgroundColor: '#FFF3E0', borderColor: '#E65100', borderWidth: 1, borderRadius: 8, padding: 10, fontSize: 13, marginBottom: 12 },
 });

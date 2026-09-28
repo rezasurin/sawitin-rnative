@@ -22,6 +22,9 @@ import type { BkmRawat, CreateDetailBkmRawatPayload, DetailBkmRawat, QueuedBkmRa
 
 type MaterialRow = { material_id: string; jumlah: number; dosis?: number; satuan_dosis?: string };
 
+/** Accepts the Indonesian decimal comma ("4,5") as well as a point. */
+const decimal = (text: string) => Number(text.trim().replace(',', '.'));
+
 export default function RawatDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const isLocal = id.startsWith('local:');
@@ -141,8 +144,8 @@ export default function RawatDetailScreen() {
   const saveDetail = async () => {
     if (editing ? !policy.edit : !policy.addDetail) return;
     const count = Number(workerCount);
-    const output = result.trim() ? Number(result) : undefined;
-    const treatedArea = area.trim() ? Number(area) : undefined;
+    const output = result.trim() ? decimal(result) : undefined;
+    const treatedArea = area.trim() ? decimal(area) : undefined;
     const treeCount = trees.trim() ? Number(trees) : undefined;
     if (!typeId || !categoryId || !itemId || !workerName.trim() || !Number.isInteger(count) || count < 1 || (output !== undefined && (!Number.isFinite(output) || output < 0))) {
       Alert.alert('Data belum lengkap', 'Isi jenis pekerjaan, kategori, item, nama pekerja, dan jumlah pekerja yang valid.');
@@ -264,8 +267,8 @@ export default function RawatDetailScreen() {
   };
 
   const addMaterial = () => {
-    const quantity = Number(materialQty);
-    const dose = materialDose.trim() ? Number(materialDose) : undefined;
+    const quantity = decimal(materialQty);
+    const dose = materialDose.trim() ? decimal(materialDose) : undefined;
     if (!materialId || !Number.isFinite(quantity) || quantity <= 0 || (dose !== undefined && (!Number.isFinite(dose) || dose <= 0)) || materialDoseUnit.trim().length > 50) {
       Alert.alert('Material belum lengkap', 'Pilih material, isi jumlah lebih dari nol, dan periksa dosis serta satuannya.');
       return;

@@ -20,6 +20,7 @@ import { useBkmRawatLookups } from '@/hooks/useBkmRawat';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { agronomyLabel, operationalLands } from '@/utils/plantation';
+import { estateDate } from '@/utils/estateDate';
 
 interface Props {
   onSuccess: (id: string) => void;
@@ -43,9 +44,8 @@ export function BKMRawatForm({ onSuccess }: Props) {
   const [kelompokLahanId, setKelompokLahanId] = useState('');
   const [lahanId, setLahanId] = useState('');
   const [blokId, setBlokId] = useState('');
-  const [tanggal, setTanggal] = useState(
-    new Date().toISOString().split('T')[0],
-  );
+  // Estate day (WIB): the UTC date is still yesterday before 07:00.
+  const [tanggal, setTanggal] = useState(estateDate());
   const [namaPengawas, setNamaPengawas] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
