@@ -1,6 +1,8 @@
 export interface User {
   id: string;
   username: string;
+  /** Matches `created_by` on documents. Absent on profiles cached before it was sent. */
+  user_code?: string;
   member: {
     id: string;
     nama: string;

@@ -157,7 +157,7 @@ export function VehicleUsageDetail() {
   const addToQueue = useSyncQueueStore((s) => s.addToQueue);
   const canUpdate = useAuthStore((s) => s.hasPermission('mod_bkm_rawat', 'update'));
   const canApprove = useAuthStore((s) => s.hasPermission('mod_bkm_rawat', 'approve'));
-  const username = useAuthStore((s) => s.user?.username);
+  const userCode = useAuthStore((s) => s.user?.user_code);
   const [rejectionNote, setRejectionNote] = useState('');
   const record = useQuery({ queryKey: ['pemakaianKendaraan', id], queryFn: () => usageApi.getById(id), enabled: !isLocal(id) });
   const pending = isLocal(id) ? queue.find((item) => item.id === id.slice(6)) : undefined;
@@ -202,7 +202,7 @@ export function VehicleUsageDetail() {
       {!isLocal(id) && row.status === 'DRAFT' && canUpdate && online && <Button title="Ubah" onPress={() => router.push(`/${group}/pemakaian-kendaraan/add?id=${id}` as never)} />}
       {row.status === 'DRAFT' && canUpdate && <Button title="Kirim untuk persetujuan" onPress={() => void submit()} />}
       {!isLocal(id) && row.status === 'REVISION_REQUESTED' && canUpdate && online && <Button title="Buka kembali sebagai draft" onPress={async () => { try { await usageApi.update(id, { status: 'DRAFT' }); await refresh(); } catch (error) { Alert.alert('Gagal', errText(error)); } }} />}
-      {!isLocal(id) && row.status === 'SUBMITTED' && canApprove && online && row.created_by !== username && <>
+      {!isLocal(id) && row.status === 'SUBMITTED' && canApprove && online && row.created_by !== userCode && <>
         <Button title="Setujui" onPress={approve} />
         <FormField label="Catatan revisi" value={rejectionNote} onChangeText={setRejectionNote} />
         <Button title="Kembalikan untuk revisi" variant="secondary" onPress={reject} />

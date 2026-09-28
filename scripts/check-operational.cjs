@@ -47,6 +47,10 @@ test('empty drafts cannot submit and decisions/history are unavailable offline',
 test('approve alone grants approval; write alone never grants approval', () => {
   assert.equal(operationalPolicy('SUBMITTED', { approve: true }, true).approve, true);
   assert.equal(operationalPolicy('SUBMITTED', { write: true }, true).approve, false);
+  // Maker-checker: the author may still request revision, never approve.
+  const own = operationalPolicy('SUBMITTED', { approve: true }, true, 1, true);
+  assert.equal(own.approve, false);
+  assert.equal(own.reject, true);
 });
 
 test('document cache preserves revision metadata and refuses cached data on permission errors', async () => {

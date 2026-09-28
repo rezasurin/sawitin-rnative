@@ -17,12 +17,12 @@ type Action = keyof typeof labels;
 
 export function OperationalActions({ module, document, onDeleted, exclude = [] }: {
   module: OperationalModule;
-  document: { id: string; status: DocumentStatus; details?: unknown[]; detail_rawat?: unknown[]; rejected_by?: string | null; rejected_at?: string | null; rejection_note?: string | null };
+  document: { id: string; status: DocumentStatus; details?: unknown[]; detail_rawat?: unknown[]; rejected_by?: string | null; rejected_at?: string | null; rejection_note?: string | null; created_by?: string | null };
   onDeleted?: () => void;
   exclude?: OperationalAction[];
 }) {
   const count = (document.detail_rawat ?? document.details ?? []).length;
-  const policy = useOperationalPolicy(module, document.status, count);
+  const policy = useOperationalPolicy(module, document.status, count, document.created_by);
   const client = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
