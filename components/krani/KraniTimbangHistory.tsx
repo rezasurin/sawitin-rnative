@@ -7,6 +7,7 @@ import { BrandColors } from '@/constants/Colors';
 import { useKraniTimbangList } from '@/hooks/useKraniTimbang';
 import type { KraniTimbang } from '@/types';
 import { DocStatusBadge } from '@/components/bkm/DocStatusBadge';
+import { estateDate } from '@/utils/estateDate';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
@@ -22,13 +23,6 @@ interface KraniTimbangHistoryProps {
   onScanPress: () => void;
 }
 
-const todayStr = () => {
-  const d = new Date();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
-};
-
 export function KraniTimbangHistory({ onCardPress, onScanPress }: KraniTimbangHistoryProps) {
   const policy = useOperationalPolicy('kraniTimbang');
   const { data, isLoading, isError, refetch, isRefetching } = useKraniTimbangList({
@@ -38,8 +32,9 @@ export function KraniTimbangHistory({ onCardPress, onScanPress }: KraniTimbangHi
   });
 
   const allItems = data?.data ?? [];
-  const today = todayStr();
-  const items = allItems.filter((i) => i.tanggal === today);
+  // `tanggal` is a DateTime, so compare estate (WIB) calendar days, not raw strings.
+  const today = estateDate();
+  const items = allItems.filter((i) => estateDate(new Date(i.tanggal)) === today);
 
   return (
     <View style={styles.container}>

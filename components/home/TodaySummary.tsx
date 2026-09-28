@@ -101,7 +101,8 @@ function FieldSummaryCard({ group, summary }: { group: string; summary: FieldSum
 function KraniTodaySummary() {
   const { data, isLoading, isError, refetch } = useKraniTimbangList({ limit: 100 });
   useFocusEffect(useCallback(() => { void refetch(); }, [refetch]));
-  const todays = data?.data?.filter((row) => row.tanggal === estateDate()) ?? [];
+  // `tanggal` is a DateTime, so compare estate (WIB) calendar days, not raw strings.
+  const todays = data?.data?.filter((row) => estateDate(new Date(row.tanggal)) === estateDate()) ?? [];
   const totalNetto = todays.reduce((total, row) => total + (Number(row.netto) || 0), 0);
   return <SectionCard title="Timbangan Hari Ini" icon="truck">
     {isLoading ? <ActivityIndicator color={BrandColors.primary} /> : <StatRow stats={[

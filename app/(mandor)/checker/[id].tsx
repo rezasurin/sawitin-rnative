@@ -34,6 +34,8 @@ export default function CheckerDetailScreen() {
     queryFn: () => bkmCheckerApi.getSpb(id),
     enabled: !!id && data?.status === 'APPROVED',
     refetchOnWindowFocus: false,
+    // A 409 is a rule the document breaks (e.g. several trucks); retrying cannot fix it.
+    retry: (count, error) => (error as { status?: number }).status !== 409 && count < 2,
   });
   const viewShotRef = useRef<any>(null);
   const [isSharing, setIsSharing] = useState(false);
@@ -91,7 +93,13 @@ export default function CheckerDetailScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {data.status === 'APPROVED' && spb.isLoading && <ActivityIndicator color={BrandColors.primary} />}
-        {data.status === 'APPROVED' && spb.isError && (
+        {data.status === 'APPROVED' && spb.isError && (spb.error as { status?: number }).status === 409 && (
+          <Text style={styles.errorText}>
+            SPB tidak dapat diterbitkan: satu SPB hanya untuk satu truk pengiriman Langsung. Checker ini berisi beberapa truk
+            atau jenis pengiriman campuran, atau sudah ditimbang. Buat Checker terpisah per truk.
+          </Text>
+        )}
+        {data.status === 'APPROVED' && spb.isError && (spb.error as { status?: number }).status !== 409 && (
           <TouchableOpacity onPress={() => spb.refetch()} style={styles.retryButton}>
             <Text style={styles.retryText}>SPB belum tersedia. Coba lagi.</Text>
           </TouchableOpacity>
