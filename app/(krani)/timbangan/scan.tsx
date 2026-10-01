@@ -1,6 +1,6 @@
 import { useModuleGroup } from '@/hooks/useModuleGroup';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Platform, Alert, Dimensions, ActivityIndicator, Linking, AppState } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform, Alert, Dimensions, ActivityIndicator, Linking, AppState, TextInput } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Brightness from 'expo-brightness';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -10,8 +10,16 @@ import { BrandColors } from '@/constants/Colors';
 import { PageHeader } from '@/components/home';
 import { parseQrPayload, isQrFresh, QR_EXPIRY_MS } from '@/utils/qr';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
+import { SPB_BARCODE_TYPES } from '@/components/core/BarcodeScanner';
+import { WeighbridgeGate } from '@/components/krani/WeighbridgeGate';
+import { isV3Qr } from '@/utils/trip';
 
-export default function ScanQrScreen() {
+/** SPB number (barcode or typed) or the legacy V3 QR; the content decides which. */
+export default function ScanScreen() {
+  return <WeighbridgeGate><ScanQrScreen /></WeighbridgeGate>;
+}
+
+function ScanQrScreen() {
   const group = useModuleGroup('(krani)');
   // Follow the server's SPB validity; the default covers a device that never reached it.
   const expiryMs = useOrgConfig().data?.qr_expiry_ms ?? QR_EXPIRY_MS;
@@ -21,6 +29,7 @@ export default function ScanQrScreen() {
   const [permission, requestPermission, getPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
   const [hasScanned, setHasScanned] = useState(false);
+  const [typed, setTyped] = useState('');
 
   // Prevent duplicate alert prompts
   const isAlerting = useRef(false);
@@ -89,6 +98,22 @@ export default function ScanQrScreen() {
     if (hasScanned || isAlerting.current) return;
     setHasScanned(true);
     isAlerting.current = true;
+
+    // Anything that is not a V3 QR is an SPB number.
+    if (!isV3Qr(value)) {
+      const nomorSpb = value.trim();
+      Alert.alert('SPB Terbaca', `Nomor SPB: ${nomorSpb}\n\nTruk, sopir, dan tujuan diambil dari SPB di server.`, [
+        {
+          text: 'Lanjutkan Timbangan',
+          onPress: () => {
+            isAlerting.current = false;
+            router.replace({ pathname: `/${group}/timbangan/add`, params: { nomorSpb } });
+          },
+        },
+        { text: 'Batal', style: 'cancel', onPress: () => { setHasScanned(false); isAlerting.current = false; } },
+      ]);
+      return;
+    }
 
     const parsed = parseQrPayload(value);
     if (!parsed) {
@@ -159,6 +184,19 @@ export default function ScanQrScreen() {
     }
   }, [handleScan]);
 
+
+  // Typing the number stays the fallback when a printed barcode will not scan.
+  const ManualEntry = (
+    <View style={styles.manual}>
+      <TextInput value={typed} onChangeText={setTyped} placeholder="Atau ketik nomor SPB" placeholderTextColor={BrandColors.textMuted}
+        autoCapitalize="characters" style={styles.manualInput} />
+      <Pressable accessibilityRole="button" disabled={!typed.trim()} style={[styles.permissionBtn, !typed.trim() && { opacity: 0.5 }]}
+        onPress={() => handleScan(typed.trim())}>
+        <Text style={styles.permissionBtnText}>Lanjut</Text>
+      </Pressable>
+    </View>
+  );
+
   // Toggle flashlight handler
   const TorchButton = (
     <Pressable
@@ -184,7 +222,7 @@ export default function ScanQrScreen() {
   if (!permission) {
     return (
       <View style={styles.container}>
-        <PageHeader title="Pindai QR" showBackButton onBack={handleBack} />
+        <PageHeader title="Pindai SPB" showBackButton onBack={handleBack} />
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color={BrandColors.primary} />
         </View>
@@ -195,16 +233,17 @@ export default function ScanQrScreen() {
   if (!permission.granted) {
     return (
       <View style={styles.container}>
-        <PageHeader title="Pindai QR" showBackButton onBack={handleBack} />
+        <PageHeader title="Pindai SPB" showBackButton onBack={handleBack} />
         <View style={styles.centerContent}>
           <FontAwesome name="camera" size={54} color={BrandColors.textMuted} />
           <Text style={styles.permissionText}>
-            Aplikasi memerlukan izin kamera untuk memindai kode QR SPB.
+            Aplikasi memerlukan izin kamera untuk memindai barcode SPB. Nomor SPB juga bisa diketik.
           </Text>
           <Pressable accessibilityRole="button" style={styles.permissionBtn}
             onPress={permission.canAskAgain ? requestPermission : () => Linking.openSettings()}>
             <Text style={styles.permissionBtnText}>{permission.canAskAgain ? 'Berikan Izin Kamera' : 'Buka Pengaturan Kamera'}</Text>
           </Pressable>
+          {ManualEntry}
         </View>
       </View>
     );
@@ -213,7 +252,7 @@ export default function ScanQrScreen() {
   return (
     <View style={styles.container}>
       <PageHeader
-        title="Pindai QR"
+        title="Pindai SPB"
         showBackButton
         onBack={handleBack}
         actionBtn={TorchButton}
@@ -225,7 +264,7 @@ export default function ScanQrScreen() {
           enableTorch={torch}
           onBarcodeScanned={hasScanned ? undefined : handleBarCodeScanned}
           barcodeScannerSettings={{
-            barcodeTypes: ['qr'],
+            barcodeTypes: SPB_BARCODE_TYPES,
           }}
         />}
 
@@ -238,10 +277,11 @@ export default function ScanQrScreen() {
             <View style={[styles.corner, styles.bottomRight]} />
           </View>
           <Text style={styles.scanInstruction}>
-            Posisikan Kode QR SPB dari Mandor di dalam kotak untuk memindai
+            Arahkan kamera ke barcode nomor SPB (atau QR SPB lama) untuk memindai
           </Text>
         </View>
       </View>
+      {ManualEntry}
     </View>
   );
 }
@@ -278,6 +318,11 @@ const styles = StyleSheet.create({
     color: BrandColors.white,
     fontWeight: '700',
     fontSize: 15,
+  },
+  manual: { flexDirection: 'row', gap: 8, padding: 12, alignItems: 'center', backgroundColor: BrandColors.background },
+  manualInput: {
+    flex: 1, borderWidth: 1, borderColor: BrandColors.inputBorder, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10,
+    fontSize: 15, color: BrandColors.textPrimary, backgroundColor: BrandColors.white,
   },
   headerBtn: {
     width: 40,

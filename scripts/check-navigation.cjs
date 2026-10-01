@@ -75,7 +75,7 @@ test('Krani scan, input and detail share the Timbangan stack', () => {
   const krani = routes.children.find((node) => node.route === '(krani)');
   const weighing = krani.children.find((node) => node.route === 'timbangan');
   assert.equal(weighing.type, 'layout');
-  assert.deepEqual(weighing.children.map((node) => node.route).sort(), ['[detailId]', 'add', 'index', 'scan', 'tiket/[tripId]', 'trace/[tripId]']);
+  assert.deepEqual(weighing.children.map((node) => node.route).sort(), ['[detailId]', 'add', 'index', 'scan', 'tiket-spb', 'tiket/[tripId]', 'trace/[tripId]']);
 });
 
 test('Permission guard remains active', () => {
@@ -154,6 +154,7 @@ test('deferred planning and attendance stay out of routes, quick actions, menu a
       'react-native': { StyleSheet: { create: (value) => value } },
       '@/constants/Colors': { BrandColors: {} },
       '@/stores/useAuthStore': {},
+      '@/hooks/useOrgConfig': {},
       'expo-router': {},
       '@expo/vector-icons/FontAwesome': {},
     })[name] ?? require(name),

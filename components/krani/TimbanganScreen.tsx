@@ -16,6 +16,7 @@ import { useNetworkStore } from "@/stores/useNetworkStore";
 import { useSyncQueueStore } from "@/stores/useSyncQueueStore";
 import { parseQrPayload } from "@/utils/qr";
 import { isWholeKg } from '@/utils/field-summary';
+import { spbConflictOf, spbConflictText } from '@/utils/trip';
 import type { BkmChecker, KraniTimbang } from "@/types";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -232,9 +233,11 @@ export default function TimbanganScreen() {
         ]);
       },
       onError: (err) => {
+        // `410 QR_V3_RETIRED` and `409 SPB_ALREADY_WEIGHED` get their own wording.
+        const conflict = spbConflictOf(err);
         Alert.alert(
           "Gagal",
-          err instanceof Error
+          conflict ? spbConflictText(conflict) : err instanceof Error
             ? err.message
             : "Terjadi kesalahan saat menyimpan data timbangan.",
         );

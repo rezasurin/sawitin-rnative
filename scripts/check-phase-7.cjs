@@ -14,6 +14,7 @@ function load(path, mocks = {}) {
 }
 
 const display = load('utils/field-summary.ts');
+const tripRules = load('utils/trip.ts');
 
 test('R11 display keeps missing measures distinct and links only usable approval lists', () => {
   assert.equal(display.displayMeasure(null), '—');
@@ -189,6 +190,7 @@ test('QR weighing submits the krani-entered truck brondol instead of Checker bro
     '@/utils/qr': { parseQrPayload: () => ({ qty: 10 }) },
     '@/services/staging.service': { stagingApi: { submitPayload: async () => {} } },
     '@/utils/field-summary': display,
+    '@/utils/trip': tripRules,
     '@/types': {},
     '@expo/vector-icons/FontAwesome': 'FontAwesome',
     '@tanstack/react-query': {
@@ -248,6 +250,7 @@ test('offline weighing of an uncached Checker queues the SPB with hand-entered t
     '@/utils/qr': { parseQrPayload: () => ({ qty: 10 }) },
     '@/services/staging.service': { stagingApi: { submitPayload: async () => {} } },
     '@/utils/field-summary': display,
+    '@/utils/trip': tripRules,
     '@/types': {},
     '@expo/vector-icons/FontAwesome': 'FontAwesome',
     '@tanstack/react-query': {
@@ -315,6 +318,7 @@ test('field summary renders approved, submitted, missing kilograms, and empty ap
       ActivityIndicator: 'ActivityIndicator', StyleSheet: { create: (value) => value } },
     '@/utils/estateDate': { estateDate: () => '2026-09-24' },
     '@/utils/field-summary': display,
+    '@/utils/trip': tripRules,
     '@/constants/Colors': { BrandColors: { primary: '#654', textPrimary: '#333', textSecondary: '#666',
       textMuted: '#999', cardBg: '#fff', white: '#fff', inputBorder: '#ddd' } },
     '@/hooks/useKraniTimbang': { useKraniTimbangList: () => ({}) },

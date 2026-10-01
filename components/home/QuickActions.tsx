@@ -1,4 +1,5 @@
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useOrgSetting } from "@/hooks/useOrgConfig";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { BrandColors } from "@/constants/Colors";
 import { Href, useRouter, useSegments } from "expo-router";
@@ -12,13 +13,15 @@ interface QuickAction {
   route: Href;
   permission?: string;
   permissionAction?: "write" | "read";
+  /** Weighbridge entry: shown only when the organization has its own weighbridge. */
+  needsWeighbridge?: boolean;
 }
 
 export const ROLE_ACTIONS: Record<string, QuickAction[]> = {
   "(admin)": [
     { id: "bkm-add", label: "Buat BKM Panen", icon: "book", route: "/(admin)/bkm/add", permission: "mod_bkm_panen", permissionAction: "write" },
     { id: "checker-add", label: "Input Checker", icon: "check-square-o", route: "/(admin)/checker/add", permission: "mod_bkm_checker", permissionAction: "write" },
-    { id: "timbangan-scan", label: "Pindai Timbangan", icon: "qrcode", route: "/(admin)/timbangan/scan", permission: "mod_krani_timbang", permissionAction: "write" },
+    { id: "timbangan-scan", label: "Pindai Timbangan", icon: "qrcode", route: "/(admin)/timbangan/scan", permission: "mod_krani_timbang", permissionAction: "write", needsWeighbridge: true },
     { id: "observasi-add", label: "Catat Observasi", icon: "eye", route: "/(admin)/observasi/add" as Href, permission: "mod_bkm_rawat", permissionAction: "write" },
     { id: "usage-list", label: "Pemakaian Kendaraan", icon: "truck", route: "/(admin)/pemakaian-kendaraan" as Href, permission: "mod_bkm_rawat", permissionAction: "read" },
   ],
@@ -52,10 +55,11 @@ export function QuickActions() {
   const router = useRouter();
   const { width, fontScale } = useWindowDimensions();
   const hasPermission = useAuthStore((state) => state.hasPermission);
+  const weighbridge = useOrgSetting("jembatan_timbang");
   const segments = useSegments();
   const currentGroup = segments[0] ?? "";
   const actions = (ROLE_ACTIONS[currentGroup] ?? []).filter((action) =>
-    !action.permission || (hasPermission(action.permission, "read") && hasPermission(action.permission, action.permissionAction ?? "read")),
+    (weighbridge || !action.needsWeighbridge) && (!action.permission || (hasPermission(action.permission, "read") && hasPermission(action.permission, action.permissionAction ?? "read"))),
   );
 
   if (actions.length === 0) return null;
