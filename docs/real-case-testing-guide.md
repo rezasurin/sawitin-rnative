@@ -429,13 +429,18 @@ Legenda: ✅ = ada di source saat ini (lolos lapangan **belum** dibuktikan) · �
   ```
   Keluar dari semua akun di ponsel setelah reset. Antrean lama di perangkat merujuk ke dokumen yang sudah tidak ada dan akan muncul sebagai item tinjauan (404/409).
 - **BJR bisa diubah** per organisasi di kolom `organization.settings` (JSON `{ "bjr": 15 }`), misalnya untuk menguji kebun dengan janjang lebih kecil (10 kg) atau lebih besar (20 kg).
-- **Kenop lingkungan backend** (`src/config/config.ts`): `QR_EXPIRY_MS` (default 48 jam), `QR_CLOCK_SKEW_MS` (5 menit), `OFFLINE_WEIGHING_MAX_AGE_MS` (7 hari), `DISCREPANCY_TOLERANCE_PCT` (2). Pemeriksaan kedaluwarsa QR di ponsel (48 jam) dan toleransi rekonsiliasi di form Checker (2%) tertanam di kode mobile, sehingga tidak ikut berubah bila env server diubah.
+- **Kenop lingkungan backend** (`src/config/config.ts`): `QR_EXPIRY_MS` (default 48 jam), `QR_CLOCK_SKEW_MS` (5 menit), `OFFLINE_WEIGHING_MAX_AGE_MS` (7 hari), `DISCREPANCY_TOLERANCE_PCT` (2). Masa berlaku QR saat pindai dan toleransi rekonsiliasi di form Checker kini mengikuti server lewat `/orgConfig` (`qr_expiry_ms`, `discrepancy_tolerance_pct`). Nilai 48 jam dan 2% di ponsel hanya dipakai bila ponsel belum pernah menjangkau server. Uji: ubah `QR_EXPIRY_MS` di server, login ulang di ponsel krani, lalu pastikan pesan kedaluwarsa menyebut jumlah jam yang baru [perlu verifikasi di perangkat].
 - **Temuan yang perlu ditindaklanjuti sebelum pilot:**
-  1. Kolom desimal Rawat menolak koma.
-  2. Tanggal default Rawat berbasis UTC.
-  3. Panen di lahan TBM tidak diblokir.
-  4. Model satu Checker per TPH versus pola muat truk di lapangan (C.5).
-  5. Rentang acuan brondolan belum disepakati.
-  6. Penyetuju Checker: saat ini sesama Mandor (atau manajer/admin). Audit Checker (§10b) menyarankan Asisten Afdeling sebagai penyetuju; ini keputusan produk.
+  1. Model satu Checker per TPH versus pola muat truk di lapangan (C.5).
+  2. Rentang acuan brondolan belum disepakati.
+  3. Penyetuju Checker: saat ini sesama Mandor (atau manajer/admin). Audit Checker (§10b) menyarankan Asisten Afdeling sebagai penyetuju; ini keputusan produk.
+  4. Panen di lahan TBM kini **diperingatkan, tidak diblokir**. Tentukan apakah perlu diblokir (panen perdana saat peralihan ke TM adalah kasus sah).
 
-  Sudah diperbaiki 25 September 2026 (belum di-commit): jalur Mandor ke BKM Rawat (Aksi Cepat), tanggal di ringkasan Beranda Krani, teks alasan Akun untuk timbangan yang ditolak, dan maker-checker pada Checker.
+  Sudah diperbaiki (25–28 September 2026):
+  - jalur Mandor ke BKM Rawat (Aksi Cepat);
+  - tanggal di ringkasan Beranda Krani;
+  - teks alasan di Akun untuk timbangan yang ditolak;
+  - maker-checker pada Checker;
+  - koma desimal di form Rawat (mis. `4,5`);
+  - tanggal default hari kebun (WIB) di form Rawat, Observasi, dan Pemakaian Kendaraan;
+  - peringatan TBM di langkah 1 BKM Panen.
