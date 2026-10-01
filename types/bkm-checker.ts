@@ -1,13 +1,27 @@
 import { DocumentStatus, TipePengiriman, TimestampFields } from './common';
 import { Lahan, Blok, Tph, Pekerja, Kendaraan, Supir } from './master-data';
 
+/**
+ * One truck trip (the SPB). The server still returns the header TPH, block and
+ * Panen for legacy single-TPH rows; a trip created from phase 2 has them null
+ * and carries them on each line instead. Every field below `bkm_panen_id` up to
+ * `tutup_harian_id` is new and null until the server writes it.
+ */
 export interface BkmChecker extends TimestampFields {
   id: string;
   org_id: string;
+  nomor_spb?: string | null;
   lahan_id: string | null;
-  tph_id: string;
-  blok_id: string;
+  tph_id: string | null;
+  blok_id: string | null;
   bkm_panen_id: string | null;
+  kendaraan_id?: string | null;
+  supir_id?: string | null;
+  nomor_truk?: string | null;
+  nama_sopir?: string | null;
+  tujuan_kirim?: string | null;
+  dispatched_at?: string | null;
+  tutup_harian_id?: string | null;
   tanggal_laporan: string;
   keterangan: string | null;
   status: DocumentStatus;
@@ -40,6 +54,14 @@ export interface BkmCheckerDetail extends TimestampFields {
   id: string;
   bkm_checker_id: string;
   pekerja_id: string | null;
+  /** The TPH this line loaded from; null on rows the backfill has not reached. */
+  tph_id?: string | null;
+  blok_id?: string | null;
+  lahan_id?: string | null;
+  /** `LANGSUNG` line: that day's Panen. */
+  bkm_panen_id?: string | null;
+  /** `TITIP` line: the open restan it collects. */
+  restan_id?: string | null;
   kendaraan_id: string | null;
   supir_id: string | null;
   nomor_truk: string | null;

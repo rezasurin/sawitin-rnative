@@ -81,6 +81,8 @@ export interface Lahan extends TimestampFields, AgronomyMetadata, MappedRecord {
   /** Legacy coordinates are read-only, in latitude/longitude order. */
   koordinat_lokasi: number[] | null;
   tahun_tanam?: number | null;
+  /** Date (YYYY-MM-DD) the parcel counts as mature; null falls back to the planting-year rule. */
+  tanggal_tm?: string | null;
   jumlah_pokok?: number | null;
   status: GlobalStatus;
   blok?: Blok;
@@ -121,6 +123,10 @@ export interface Blok extends TimestampFields, AgronomyMetadata, MappedRecord {
   jumlah_pokok: number | null;
   tahun_tanam: number | null;
   tahun_panen: number | null;
+  /** Average bunch weight in kg. Prisma serializes the decimal as a string; null falls back to the organization BJR. */
+  bjr?: string | number | null;
+  /** Date (YYYY-MM-DD) the block counts as mature; null falls back to the planting-year rule. */
+  tanggal_tm?: string | null;
   status: GlobalStatus;
   kelompok_lahan?: KelompokLahan;
 }

@@ -156,8 +156,8 @@ export default function CheckerDetailScreen() {
         )}
 
         <View style={styles.card}>
-          <Row label="Blok" value={data.blok?.nama ?? data.blok_id} />
-          <Row label="TPH" value={data.tph?.nama ?? data.tph_id} />
+          <Row label="Blok" value={data.blok?.nama ?? data.blok_id ?? '-'} />
+          <Row label="TPH" value={data.tph?.nama ?? data.tph_id ?? '-'} />
           <Row label="Tanggal" value={data.tanggal_laporan} />
           <Row label="Status" value={data.status} />
           <Row label="Truk dokumen" value={data.details?.find((row) => row.tipe_pengiriman !== 'RESTAN')?.kendaraan?.nomor_kendaraan
@@ -168,7 +168,7 @@ export default function CheckerDetailScreen() {
 
         {canCreate && <Button title="Buat dokumen baru untuk truk lain" variant="secondary" onPress={() => router.push({
           pathname: `/${group}/checker/add` as never,
-          params: { blok_id: data.blok_id, tph_id: data.tph_id, lahan_id: data.lahan_id || '',
+          params: { blok_id: data.blok_id ?? '', tph_id: data.tph_id ?? '', lahan_id: data.lahan_id || '',
             bkm_panen_id: data.bkm_panen_id || '', tanggal_laporan: data.tanggal_laporan },
         })} />}
 

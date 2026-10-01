@@ -15,6 +15,8 @@ export interface BkmPanen extends TimestampFields {
   rejected_by: string | null;
   rejected_at: string | null;
   rejection_note: string | null;
+  /** Why fruit was harvested on TBM land; required by the server from phase 4. */
+  alasan_tbm?: string | null;
   lahan?: Lahan;
   blok?: Blok;
   grup_pekerja?: GrupPekerja;
