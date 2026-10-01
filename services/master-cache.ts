@@ -69,15 +69,28 @@ const DELTA_RESOURCE_KEYS: Record<string, string[]> = {
   supir: ['supir'],
 };
 
+/** Where the open restan list lives in the lookup cache. */
+export const openRestanKey = (userId: string) => `${userId}:restan:open`;
+
+interface RestanRow { id: string; sudah_dikirim?: boolean }
+
 export interface DeltaSyncDeps {
   fetchDelta: (since?: string, limit?: number) => Promise<{
     changed: Record<string, unknown[]>;
+    removed?: Record<string, string[]>;
     cursor: string;
     has_more: boolean;
   }>;
   readCursor: (userId: string) => Promise<string | undefined>;
   saveCursor: (userId: string, cursor: string) => Promise<void>;
   invalidateResource: (userId: string, resource: string) => Promise<void>;
+  /**
+   * Open restan, kept as rows rather than invalidated: the server reports a
+   * collected one only as an id under `removed.restan`, so a refetch could not
+   * tell the device what to drop. Null means never pulled.
+   */
+  readRestan?: (userId: string) => Promise<RestanRow[] | null>;
+  saveRestan?: (userId: string, rows: RestanRow[]) => Promise<void>;
 }
 
 /**
@@ -97,6 +110,12 @@ export interface DeltaSyncDeps {
 export async function pullMasterDelta(userId: string, deps: DeltaSyncDeps): Promise<string[]> {
   let cursor = await deps.readCursor(userId);
   const invalidated = new Set<string>();
+  let restan = deps.readRestan ? await deps.readRestan(userId) : null;
+  // The open-restan snapshot only comes with a pull that has no cursor. A device
+  // that already held a cursor before this model existed never got it, so it
+  // pulls from the start once rather than miss every restan that has not moved.
+  if (deps.readRestan && !restan) cursor = undefined;
+  const open = new Map((restan ?? []).map((row) => [row.id, row]));
 
   // Bounded: a device returning after a long absence pages through, but a
   // broken `has_more` must never spin forever.
@@ -106,6 +125,11 @@ export async function pullMasterDelta(userId: string, deps: DeltaSyncDeps): Prom
       if (!rows?.length) continue;
       for (const resource of DELTA_RESOURCE_KEYS[model] ?? []) invalidated.add(resource);
     }
+    for (const row of (delta.changed.restan ?? []) as RestanRow[]) {
+      if (row.sudah_dikirim) open.delete(row.id);
+      else open.set(row.id, row);
+    }
+    for (const id of delta.removed?.restan ?? []) open.delete(id);
     cursor = delta.cursor;
     if (!delta.has_more) break;
   }
@@ -113,6 +137,7 @@ export async function pullMasterDelta(userId: string, deps: DeltaSyncDeps): Prom
   for (const resource of invalidated) {
     await deps.invalidateResource(userId, resource);
   }
+  await deps.saveRestan?.(userId, [...open.values()]);
   if (cursor) await deps.saveCursor(userId, cursor);
   return [...invalidated];
 }

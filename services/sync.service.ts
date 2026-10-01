@@ -4,7 +4,8 @@ import { syncQueueDb } from '@/services/database';
 import { backoffUntil, classify, isBlocking } from '@/services/sync-errors';
 import { currentOwner, MAX_RETRIES } from '@/stores/useSyncQueueStore';
 import { syncApi } from '@/services/sync.api';
-import { pullMasterDelta } from '@/services/master-cache';
+import { openRestanKey, pullMasterDelta } from '@/services/master-cache';
+import type { Restan } from '@/types/restan';
 import { lookupCacheDb } from '@/services/database';
 import type { SyncErrorClass } from '@/types/sync';
 import { latestQueueDocument, queueModulePaths } from './queue-recovery';
@@ -32,6 +33,24 @@ interface PerformSyncParams {
 
 /** How many items one pass claims at a time. */
 const CLAIM_BATCH = 25;
+
+/**
+ * One pull at a time, whoever asks: the sync button, the background pass and the
+ * trip form's restan list all land here, and two pulls would race on the
+ * cursor and the restan rows they both write.
+ */
+let pulling: Promise<string[]> | null = null;
+export function pullDelta(userId: string): Promise<string[]> {
+  pulling ??= pullMasterDelta(userId, {
+    fetchDelta: (since) => syncApi.delta(since),
+    readCursor: async (id) => ((await lookupCacheDb.get(`${id}:__sync_cursor`)) as string | null) ?? undefined,
+    saveCursor: (id, cursor) => lookupCacheDb.save(`${id}:__sync_cursor`, cursor),
+    invalidateResource: (id, resource) => lookupCacheDb.clearResource(id, resource),
+    readRestan: async (id) => (await lookupCacheDb.get(openRestanKey(id))) as Restan[] | null,
+    saveRestan: (id, rows) => lookupCacheDb.save(openRestanKey(id), rows),
+  }).finally(() => { pulling = null; });
+  return pulling;
+}
 
 // ── Sync Orchestrator ────────────────────────────────────────────────
 
@@ -127,13 +146,7 @@ export async function performSync({
 
   let pulled = false;
   try {
-    await pullMasterDelta(owner.userId, {
-      fetchDelta: (since) => syncApi.delta(since),
-      readCursor: async (userId) =>
-        ((await lookupCacheDb.get(`${userId}:__sync_cursor`)) as string | null) ?? undefined,
-      saveCursor: (userId, cursor) => lookupCacheDb.save(`${userId}:__sync_cursor`, cursor),
-      invalidateResource: (userId, resource) => lookupCacheDb.clearResource(userId, resource),
-    });
+    await pullDelta(owner.userId);
     await queryClient.invalidateQueries();
     // Wait briefly for refetches to settle
     await new Promise((resolve) => setTimeout(resolve, 1000));

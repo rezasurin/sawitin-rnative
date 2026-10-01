@@ -2,7 +2,11 @@ import { apiClient } from './api';
 
 export interface DeltaResponse {
   changed: Record<string, unknown[]>;
+  /** Ids a device should drop; today only `restan`, collected by a dispatched trip. */
+  removed?: Record<string, string[]>;
   cursor: string;
+  /** Tie-breaker half of the cursor. Not sent back yet; see `pullMasterDelta`. */
+  cursor_id?: string;
   has_more: boolean;
   skipped: string[];
 }

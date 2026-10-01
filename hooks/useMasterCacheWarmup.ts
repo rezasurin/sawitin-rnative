@@ -9,6 +9,8 @@ import { tphApi } from '@/services/tph.service';
 import { kendaraanApi, supirApi } from '@/services/vehicle-usage.service';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { bkmRawatApi } from '@/services/bkm-rawat.service';
+import { bkmPanenApi } from '@/services/bkm-panen.service';
+import { pullDelta } from '@/services/sync.service';
 
 /**
  * Fills the master-data cache once per signed-in user, so a field form works
@@ -30,6 +32,7 @@ export function useMasterCacheWarmup() {
   const userId = useAuthStore((state) => state.user?.id);
   const canReadRawat = useAuthStore((state) => state.hasPermission('mod_bkm_rawat', 'read'));
   const canReadVehicles = useAuthStore((state) => state.hasPermission('mod_krani_timbang', 'read'));
+  const canReadPanen = useAuthStore((state) => state.hasPermission('mod_bkm_panen', 'read'));
   const warmedFor = useRef<string | null>(null);
 
   useEffect(() => {
@@ -45,6 +48,9 @@ export function useMasterCacheWarmup() {
       tipePekerjaanApi.getAll(FIELD_FORM_PAGE),
       ...(canReadVehicles ? [kendaraanApi.getAll(FIELD_FORM_PAGE), supirApi.getAll(FIELD_FORM_PAGE)] : []),
       ...(canReadRawat ? [bkmRawatApi.getLookups()] : []),
+      // For the SPB trip form: recent Panen (today's LANGSUNG sources) and open restan (TITIP).
+      ...(canReadPanen ? [bkmPanenApi.getAll({ limit: 100, sort: 'tanggal_laporan:desc' })] : []),
+      pullDelta(userId),
     ]);
-  }, [isAuthenticated, userId, canReadRawat, canReadVehicles]);
+  }, [isAuthenticated, userId, canReadRawat, canReadVehicles, canReadPanen]);
 }

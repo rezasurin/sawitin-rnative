@@ -46,6 +46,24 @@ export interface CreateBkmCheckerPayload {
   keterangan?: string;
 }
 
+/**
+ * A truck trip (SPB): the paper SPB's serial, truck, driver and destination.
+ * The TPH, block and Panen live on the lines, so none of them is sent here.
+ * Truck and driver are `kendaraan_id`/`supir_id` from master data or typed text.
+ */
+export interface CreateTripPayload {
+  client_request_id?: string;
+  nomor_spb: string;
+  tanggal_laporan: string;
+  dispatched_at: string;
+  kendaraan_id?: string;
+  supir_id?: string;
+  nomor_truk?: string;
+  nama_sopir?: string;
+  tujuan_kirim?: string;
+  keterangan?: string;
+}
+
 export type UpdateBkmCheckerPayload = Partial<CreateBkmCheckerPayload> & {
   status?: DocumentStatus;
 };
@@ -79,12 +97,19 @@ export interface BkmCheckerDetail extends TimestampFields {
   pekerja?: Pekerja;
   kendaraan?: Kendaraan | null;
   supir?: Supir | null;
+  /** Returned on a document's details since phase 2. */
+  tph?: Tph | null;
+  blok?: Pick<Blok, 'id' | 'nama'> | null;
 }
 
 export interface CreateBkmCheckerDetailPayload {
   client_detail_id?: string;
   bkm_checker_id: string;
   pekerja_id?: string;
+  /** Trip line: the TPH loaded from, and either today's Panen (LANGSUNG) or the restan collected (TITIP). */
+  tph_id?: string;
+  bkm_panen_id?: string;
+  restan_id?: string;
   kendaraan_id?: string | null;
   supir_id?: string | null;
   nomor_truk?: string;
@@ -102,3 +127,43 @@ export interface CreateBkmCheckerDetailPayload {
 }
 
 export type UpdateBkmCheckerDetailPayload = Partial<Omit<CreateBkmCheckerDetailPayload, 'bkm_checker_id'>>;
+
+/** What the Mandor types on the first step of a trip. `tanggal` is the dispatch day (YYYY-MM-DD, WIB). */
+export interface TripHeaderDraft {
+  nomor_spb: string;
+  tanggal: string;
+  kendaraan_id: string;
+  supir_id: string;
+  nomor_truk: string;
+  nama_sopir: string;
+  tujuan_kirim: string;
+  keterangan: string;
+}
+
+/**
+ * One TPH the truck loads from. A LANGSUNG line names today's Panen; a TITIP line
+ * names an open restan. `client_detail_id` is fixed when the line is added, so a
+ * line removed later during conflict recovery never shifts another line's
+ * idempotency key.
+ */
+export interface TripLineDraft {
+  client_detail_id: string;
+  tipe_pengiriman: 'LANGSUNG' | 'TITIP';
+  tph_id: string;
+  tph_nama: string;
+  bkm_panen_id?: string;
+  /** Estate day of that Panen; the server refuses one that is not the dispatch day. */
+  panen_day?: string;
+  restan_id?: string;
+  /** Bunches still open on the restan: a line may take part of it, never more. */
+  restan_max?: number;
+  janjang_normal: number;
+  buah_mentah: number;
+  over_ripe: number;
+  tangkai_panjang: number;
+  buah_abnormal: number;
+  janjang_kosong: number;
+  jumlah_janjang: number;
+  /** Kilograms (D8). */
+  jumlah_brondol: number;
+}

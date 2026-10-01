@@ -142,3 +142,80 @@ test('a server that never clears has_more cannot spin forever', async () => {
   await pullMasterDelta('user-1', deps);
   assert.ok(state.calls.length <= 20, `bounded paging, got ${state.calls.length} calls`);
 });
+
+// ── Open restan from delta sync ──────────────────────────────────────
+
+function restanDeps(pages, stored = null, cursor = 'old') {
+  const state = { cursor, restan: stored, calls: [] };
+  return {
+    state,
+    deps: {
+      fetchDelta: async (since) => { state.calls.push(since); return pages.shift() ?? { changed: {}, cursor: 'end', has_more: false }; },
+      readCursor: async () => state.cursor,
+      saveCursor: async (_userId, next) => { state.cursor = next; },
+      invalidateResource: async () => {},
+      readRestan: async () => state.restan,
+      saveRestan: async (_userId, rows) => { state.restan = JSON.parse(JSON.stringify(rows)); },
+    },
+  };
+}
+const row = (id, extra = {}) => ({ id, tph_id: 'tph-1', tanggal: '2026-09-27T00:30:00.000Z', jumlah_janjang: 40, sudah_dikirim: false, ...extra });
+const ids = (rows) => rows.map((r) => r.id).sort();
+
+test('open restan from the first pull are cached, and a device with an old cursor pulls from the start once', async () => {
+  const { pullMasterDelta } = loadMasterCache();
+  const { state, deps } = restanDeps([{ changed: { restan: [row('r1'), row('r2')] }, cursor: 'c1', has_more: false }]);
+  await pullMasterDelta('user-1', deps);
+  assert.deepEqual(state.calls, [undefined], 'the stored cursor is ignored while no restan list exists');
+  assert.deepEqual(ids(state.restan), ['r1', 'r2']);
+  assert.equal(state.cursor, 'c1');
+
+  // From then on the cursor is used again.
+  const next = restanDeps([], state.restan, 'c1');
+  await pullMasterDelta('user-1', next.deps);
+  assert.deepEqual(next.state.calls, ['c1']);
+});
+
+test('a restan collected by a dispatched trip leaves the cache, including across pages', async () => {
+  const { pullMasterDelta } = loadMasterCache();
+  const { state, deps } = restanDeps([
+    { changed: { restan: [row('r3')] }, removed: { restan: ['r1'] }, cursor: 'c2', has_more: true },
+    { changed: {}, removed: { restan: ['r2', 'never-cached'] }, cursor: 'c3', has_more: false },
+  ], [row('r1'), row('r2')]);
+  await pullMasterDelta('user-1', deps);
+  assert.deepEqual(ids(state.restan), ['r3']);
+});
+
+test('a partial pickup swaps the shrunk row for its leftover, which keeps the original harvest day', async () => {
+  const { pullMasterDelta } = loadMasterCache();
+  const { state, deps } = restanDeps([{
+    changed: { restan: [row('leftover', { jumlah_janjang: 25 })] }, removed: { restan: ['r1'] }, cursor: 'c2', has_more: false,
+  }], [row('r1', { jumlah_janjang: 40 })]);
+  await pullMasterDelta('user-1', deps);
+  assert.deepEqual(ids(state.restan), ['leftover']);
+  assert.equal(state.restan[0].jumlah_janjang, 25);
+  assert.equal(state.restan[0].tanggal, '2026-09-27T00:30:00.000Z');
+});
+
+test('a withdrawn trip re-opens its restan, which arrives again as changed', async () => {
+  const { pullMasterDelta } = loadMasterCache();
+  const { state, deps } = restanDeps([{ changed: { restan: [row('r1')] }, cursor: 'c2', has_more: false }], []);
+  await pullMasterDelta('user-1', deps);
+  assert.deepEqual(ids(state.restan), ['r1']);
+});
+
+test('a failed pull leaves both the restan list and the cursor as they were', async () => {
+  const { pullMasterDelta } = loadMasterCache();
+  const { state, deps } = restanDeps([], [row('r1')]);
+  deps.fetchDelta = async () => { throw new Error('Network Error'); };
+  await assert.rejects(pullMasterDelta('user-1', deps), /Network/);
+  assert.deepEqual(ids(state.restan), ['r1']);
+  assert.equal(state.cursor, 'old');
+});
+
+test('a caller without the restan grant still gets an empty list, so it is not pulled from scratch every time', async () => {
+  const { pullMasterDelta } = loadMasterCache();
+  const { state, deps } = restanDeps([{ changed: {}, cursor: 'c1', has_more: false, skipped: ['restan'] }]);
+  await pullMasterDelta('user-1', deps);
+  assert.deepEqual(state.restan, []);
+});
