@@ -160,10 +160,12 @@ test('inspection shows the retained payload alongside the fetched server version
   const payload = { id: 'doc', data: { keterangan: 'local correction' } };
   const item = { id: 'queue', payload, status: 'DEAD', errorClass: 'CONFLICT' };
   const { QueueInspection } = load('components/bkm/QueueInspection.tsx', {
-    'react-native': Object.fromEntries(['ActivityIndicator', 'Button', 'Modal', 'ScrollView', 'Text', 'View'].map((name) => [name, name])),
+    'react-native': Object.fromEntries(['ActivityIndicator', 'Alert', 'Button', 'Modal', 'ScrollView', 'Text', 'TextInput', 'View'].map((name) => [name, name])),
     'expo-router': { useRouter: () => ({ push: () => {} }) },
     '@/services/queue-recovery': { latestQueueDocument: async () => ({ id: 'doc', status: 'SUBMITTED', keterangan: 'server correction' }) },
     '@/stores/useAuthStore': { useAuthStore: (selector) => selector({ hasPermission: () => false }) },
+    '@/stores/useSyncQueueStore': { useSyncQueueStore: (selector) => selector({ updatePayload: async () => {}, retryItem: async () => {} }) },
+    '@/utils/trip': load('utils/trip.ts'),
   });
   let tree;
   await act(async () => { tree = create(React.createElement(QueueInspection, { item, onClose: () => {} })); });

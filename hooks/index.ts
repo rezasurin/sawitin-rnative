@@ -27,7 +27,7 @@ export {
   useUpdateBkmChecker,
   useDeleteBkmChecker,
   useApproveBkmChecker,
-  useSubmitBkmChecker,
+  usePanenOfDay,
 } from './useBkmChecker';
 export {
   useMaterialList,

@@ -7,6 +7,8 @@ import { PageHeader } from '@/components/home';
 import { View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { useBkmCheckerInfinite } from '@/hooks/useBkmChecker';
+import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
+import { isTripHeader } from '@/utils/trip';
 import { useLocalSearchParams, router } from 'expo-router';
 import React, { useCallback, useMemo } from 'react';
 import {
@@ -42,6 +44,13 @@ export default function CheckerListScreen() {
     isFetchingNextPage,
   } = useBkmCheckerInfinite(queryParams);
 
+  // Trips still on this phone are not in the server list yet; say so instead of showing nothing.
+  const queue = useSyncQueueStore((state) => state.queue);
+  const queuedTrips = queue.filter((item) => item.module === 'bkm_checker' && item.action === 'CREATE'
+    && isTripHeader(item.payload?.header as { nomor_spb?: unknown; tph_id?: unknown } | undefined));
+  const needReview = queuedTrips.filter((item) => item.status === 'DEAD').length;
+  const waiting = queuedTrips.length - needReview;
+
   const handleCreate = () => {
     router.push(`/${group}/checker/add` as any);
   };
@@ -75,6 +84,8 @@ export default function CheckerListScreen() {
             <Text style={styles.headerSubtitle}>
               {totalItems > 0 ? totalItems : checkerList.length} dokumen checker
             </Text>
+            {waiting > 0 && <Text style={styles.headerSubtitle}>{waiting} SPB menunggu dikirim</Text>}
+            {needReview > 0 && <Text style={styles.reviewText}>{needReview} SPB perlu ditinjau. Buka menu Akun.</Text>}
           </View>
         }
         ListFooterComponent={
@@ -122,6 +133,7 @@ const styles = StyleSheet.create({
     color: BrandColors.textSecondary,
     marginTop: 4,
   },
+  reviewText: { fontSize: 13, fontWeight: '600', color: BrandColors.error, marginTop: 4 },
   footerLoader: {
     paddingVertical: 16,
     alignItems: 'center',

@@ -2,7 +2,7 @@ import { readOperational, requireOnline } from './operational.service';
 import { apiClient } from './api';
 import { withPrecondition } from './precondition';
 import { PaginatedResponse, ApiListParams } from '@/types/common';
-import { BkmChecker, CreateBkmCheckerPayload, UpdateBkmCheckerPayload, BkmCheckerDetail, CreateBkmCheckerDetailPayload, UpdateBkmCheckerDetailPayload } from '@/types/bkm-checker';
+import { BkmChecker, CreateBkmCheckerPayload, CreateTripPayload, UpdateBkmCheckerPayload, BkmCheckerDetail, CreateBkmCheckerDetailPayload, UpdateBkmCheckerDetailPayload } from '@/types/bkm-checker';
 
 export const bkmCheckerApi = {
   getSpb: async (id: string): Promise<{ qr_payload: string; checker_id: string; tph_id: string; jumlah_janjang: number; issued_at: string; expires_at: string }> => {
@@ -15,7 +15,7 @@ export const bkmCheckerApi = {
   getById: async (id: string): Promise<BkmChecker> => {
     return readOperational('bkmChecker', `/bkmChecker/${id}`);
   },
-  create: async (data: CreateBkmCheckerPayload): Promise<BkmChecker> => {
+  create: async (data: CreateBkmCheckerPayload | CreateTripPayload): Promise<BkmChecker> => {
     const response = await apiClient.post<BkmChecker>('/bkmChecker', data);
     return response.data;
   },

@@ -89,7 +89,7 @@ const native = { ScrollView: 'ScrollView', StyleSheet: { create: (s) => s } };
 const controls = { FormSelect: 'FormSelect', FormField: 'FormField', FormDateField: 'FormDateField' };
 function children(tree) { return tree.props.children.flat().filter(Boolean); }
 
-test('Panen and Checker pickers exclude block-less sources and allow sparse parcels', () => {
+test('Panen picker excludes block-less sources and allow sparse parcels', () => {
   const header = { blok_id: 'b', lahan_id: 'valid', tph_id: 'tph-valid', tanggal_laporan: '2026-09-23' };
   const mocks = {
     'react-native': native,
@@ -101,12 +101,10 @@ test('Panen and Checker pickers exclude block-less sources and allow sparse parc
     '@/services/bkm-panen.service': {},
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
     '@/stores/useBkmPanenStore': { useBkmPanenStore: () => ({ header, setHeader: () => {} }) },
-    '@/stores/useBkmCheckerStore': { useBkmCheckerStore: () => ({ header, setHeader: () => {} }) },
     '@tanstack/react-query': { useQuery: ({ queryKey }) => ({ data: { data: ({ blok: [{ id: 'b', nama: 'B' }], lahan: lands, tph: tphs })[queryKey[0]] ?? [] } }) },
   };
   const { BKMPanenFormStep1 } = load('components/mandor/BKMPanenFormStep1.tsx', mocks);
-  const { BKMCheckerFormStep1 } = load('components/mandor/BKMCheckerFormStep1.tsx', mocks);
-  for (const [Component, label, expected] of [[BKMPanenFormStep1, 'Lahan', 'valid'], [BKMCheckerFormStep1, 'TPH', 'tph-valid']]) {
+  for (const [Component, label, expected] of [[BKMPanenFormStep1, 'Lahan', 'valid']]) {
     const nodes = children(Component({ onNext() {} }));
     assert.deepEqual(Array.from(nodes.find((n) => n.props.label === label).props.options, (o) => o.value), [expected]);
     assert.equal(nodes.find((n) => n.type === 'Button').props.disabled, false);

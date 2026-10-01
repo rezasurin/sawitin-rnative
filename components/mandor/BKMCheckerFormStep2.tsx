@@ -1,31 +1,29 @@
 import { Button } from '@/components/core/Button';
-import { FormField, FormSelect } from '@/components/form';
+import { FormSelect } from '@/components/form';
 import { Text, View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
+import { usePanenOfDay } from '@/hooks/useBkmChecker';
+import { useOpenRestan } from '@/hooks/useOpenRestan';
+import { blokApi, lahanApi, tphApi } from '@/services';
 import { useBkmCheckerStore } from '@/stores/useBkmCheckerStore';
-import { useFleetChoices } from '@/hooks/useFleetChoices';
-import { checkerLoadConflict } from '@/utils/transport';
+import { restanAgeDays } from '@/utils/dispatch';
+import { estateDate } from '@/utils/estateDate';
 import { isWholeKg } from '@/utils/field-summary';
+import { agronomyLabel, operationalTphs } from '@/utils/plantation';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useRef, useState } from 'react';
-import {
-  Alert,
-  FlatList,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-} from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import React, { useCallback, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import type { TripLineDraft } from '@/types/bkm-checker';
 
 interface Props {
   onNext: () => void;
   onBack: () => void;
 }
 
-const TIPE_PENGIRIMAN_OPTIONS = [
-  { label: 'Langsung', value: 'LANGSUNG' },
-  { label: 'Titip', value: 'TITIP' },
-  { label: 'Restan', value: 'RESTAN' },
+const SOURCE_OPTIONS = [
+  { label: 'Langsung (Panen hari ini)', value: 'LANGSUNG' },
+  { label: 'Titip (restan hari sebelumnya)', value: 'TITIP' },
 ];
 
 const GRADING_FIELDS = [
@@ -37,101 +35,50 @@ const GRADING_FIELDS = [
   { key: 'janjang_kosong' as const, label: 'Janjang Kosong' },
 ];
 
-interface DetailFormLocal {
-  tipe_pengiriman: 'LANGSUNG' | 'TITIP' | 'RESTAN';
-  kendaraan_id: string;
-  supir_id: string;
-  manualVehicle: boolean;
-  manualDriver: boolean;
-  nomor_truk: string;
-  nama_sopir: string;
-  tujuan_kirim: string;
-}
-
-const emptyDetailForm: DetailFormLocal = {
-  tipe_pengiriman: 'LANGSUNG',
-  kendaraan_id: '',
-  supir_id: '',
-  manualVehicle: false,
-  manualDriver: false,
-  nomor_truk: '',
-  nama_sopir: '',
-  tujuan_kirim: '',
+const emptyGrading = {
+  janjang_normal: 0, buah_mentah: 0, over_ripe: 0, tangkai_panjang: 0, buah_abnormal: 0, janjang_kosong: 0,
+  jumlah_janjang: 0, jumlah_brondol: 0,
 };
 
-function calcTotal(detail: Record<string, unknown>) {
-  return GRADING_FIELDS.reduce(
-    (sum, f) => sum + (Number(detail[f.key]) || 0),
-    0,
-  );
-}
+let lineCounter = 0;
+/** Fixed when the line is added; the server replays a line by this key. */
+const newLineKey = () => `line_${Date.now().toString(36)}_${++lineCounter}_${Math.random().toString(36).slice(2, 8)}`;
 
-interface GradingRowProps {
-  detail: ReturnType<typeof useBkmCheckerStore.getState>['details'][number];
-  onUpdate: (updates: Record<string, unknown>) => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}
+type StoredLine = ReturnType<typeof useBkmCheckerStore.getState>['details'][number];
 
-function GradingRow({ detail, onUpdate, onEdit, onDelete }: GradingRowProps) {
-  const handleStepper = useCallback(
-    (key: string, delta: number) => {
-      const current = Number(detail[key as keyof typeof detail] ?? 0);
-      onUpdate({ [key]: Math.max(0, current + delta) });
-    },
-    [detail, onUpdate],
-  );
-
-  const total = calcTotal(detail as unknown as Record<string, unknown>);
-
+function LineCard({ line, onUpdate, onDelete }: { line: StoredLine; onUpdate: (updates: Partial<TripLineDraft>) => void; onDelete: () => void }) {
+  const source = line.tipe_pengiriman === 'TITIP'
+    ? `Titip · restan ${line.restan_max ?? 0} janjang`
+    : 'Langsung · Panen hari ini';
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderInfo}>
-          <Text style={styles.cardTitle}>
-            {detail.tipe_pengiriman} · Truk: {detail.nomor_truk || '-'}
-          </Text>
-          <Text style={styles.cardSubtitle}>
-            Sopir: {detail.nama_sopir || '-'} · Tujuan: {detail.tujuan_kirim || '-'}
-          </Text>
+          <Text style={styles.cardTitle}>{line.tph_nama}</Text>
+          <Text style={styles.cardSubtitle}>{source}</Text>
         </View>
-        <View style={styles.cardActions}>
-          <TouchableOpacity onPress={onEdit} style={styles.actionBtn} activeOpacity={0.7}>
-            <Ionicons name="create-outline" size={18} color={BrandColors.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onDelete} style={styles.actionBtn} activeOpacity={0.7}>
-            <Ionicons name="trash-outline" size={18} color={BrandColors.error} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={onDelete} style={styles.actionBtn} activeOpacity={0.7} accessibilityLabel="Hapus muatan">
+          <Ionicons name="trash-outline" size={18} color={BrandColors.error} />
+        </TouchableOpacity>
       </View>
 
       {GRADING_FIELDS.map((field) => (
         <View key={field.key} style={styles.gradingRow}>
           <Text style={styles.gradingLabel}>{field.label}</Text>
           <View style={styles.stepperRow}>
-            <TouchableOpacity
-              style={styles.stepperBtn}
-              onPress={() => handleStepper(field.key, -1)}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={styles.stepperBtn} onPress={() => onUpdate({ [field.key]: Math.max(0, line[field.key] - 1) })} activeOpacity={0.7}>
               <Text style={styles.stepperBtnText}>−</Text>
             </TouchableOpacity>
             <TextInput
               style={styles.stepperValue}
-              value={String(detail[field.key] ?? 0)}
+              value={String(line[field.key])}
               keyboardType="numeric"
               onChangeText={(val) => {
                 const n = parseInt(val, 10);
-                if (!isNaN(n) && n >= 0) {
-                  onUpdate({ [field.key]: n });
-                }
+                if (!isNaN(n) && n >= 0) onUpdate({ [field.key]: n });
               }}
             />
-            <TouchableOpacity
-              style={styles.stepperBtn}
-              onPress={() => handleStepper(field.key, 1)}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={styles.stepperBtn} onPress={() => onUpdate({ [field.key]: line[field.key] + 1 })} activeOpacity={0.7}>
               <Text style={styles.stepperBtnText}>+</Text>
             </TouchableOpacity>
           </View>
@@ -140,14 +87,14 @@ function GradingRow({ detail, onUpdate, onEdit, onDelete }: GradingRowProps) {
 
       <View style={styles.totalRow}>
         <Text style={styles.totalLabel}>Total Janjang</Text>
-        <Text style={styles.totalValue}>{total}</Text>
+        <Text style={styles.totalValue}>{line.jumlah_janjang}</Text>
       </View>
 
       <View style={styles.brondolRow}>
         <Text style={styles.brondolLabel}>Brondol (kg)</Text>
         <TextInput
           style={styles.brondolInput}
-          value={String(detail.jumlah_brondol ?? '')}
+          value={String(line.jumlah_brondol ?? '')}
           keyboardType="numeric"
           placeholder="0"
           placeholderTextColor={BrandColors.textMuted}
@@ -161,220 +108,110 @@ function GradingRow({ detail, onUpdate, onEdit, onDelete }: GradingRowProps) {
   );
 }
 
+/** One line per TPH the truck loads from: today's Panen there (Langsung) or an open restan there (Titip). */
 export function BKMCheckerFormStep2({ onNext, onBack }: Props) {
-  const { details, addDetail, updateDetail, removeDetail } = useBkmCheckerStore();
-  const fleet = useFleetChoices();
-  const [form, setForm] = useState<DetailFormLocal>({ ...emptyDetailForm });
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const { header, details, addDetail, updateDetail, removeDetail } = useBkmCheckerStore();
+  const [blokId, setBlokId] = useState('');
+  const [tphId, setTphId] = useState('');
+  const [tipe, setTipe] = useState<'LANGSUNG' | 'TITIP'>('LANGSUNG');
+  const [panenId, setPanenId] = useState('');
+  const [restanId, setRestanId] = useState('');
 
-  const handleEditDetail = useCallback(
-    (detail: (typeof details)[number]) => {
-      setForm({
-        tipe_pengiriman: detail.tipe_pengiriman,
-        kendaraan_id: detail.kendaraan_id ?? '',
-        supir_id: detail.supir_id ?? '',
-        manualVehicle: !detail.kendaraan_id,
-        manualDriver: !detail.supir_id,
-        nomor_truk: detail.nomor_truk ?? '',
-        nama_sopir: detail.nama_sopir ?? '',
-        tujuan_kirim: detail.tujuan_kirim ?? '',
-      });
-      setEditingId(detail._tempId);
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-    },
-    [details],
-  );
+  const { data: blokData } = useQuery({ queryKey: ['blok', 'all'], queryFn: () => blokApi.getAll({ limit: 200 }) });
+  const { data: tphData } = useQuery({ queryKey: ['tph', 'all'], queryFn: () => tphApi.getAll({ limit: 200 }) });
+  const { data: lahanData } = useQuery({ queryKey: ['lahan', 'all'], queryFn: () => lahanApi.getAll({ limit: 200 }) });
+  const panenOfDay = usePanenOfDay(header.tanggal);
+  const { loaded: restanLoaded, restan } = useOpenRestan(details);
 
-  const handleDeleteDetail = useCallback(
-    (tempId: string) => {
-      Alert.alert('Hapus Detail?', 'Detail truk ini akan dihapus dari BKM Checker.', [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Hapus',
-          style: 'destructive',
-          onPress: () => {
-            removeDetail(tempId);
-            setEditingId((prev) => (prev === tempId ? null : prev));
-          },
-        },
-      ]);
-    },
-    [removeDetail],
-  );
+  const tphs = operationalTphs(tphData?.data ?? [], lahanData?.data ?? [], blokId);
+  const panenAtTph = (panenOfDay.data ?? []).filter((panen) => panen.details?.some((row) => row.tph_id === tphId));
+  const restanAtTph = restan.filter((row) => row.tph_id === tphId);
+  const today = estateDate();
 
-  const handleAddDetail = useCallback(() => {
-    if (!form.tipe_pengiriman) return;
+  const panenOptions = panenAtTph.map((panen) => ({
+    label: `${panen.blok?.nama ?? panen.blok_id ?? 'Panen'} · ${panen.details!.filter((row) => row.tph_id === tphId)
+      .reduce((sum, row) => sum + row.jumlah_janjang, 0)} janjang · ${panen.status}`,
+    value: panen.id,
+  }));
+  const restanOptions = restanAtTph.map((row) => ({
+    label: `Panen ${estateDate(new Date(row.tanggal))} · ${restanAgeDays(row.tanggal, today)} hari · ${row.jumlah_janjang} janjang`,
+    value: row.id,
+  }));
 
-    if (form.tipe_pengiriman !== 'RESTAN') {
-      const missing: string[] = [];
-      if (!form.nomor_truk.trim()) missing.push('Nomor Truk');
-      if (!form.nama_sopir.trim()) missing.push('Nama Sopir');
-      if (!form.tujuan_kirim.trim()) missing.push('Tujuan Kirim');
-      if (missing.length > 0) {
-        Alert.alert('Data Belum Lengkap', `Lengkapi ${missing.join(', ')} untuk pengiriman ${form.tipe_pengiriman}.`);
-        return;
-      }
-    }
+  const canAdd = !!tphId && (tipe === 'LANGSUNG' ? !!panenId : !!restanId);
 
-    const truckFields = {
-      tipe_pengiriman: form.tipe_pengiriman,
-      kendaraan_id: form.kendaraan_id || undefined,
-      supir_id: form.supir_id || undefined,
-      nomor_truk: form.nomor_truk || undefined,
-      nama_sopir: form.nama_sopir || undefined,
-      tujuan_kirim: form.tujuan_kirim || undefined,
-    };
-
-    const candidate = editingId
-      ? details.map((row) => row._tempId === editingId ? { ...row, ...truckFields } : row)
-      : [...details, truckFields];
-    const conflict = checkerLoadConflict(candidate);
-    if (conflict) { Alert.alert('Muatan berbeda', conflict); return; }
-
-    if (editingId) {
-      updateDetail(editingId, truckFields);
+  const handleAdd = useCallback(() => {
+    const tph = tphs.find((row) => row.id === tphId);
+    if (!tph) return;
+    const base = { client_detail_id: newLineKey(), tph_id: tph.id, tph_nama: tph.nama, ...emptyGrading };
+    if (tipe === 'LANGSUNG') {
+      const panen = panenAtTph.find((row) => row.id === panenId);
+      if (!panen) return;
+      addDetail({ ...base, tipe_pengiriman: 'LANGSUNG', bkm_panen_id: panen.id, panen_day: estateDate(new Date(panen.tanggal_laporan)) });
     } else {
-      addDetail({
-        bkm_checker_id: '',
-        ...truckFields,
-        janjang_normal: 0,
-        buah_mentah: 0,
-        over_ripe: 0,
-        tangkai_panjang: 0,
-        buah_abnormal: 0,
-        janjang_kosong: 0,
-        jumlah_janjang: 0,
-        jumlah_brondol: 0,
-      });
+      const row = restanAtTph.find((item) => item.id === restanId);
+      if (!row) return;
+      // A full pickup is the usual case; the Mandor lowers it for a partial one.
+      addDetail({ ...base, tipe_pengiriman: 'TITIP', restan_id: row.id, restan_max: row.jumlah_janjang, janjang_normal: row.jumlah_janjang });
     }
+    setPanenId('');
+    setRestanId('');
+  }, [tphs, tphId, tipe, panenAtTph, panenId, restanAtTph, restanId, addDetail]);
 
-    setEditingId(null);
-    setForm({ ...emptyDetailForm });
-  }, [form, editingId, addDetail, updateDetail]);
+  const handleDelete = (tempId: string) =>
+    Alert.alert('Hapus Muatan?', 'Muatan TPH ini akan dihapus dari SPB.', [
+      { text: 'Batal', style: 'cancel' },
+      { text: 'Hapus', style: 'destructive', onPress: () => removeDetail(tempId) },
+    ]);
 
-  const handleCancelEdit = useCallback(() => {
-    setEditingId(null);
-    setForm({ ...emptyDetailForm });
-  }, []);
-
-  const totalAllJanjang = details.reduce((sum, d) => sum + d.jumlah_janjang, 0);
+  const totalJanjang = details.reduce((sum, d) => sum + d.jumlah_janjang, 0);
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        ref={scrollRef}
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.sectionTitle}>Tambah Truk & Pengiriman</Text>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionTitle}>Tambah Muatan dari TPH</Text>
 
-        {editingId && (
-          <View style={styles.editingBanner}>
-            <Text style={styles.editingBannerText}>
-              Mengedit detail — ubah data lalu tekan Simpan Perubahan.
-            </Text>
-            <TouchableOpacity onPress={handleCancelEdit} activeOpacity={0.7}>
-              <Text style={styles.editingBannerCancel}>Batal</Text>
-            </TouchableOpacity>
-          </View>
+        <FormSelect label="Blok" value={blokId} searchable placeholder="Pilih Blok"
+          options={(blokData?.data ?? []).map((b) => ({ label: agronomyLabel(b), value: b.id }))}
+          onSelect={(val) => { setBlokId(val); setTphId(''); setPanenId(''); setRestanId(''); }} />
+        <FormSelect label="TPH" value={tphId} searchable disabled={!blokId}
+          placeholder={blokId ? 'Pilih TPH' : 'Pilih Blok terlebih dahulu'}
+          options={tphs.map((t) => ({ label: t.nama, value: t.id }))}
+          onSelect={(val) => { setTphId(val); setPanenId(''); setRestanId(''); }} />
+        <FormSelect label="Sumber Muatan" value={tipe} options={SOURCE_OPTIONS}
+          onSelect={(val) => { setTipe(val as 'LANGSUNG' | 'TITIP'); setPanenId(''); setRestanId(''); }} />
+
+        {tipe === 'LANGSUNG' ? (
+          <FormSelect label="BKM Panen hari berangkat" value={panenId} options={panenOptions} disabled={!tphId}
+            placeholder={tphId ? (panenOptions.length ? 'Pilih BKM Panen' : `Tidak ada Panen tanggal ${header.tanggal} di TPH ini`) : 'Pilih TPH terlebih dahulu'}
+            onSelect={setPanenId} />
+        ) : (
+          <>
+            <FormSelect label="Restan terbuka" value={restanId} options={restanOptions} disabled={!tphId}
+              placeholder={tphId ? (restanOptions.length ? 'Pilih restan' : 'Tidak ada restan terbuka di TPH ini') : 'Pilih TPH terlebih dahulu'}
+              onSelect={setRestanId} />
+            {!restanLoaded && <Text style={styles.note}>Daftar restan belum pernah diunduh. Hubungkan internet lalu sinkronkan.</Text>}
+          </>
         )}
 
-        <FormSelect
-          label="Tipe Pengiriman"
-          value={form.tipe_pengiriman}
-          options={TIPE_PENGIRIMAN_OPTIONS}
-          onSelect={(val) => setForm((f) => ({ ...f, tipe_pengiriman: val as any }))}
-          placeholder="Pilih Tipe"
-        />
-
-        <FormSelect label="Kendaraan" searchable
-          value={form.manualVehicle ? '__manual__' : form.kendaraan_id}
-          options={[...fleet.vehicles.map((row) => ({ label: row.nomor_kendaraan, value: row.id })), { label: 'Ketik manual', value: '__manual__' }]}
-          onSelect={(id) => {
-            const row = fleet.vehicles.find((vehicle) => vehicle.id === id);
-            setForm((current) => ({ ...current, manualVehicle: id === '__manual__',
-              kendaraan_id: row?.id ?? '', nomor_truk: row?.nomor_kendaraan ?? (id === '__manual__' ? current.nomor_truk : '') }));
-          }} placeholder="Pilih kendaraan atau ketik manual" />
-        {(form.manualVehicle || !fleet.vehicles.length) && <FormField
-          label="Nomor Truk" value={form.nomor_truk}
-          onChangeText={(val) => setForm((f) => ({ ...f, kendaraan_id: '', manualVehicle: true, nomor_truk: val }))}
-          placeholder="B 1234 XY" />}
-
-        <FormSelect label="Sopir" searchable
-          value={form.manualDriver ? '__manual__' : form.supir_id}
-          options={[...fleet.drivers.map((row) => ({ label: row.nama, value: row.id })), { label: 'Ketik manual', value: '__manual__' }]}
-          onSelect={(id) => {
-            const row = fleet.drivers.find((driver) => driver.id === id);
-            setForm((current) => ({ ...current, manualDriver: id === '__manual__',
-              supir_id: row?.id ?? '', nama_sopir: row?.nama ?? (id === '__manual__' ? current.nama_sopir : '') }));
-          }} placeholder="Pilih sopir atau ketik manual" />
-        {(form.manualDriver || !fleet.drivers.length) && <FormField
-          label="Nama Sopir" value={form.nama_sopir}
-          onChangeText={(val) => setForm((f) => ({ ...f, supir_id: '', manualDriver: true, nama_sopir: val }))}
-          placeholder="Nama sopir" />}
-
-        <FormField
-          label="Tujuan Kirim"
-          value={form.tujuan_kirim}
-          onChangeText={(val) => setForm((f) => ({ ...f, tujuan_kirim: val }))}
-          placeholder="Nama PKS / tujuan"
-        />
-
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={handleAddDetail}
-          activeOpacity={0.7}
-        >
-          <Ionicons name={editingId ? 'checkmark-circle' : 'add-circle'} size={20} color={BrandColors.white} />
-          <Text style={styles.addButtonText}>
-            {editingId ? 'Simpan Perubahan' : 'Tambah Detail'}
-          </Text>
+        <TouchableOpacity style={[styles.addButton, !canAdd && styles.addButtonOff]} disabled={!canAdd} onPress={handleAdd} activeOpacity={0.7}>
+          <Ionicons name="add-circle" size={20} color={BrandColors.white} />
+          <Text style={styles.addButtonText}>Tambah Muatan</Text>
         </TouchableOpacity>
 
         {details.length > 0 && (
           <View style={styles.listSection}>
-            <Text style={styles.sectionTitle}>
-              Detail Ditambahkan ({details.length})
-            </Text>
-
-            <FlatList
-              data={details}
-              keyExtractor={(item) => item._tempId}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <GradingRow
-                  detail={item}
-                  onUpdate={(updates) => updateDetail(item._tempId, updates as any)}
-                  onEdit={() => handleEditDetail(item)}
-                  onDelete={() => handleDeleteDetail(item._tempId)}
-                />
-              )}
-            />
-          </View>
-        )}
-
-        {details.length > 0 && (
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Ringkasan</Text>
-            <Text style={styles.summaryText}>
-              {details.length} detail · Total Janjang: {totalAllJanjang}
-            </Text>
+            <Text style={styles.sectionTitle}>Muatan ({details.length}) · {totalJanjang} janjang</Text>
+            {details.map((line) => (
+              <LineCard key={line._tempId} line={line} onUpdate={(updates) => updateDetail(line._tempId, updates)} onDelete={() => handleDelete(line._tempId)} />
+            ))}
           </View>
         )}
       </ScrollView>
 
       <View style={styles.navButtons}>
         <Button title="Kembali" onPress={onBack} variant="secondary" style={{ flex: 1 }} />
-        <Button
-          title="Review & Konfirmasi"
-          onPress={onNext}
-          disabled={details.length === 0}
-          variant="primary"
-          style={{ flex: 2 }}
-        />
+        <Button title="Review & Konfirmasi" onPress={onNext} disabled={details.length === 0} variant="primary" style={{ flex: 2 }} />
       </View>
     </View>
   );
@@ -384,192 +221,47 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'transparent' },
   scrollView: { flex: 1 },
   scrollContent: { padding: 16 },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: BrandColors.textPrimary,
-    marginBottom: 12,
-  },
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: BrandColors.textPrimary, marginBottom: 12 },
+  note: { fontSize: 12, color: BrandColors.textSecondary, marginBottom: 8 },
   addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: BrandColors.primary,
-    height: 44,
-    borderRadius: 4,
-    gap: 8,
-    marginTop: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: BrandColors.primary, height: 44, borderRadius: 4, gap: 8, marginTop: 8,
   },
-  addButtonText: {
-    color: BrandColors.white,
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  addButtonOff: { opacity: 0.5 },
+  addButtonText: { color: BrandColors.white, fontSize: 15, fontWeight: '600' },
   listSection: { marginTop: 24 },
-  card: {
-    backgroundColor: BrandColors.cardBg,
-    borderRadius: 4,
-    padding: 16,
-    marginBottom: 12,
-  },
+  card: { backgroundColor: BrandColors.cardBg, borderRadius: 4, padding: 16, marginBottom: 12 },
   cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: BrandColors.inputBorder,
+    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+    marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: BrandColors.inputBorder,
   },
-  cardHeaderInfo: {
-    flex: 1,
-    marginRight: 8,
-  },
-  cardActions: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  actionBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: BrandColors.background,
-  },
-  editingBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFF8E1',
-    borderRadius: 4,
-    padding: 10,
-    marginBottom: 12,
-  },
-  editingBannerText: {
-    flex: 1,
-    fontSize: 13,
-    color: BrandColors.textSecondary,
-  },
-  editingBannerCancel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: BrandColors.primary,
-    marginLeft: 8,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: BrandColors.textPrimary,
-  },
-  cardSubtitle: {
-    fontSize: 13,
-    color: BrandColors.textSecondary,
-    marginTop: 2,
-  },
-  gradingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  gradingLabel: {
-    fontSize: 14,
-    color: BrandColors.textPrimary,
-    flex: 1,
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepperBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 4,
-    backgroundColor: BrandColors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperBtnText: {
-    color: BrandColors.white,
-    fontSize: 18,
-    fontWeight: '700',
-  },
+  cardHeaderInfo: { flex: 1, marginRight: 8 },
+  actionBtn: { width: 32, height: 32, borderRadius: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: BrandColors.background },
+  cardTitle: { fontSize: 15, fontWeight: '600', color: BrandColors.textPrimary },
+  cardSubtitle: { fontSize: 13, color: BrandColors.textSecondary, marginTop: 2 },
+  gradingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  gradingLabel: { fontSize: 14, color: BrandColors.textPrimary, flex: 1 },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  stepperBtn: { width: 36, height: 36, borderRadius: 4, backgroundColor: BrandColors.primary, alignItems: 'center', justifyContent: 'center' },
+  stepperBtnText: { color: BrandColors.white, fontSize: 18, fontWeight: '700' },
   stepperValue: {
-    width: 56,
-    height: 36,
-    borderWidth: 1,
-    borderColor: BrandColors.inputBorder,
-    borderRadius: 4,
-    textAlign: 'center',
-    fontSize: 16,
-    fontWeight: '600',
-    color: BrandColors.textPrimary,
-    backgroundColor: BrandColors.white,
+    width: 56, height: 36, borderWidth: 1, borderColor: BrandColors.inputBorder, borderRadius: 4,
+    textAlign: 'center', fontSize: 16, fontWeight: '600', color: BrandColors.textPrimary, backgroundColor: BrandColors.white,
   },
   totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: BrandColors.inputBorder,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: BrandColors.inputBorder,
   },
-  totalLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: BrandColors.primary,
-  },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: BrandColors.primary,
-  },
-  brondolRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  brondolLabel: {
-    fontSize: 14,
-    color: BrandColors.textSecondary,
-  },
+  totalLabel: { fontSize: 15, fontWeight: '700', color: BrandColors.primary },
+  totalValue: { fontSize: 18, fontWeight: '700', color: BrandColors.primary },
+  brondolRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
+  brondolLabel: { fontSize: 14, color: BrandColors.textSecondary },
   brondolInput: {
-    width: 80,
-    height: 36,
-    borderWidth: 1,
-    borderColor: BrandColors.inputBorder,
-    borderRadius: 4,
-    textAlign: 'center',
-    fontSize: 14,
-    color: BrandColors.textPrimary,
-    backgroundColor: BrandColors.white,
-  },
-  summaryCard: {
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: '#F0F3EA',
-    borderRadius: 8,
-  },
-  summaryTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: BrandColors.primary,
-    marginBottom: 8,
-  },
-  summaryText: {
-    fontSize: 13,
-    color: BrandColors.textSecondary,
+    width: 80, height: 36, borderWidth: 1, borderColor: BrandColors.inputBorder, borderRadius: 4,
+    textAlign: 'center', fontSize: 14, color: BrandColors.textPrimary, backgroundColor: BrandColors.white,
   },
   navButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 16,
-    backgroundColor: BrandColors.background,
-    borderTopWidth: 1,
-    borderTopColor: BrandColors.inputBorder,
+    flexDirection: 'row', gap: 12, padding: 16, backgroundColor: BrandColors.background,
+    borderTopWidth: 1, borderTopColor: BrandColors.inputBorder,
   },
 });

@@ -10,8 +10,8 @@ import { BKMCheckerFormStep3 } from './BKMCheckerFormStep3';
 import { useBkmCheckerStore } from '@/stores/useBkmCheckerStore';
 
 const STEPS = [
-  { label: 'Dokumen', value: 1, icon: 'file-text-o' as const },
-  { label: 'Truk & Grading', value: 2, icon: 'truck' as const },
+  { label: 'SPB', value: 1, icon: 'file-text-o' as const },
+  { label: 'Muatan TPH', value: 2, icon: 'truck' as const },
   { label: 'Review', value: 3, icon: 'check-square-o' as const },
 ];
 
@@ -26,7 +26,9 @@ export function BKMCheckerForm({ onSuccess }: Props) {
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [leaveAction, setLeaveAction] = useState<Parameters<typeof navigation.dispatch>[0] | null>(null);
-  const isDirty = Object.values(header).some(Boolean) || details.length > 0;
+  // The day is pre-filled, so it alone is not unsaved work.
+  const { tanggal: _prefilled, ...typed } = header;
+  const isDirty = Object.values(typed).some(Boolean) || details.length > 0;
   usePreventRemove((isDirty || isSaving) && !saved && !leaveAction, ({ data }) => {
     if (isSaving) {
       Alert.alert("Sedang Menyimpan", "Tunggu sampai penyimpanan selesai.");

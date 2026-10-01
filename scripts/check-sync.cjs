@@ -9,6 +9,11 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync('utils/sync-support.ts', '
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, { exports: supportExports });
 
+const tripExports = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('utils/trip.ts', 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS },
+}).outputText, { exports: tripExports });
+
 function loadSyncProcessor(api = {}) {
   const exports = {};
   const mocks = {
@@ -26,6 +31,7 @@ function loadSyncProcessor(api = {}) {
     './upload.service': { uploadApi: {} },
     '@/stores/useSyncQueueStore': { useSyncQueueStore: { getState: () => ({ updatePayload: async () => {} }) } },
     '@/utils/sync-support': supportExports,
+    '@/utils/trip': tripExports,
     '@/utils/tiket-pks': { sameFiledTicket: () => false },
   };
   const compiled = ts.transpileModule(fs.readFileSync('services/sync-processor.ts', 'utf8'), {
@@ -230,4 +236,130 @@ test('legacy queued cancellation is stopped for user resolution', async () => {
 test('legacy unsupported work stops immediately for recovery', async () => {
   const { processItem } = loadSyncProcessor();
   await assert.rejects(processItem({ module: 'absensi', action: 'CREATE', payload: {} }, dependencies()), (error) => error.status === 422);
+});
+
+// ── SPB trips: restan claims and the 409 conflicts the Mandor resolves ──────
+
+function loadPure(file, mocks = {}) {
+  const exports = {};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS },
+  }).outputText, { exports, require: (name) => mocks[name] ?? require(name), Date, Math, Set });
+  return exports;
+}
+const plain = (value) => JSON.parse(JSON.stringify(value));
+const tripRules = loadPure('utils/trip.ts');
+const dispatchRules = loadPure('utils/dispatch.ts', { '@/utils/estateDate': loadPure('utils/estateDate.ts'), '@/utils/trip': tripRules });
+const { classify } = (() => {
+  const exports = {};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('services/sync-errors.ts', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS },
+  }).outputText, { exports, require: (name) => (name === 'axios' ? { isAxiosError: () => false } : require(name)), Date, Math, Error });
+  return exports;
+})();
+
+const restanRow = (id, tph = 'tph-1', extra = {}) => ({ id, tph_id: tph, tanggal: '2026-09-27T00:30:00.000Z', jumlah_janjang: 40, jumlah_brondol: 6, sudah_dikirim: false, ...extra });
+const tripItem = (id, restanIds) => ({ id, module: 'bkm_checker', action: 'CREATE', status: 'PENDING', payload: {
+  header: { nomor_spb: id, tanggal_laporan: '2026-09-30', dispatched_at: '2026-09-30T01:00:00.000Z' },
+  details: restanIds.map((restan_id, index) => ({ client_detail_id: `${id}-${index}`, tipe_pengiriman: 'TITIP', tph_id: 'tph-1', restan_id, jumlah_janjang: 10, jumlah_brondol: 0 })),
+  submit: true,
+} });
+
+test('a restan a queued, unsynced trip claims is hidden from the next trip', () => {
+  const cache = [restanRow('r1'), restanRow('r2'), restanRow('r3', 'tph-1', { sudah_dikirim: true })];
+  const queue = [tripItem('0001', ['r1']), { module: 'bkm_panen', action: 'CREATE', payload: { details: [{ restan_id: 'r2' }] } }];
+  // r1 is claimed by the queued trip, r2 by an unrelated item type (not a claim), r3 is already collected.
+  assert.deepEqual(plain(dispatchRules.visibleRestan(cache, queue)).map((row) => row.id), ['r2']);
+  // A line already on the draft being built hides it too, and a dead (conflicted) item keeps its claim.
+  assert.deepEqual(plain(dispatchRules.visibleRestan(cache, queue, [{ restan_id: 'r2' }])), []);
+  assert.deepEqual(plain(dispatchRules.visibleRestan(cache, [{ ...tripItem('0002', ['r2']), status: 'DEAD' }])).map((row) => row.id), ['r1']);
+  // Once the trip synced it leaves the queue, and the claim goes with it.
+  assert.deepEqual(plain(dispatchRules.visibleRestan(cache, [])).map((row) => row.id), ['r1', 'r2']);
+});
+
+function tripServer({ taken = [], collectedAtSubmit = [] } = {}) {
+  const calls = [];
+  const lines = [];
+  return {
+    calls, lines,
+    create: async (body) => {
+      calls.push(['create', body.nomor_spb]);
+      if (taken.includes(body.nomor_spb)) throw Object.assign(new Error('taken'), { status: 409, data: { code: 'SPB_NUMBER_TAKEN', error: 'Nomor SPB sudah dipakai' } });
+      return { id: 'trip-server', status: 'DRAFT', details: [] };
+    },
+    getById: async () => ({ id: 'trip-server', status: 'DRAFT', details: [...lines] }),
+    addDetail: async (body) => {
+      calls.push(['addDetail', body.client_detail_id]);
+      if (!lines.some((line) => line.client_detail_id === body.client_detail_id)) lines.push({ id: `d-${lines.length + 1}`, ...body });
+    },
+    deleteDetail: async (id) => { calls.push(['deleteDetail', id]); lines.splice(lines.findIndex((line) => line.id === id), 1); },
+    update: async () => {
+      calls.push(['submit']);
+      const hit = lines.find((line) => collectedAtSubmit.includes(line.restan_id));
+      if (hit) throw Object.assign(new Error('collected'), { status: 409, data: { code: 'RESTAN_COLLECTED', restan_id: hit.restan_id } });
+    },
+  };
+}
+
+test('a taken SPB number stops as a conflict the Mandor can fix, then replays with the new number', async () => {
+  const { processItem } = loadSyncProcessor();
+  const server = tripServer({ taken: ['0001'] });
+  const saved = [];
+  const item = tripItem('0001', ['r1']);
+  let thrown;
+  await processItem(item, dependencies({ checkerApi: server, updateQueuePayload: async (_id, payload) => saved.push(payload) })).catch((error) => { thrown = error; });
+  assert.ok(thrown && thrown.code === 'SPB_NUMBER_TAKEN' && /0001/.test(thrown.message));
+  // Held for a person, never retried into the dead-letter by attempts: it is DEAD at once, with its reason.
+  const failure = classify(thrown, 0, 5);
+  assert.equal(failure.errorClass, 'CONFLICT');
+  assert.equal(failure.dead, true);
+  assert.match(failure.message, /Ganti nomor SPB/);
+  assert.equal(saved.at(-1).conflict.code, 'SPB_NUMBER_TAKEN');
+  assert.equal(saved.at(-1).details.length, 1, 'the work is kept');
+  assert.equal(tripRules.resolveTripConflict(saved.at(-1), {}), null, 'the same number is not a fix');
+
+  const fixed = tripRules.resolveTripConflict(saved.at(-1), { nomor_spb: ' 0002 ' });
+  assert.equal(fixed.header.nomor_spb, '0002');
+  assert.equal('conflict' in fixed, false);
+  await processItem({ ...item, payload: plain(fixed) }, dependencies({ checkerApi: server }));
+  assert.deepEqual(plain(server.calls).slice(-3), [['create', '0002'], ['addDetail', '0001-0'], ['submit']]);
+});
+
+test('a restan collected by another trip at submit keeps the draft and the other lines, and can be dropped', async () => {
+  const { processItem } = loadSyncProcessor();
+  const server = tripServer({ collectedAtSubmit: ['r2'] });
+  const saved = [];
+  const item = tripItem('0003', ['r1', 'r2']);
+  await assert.rejects(processItem(item, dependencies({ checkerApi: server, updateQueuePayload: async (_id, payload) => saved.push(payload) })),
+    (error) => error.status === 409 && error.code === 'RESTAN_COLLECTED');
+  const stuck = saved.at(-1);
+  // The conflict write must not lose the server id checkpointed earlier in the same attempt.
+  assert.equal(stuck.server_id, 'trip-server');
+  assert.deepEqual(plain(stuck.conflict), { code: 'RESTAN_COLLECTED', restan_id: 'r2' });
+  assert.equal(server.lines.length, 2, 'both lines are on the server draft');
+
+  const fixed = plain(tripRules.resolveTripConflict(stuck));
+  assert.deepEqual(fixed.details.map((line) => line.restan_id), ['r1']);
+  server.update = async () => { server.calls.push(['submit']); };
+  await processItem({ ...item, payload: fixed }, dependencies({ checkerApi: server }));
+  assert.equal(server.lines.length, 1, 'the collected restan line is removed from the server draft too');
+  assert.equal(server.lines[0].restan_id, 'r1');
+  assert.equal(plain(server.calls).filter(([name]) => name === 'create').length, 1, 'the draft is reused, not recreated');
+  assert.deepEqual(plain(server.calls).at(-1), ['submit']);
+});
+
+test('dropping the only line leaves nothing to send, so the Mandor discards instead', () => {
+  const payload = { ...tripItem('0004', ['r1']).payload, conflict: { code: 'RESTAN_COLLECTED', restan_id: 'r1' } };
+  assert.equal(tripRules.resolveTripConflict(payload), null);
+});
+
+test('a 409 on an old-shape document is not turned into a trip conflict', async () => {
+  const { processItem } = loadSyncProcessor();
+  const saved = [];
+  const conflict = Object.assign(new Error('one truck per document'), { status: 409, data: { code: 'RESTAN_COLLECTED', restan_id: 'r1' } });
+  const item = { id: 'old', module: 'bkm_checker', action: 'CREATE', payload: { header: { blok_id: 'b', tph_id: 't', tanggal_laporan: '2026-09-24' }, details: [] } };
+  await assert.rejects(processItem(item, dependencies({
+    checkerApi: { create: async () => { throw conflict; } }, updateQueuePayload: async (_id, payload) => saved.push(payload),
+  })), (error) => error === conflict);
+  assert.equal(saved.length, 0);
 });

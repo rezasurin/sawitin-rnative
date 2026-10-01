@@ -19,20 +19,17 @@ import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 import { bkmCheckerApi } from '@/services/bkm-checker.service';
-import { useModuleGroup } from '@/hooks/useModuleGroup';
-import { Button } from '@/components/core/Button';
-import { useAuthStore } from '@/stores/useAuthStore';
+import { isTrip } from '@/utils/trip';
 import { useQuery } from '@tanstack/react-query';
 
 export default function CheckerDetailScreen() {
-  const group = useModuleGroup('(mandor)');
-  const canCreate = useAuthStore((state) => state.hasPermission('mod_bkm_checker', 'write'));
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading, isError, refetch } = useBkmCheckerDetail(id);
   const spb = useQuery({
     queryKey: ['bkmChecker', id, 'spb'],
     queryFn: () => bkmCheckerApi.getSpb(id),
-    enabled: !!id && data?.status === 'APPROVED',
+    // A trip has no QR: it is identified by its SPB number, and `/spb` answers 409 for it.
+    enabled: !!id && data?.status === 'APPROVED' && !!data.tph_id,
     refetchOnWindowFocus: false,
     // A 409 is a rule the document breaks (e.g. several trucks); retrying cannot fix it.
     retry: (count, error) => (error as { status?: number }).status !== 409 && count < 2,
@@ -86,6 +83,7 @@ export default function CheckerDetailScreen() {
 
 
   const totalJanjang = data.details?.reduce((acc, curr) => acc + curr.jumlah_janjang, 0) ?? 0;
+  const trip = isTrip(data);
 
   return (
     <View style={styles.container}>
@@ -156,31 +154,41 @@ export default function CheckerDetailScreen() {
         )}
 
         <View style={styles.card}>
-          <Row label="Blok" value={data.blok?.nama ?? data.blok_id ?? '-'} />
-          <Row label="TPH" value={data.tph?.nama ?? data.tph_id ?? '-'} />
-          <Row label="Tanggal" value={data.tanggal_laporan} />
+          {trip ? (
+            <>
+              <Row label="Nomor SPB" value={data.nomor_spb ?? '-'} />
+              <Row label="Berangkat" value={data.dispatched_at ?? data.tanggal_laporan} />
+              <Row label="Truk" value={data.nomor_truk || '-'} />
+              <Row label="Sopir" value={data.nama_sopir || '-'} />
+              <Row label="Tujuan" value={data.tujuan_kirim || '-'} />
+            </>
+          ) : (
+            <>
+              <Row label="Blok" value={data.blok?.nama ?? data.blok_id ?? '-'} />
+              <Row label="TPH" value={data.tph?.nama ?? data.tph_id ?? '-'} />
+              <Row label="Tanggal" value={data.tanggal_laporan} />
+              <Row label="Truk dokumen" value={data.details?.find((row) => row.tipe_pengiriman !== 'RESTAN')?.kendaraan?.nomor_kendaraan
+                || data.details?.find((row) => row.tipe_pengiriman !== 'RESTAN')?.nomor_truk || '-'} />
+              {data.bkm_panen_id && <Row label="BKM Panen" value={data.bkm_panen_id} />}
+            </>
+          )}
           <Row label="Status" value={data.status} />
-          <Row label="Truk dokumen" value={data.details?.find((row) => row.tipe_pengiriman !== 'RESTAN')?.kendaraan?.nomor_kendaraan
-            || data.details?.find((row) => row.tipe_pengiriman !== 'RESTAN')?.nomor_truk || '-'} />
-          {data.bkm_panen_id && <Row label="BKM Panen" value={data.bkm_panen_id} />}
           {data.keterangan && <Row label="Keterangan" value={data.keterangan} />}
         </View>
 
-        {canCreate && <Button title="Buat dokumen baru untuk truk lain" variant="secondary" onPress={() => router.push({
-          pathname: `/${group}/checker/add` as never,
-          params: { blok_id: data.blok_id ?? '', tph_id: data.tph_id ?? '', lahan_id: data.lahan_id || '',
-            bkm_panen_id: data.bkm_panen_id || '', tanggal_laporan: data.tanggal_laporan },
-        })} />}
-
-        <Text style={styles.sectionTitle}>Detail ({data.details?.length ?? 0})</Text>
+        <Text style={styles.sectionTitle}>{trip ? 'Muatan' : 'Detail'} ({data.details?.length ?? 0})</Text>
         {(data.details ?? []).map((d) => (
           <View key={d.id} style={styles.detailCard}>
-            <Text style={styles.detailTitle}>
-              {d.tipe_pengiriman} · Truk: {d.nomor_truk || '-'}
-            </Text>
-            <Text style={styles.detailValue}>
-              Sopir: {d.nama_sopir || '-'} · Tujuan: {d.tujuan_kirim || '-'}
-            </Text>
+            {trip ? (
+              <Text style={styles.detailTitle}>
+                {d.tph?.nama ?? d.tph_id ?? '-'} · {d.tipe_pengiriman === 'TITIP' ? 'Titip (restan)' : d.tipe_pengiriman === 'LANGSUNG' ? 'Langsung' : d.tipe_pengiriman}
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.detailTitle}>{d.tipe_pengiriman} · Truk: {d.nomor_truk || '-'}</Text>
+                <Text style={styles.detailValue}>Sopir: {d.nama_sopir || '-'} · Tujuan: {d.tujuan_kirim || '-'}</Text>
+              </>
+            )}
             <Text style={styles.detailValue}>
               Normal: {d.janjang_normal} | Mentah: {d.buah_mentah} | Over: {d.over_ripe} | Brondol (kg): {d.jumlah_brondol}
             </Text>
@@ -191,7 +199,7 @@ export default function CheckerDetailScreen() {
         ))}
 
         <OperationalActions module="bkmChecker" document={data} />
-        <OperationalDraftEditor module="bkmChecker" document={data} />
+        {!trip && <OperationalDraftEditor module="bkmChecker" document={data} />}
         <OperationalHistory module="bkmChecker" id={id} />
       </ScrollView>
     </View>

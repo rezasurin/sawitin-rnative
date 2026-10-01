@@ -17,7 +17,11 @@ import { formatSyncResult } from '@/services/sync.service';
  * Plain language for why an item stopped, because the person reading this is a
  * mandor in a block, not whoever wrote the API.
  */
-function describeError(errorClass: SyncErrorClass | null, item?: Pick<SyncQueueItem, 'module' | 'action'>): string {
+function describeError(errorClass: SyncErrorClass | null, item?: Pick<SyncQueueItem, 'module' | 'action' | 'payload'>): string {
+  // An SPB trip stopped on a taken number or a collected restan: the fix is on this phone, not a newer server copy.
+  if (errorClass === 'CONFLICT' && item?.module === 'bkm_checker' && item.payload?.conflict) {
+    return 'SPB ditolak server dan perlu diperbaiki. Buka Periksa untuk memperbaikinya, lalu kirim ulang.';
+  }
   // A weighing is refused on the SPB itself, not because someone edited it, and
   // re-sending the same numbers gets the same answer.
   if (errorClass === 'CONFLICT' && item?.module === 'krani_timbang' && item.action === 'CREATE') {

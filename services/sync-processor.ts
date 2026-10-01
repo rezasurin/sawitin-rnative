@@ -13,7 +13,7 @@ import { stagingApi } from './staging.service';
 import { sameFiledTicket } from '@/utils/tiket-pks';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import type { CreateBkmPanenDetailPayload, CreateBkmPanenPayload, UpdateBkmPanenPayload } from '@/types/bkm-panen';
-import type { CreateBkmCheckerDetailPayload, CreateBkmCheckerPayload, UpdateBkmCheckerPayload } from '@/types/bkm-checker';
+import type { CreateBkmCheckerDetailPayload, CreateBkmCheckerPayload, CreateTripPayload, UpdateBkmCheckerPayload } from '@/types/bkm-checker';
 import type { CreateBkmRawatDetailPayload, QueuedBkmRawatPayload, UpdateBkmRawatDetailPayload, UpdateBkmRawatPayload } from '@/types/bkm-rawat';
 import type { SyncQueueItem } from '@/types/sync';
 import type { CreateObservasiPayload } from '@/types/observasi';
@@ -21,6 +21,7 @@ import type { CreatePemakaianKendaraanPayload } from '@/types/vehicle-usage';
 import type { CreateTiketPksPayload } from '@/types/tiket-pks';
 import type { SubmitStagingPayload } from '@/types/staging';
 import { isSupportedSyncAction } from '@/utils/sync-support';
+import { isTripHeader, tripConflictOf, tripConflictText } from '@/utils/trip';
 
 interface BkmPanenQueuePayload {
   header: CreateBkmPanenPayload;
@@ -34,9 +35,11 @@ interface BkmPanenUpdateQueuePayload extends BkmPanenQueuePayload {
 }
 
 interface BkmCheckerQueuePayload {
-  header: CreateBkmCheckerPayload;
+  header: CreateBkmCheckerPayload | CreateTripPayload;
   details: Omit<CreateBkmCheckerDetailPayload, 'bkm_checker_id'>[];
   server_id?: string;
+  /** Restan lines the Mandor dropped after a conflict; any already on the server draft are deleted. */
+  drop_restan_ids?: string[];
 }
 
 interface ProcessorDependencies {
@@ -221,14 +224,31 @@ export async function processItem(
 
   if (item.module === 'bkm_checker') {
     if (item.action === 'CREATE') {
-      const { header, details } = item.payload as unknown as BkmCheckerQueuePayload;
-      const serverId = (item.payload as unknown as BkmCheckerQueuePayload).server_id;
-      const checker = serverId ? await checkerApi.getById(serverId) : await checkerApi.create({ ...header, client_request_id: item.id });
-      if (!serverId) await dependencies.updateQueuePayload(item.id, { ...item.payload, server_id: checker.id });
-      for (const [index, detail] of details.entries()) {
-        await checkerApi.addDetail({ ...detail, client_detail_id: `${item.id}:${index}`, bkm_checker_id: checker.id });
+      const { header, details, server_id: serverId, drop_restan_ids: dropped } = item.payload as unknown as BkmCheckerQueuePayload;
+      let saved = item.payload;
+      try {
+        // One item keeps the trip's order: header, then every line, then submit.
+        const checker = serverId ? await checkerApi.getById(serverId) : await checkerApi.create({ ...header, client_request_id: item.id });
+        if (!serverId) {
+          saved = { ...item.payload, server_id: checker.id };
+          await dependencies.updateQueuePayload(item.id, saved);
+        }
+        for (const line of dropped?.length ? checker.details ?? [] : []) {
+          if (line.restan_id && dropped?.includes(line.restan_id)) await ignoreAlreadyDeleted(() => checkerApi.deleteDetail(line.id));
+        }
+        for (const [index, detail] of details.entries()) {
+          // A trip line brings its own key so dropping a line never renumbers the rest.
+          await checkerApi.addDetail({ client_detail_id: `${item.id}:${index}`, ...detail, bkm_checker_id: checker.id });
+        }
+        if (item.payload.submit !== false && checker.status === 'DRAFT') await checkerApi.update(checker.id, { status: 'SUBMITTED' });
+      } catch (error) {
+        // A taken SPB number or a collected restan is for the Mandor to resolve,
+        // not to retry: keep why, so the queue screen can offer the fix.
+        const conflict = isTripHeader(header) ? tripConflictOf(error) : null;
+        if (!conflict) throw error;
+        await dependencies.updateQueuePayload(item.id, { ...saved, conflict });
+        throw Object.assign(new Error(tripConflictText(conflict, (header as CreateTripPayload).nomor_spb)), { status: 409, code: conflict.code });
       }
-      if (item.payload.submit !== false && checker.status === 'DRAFT') await checkerApi.update(checker.id, { status: 'SUBMITTED' });
     } else if (item.action === 'UPDATE') {
       const { id, data } = item.payload as unknown as { id: string; data: UpdateBkmCheckerPayload };
       return checkerApi.update(id, data, item.precondition);

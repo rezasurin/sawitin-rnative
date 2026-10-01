@@ -14,6 +14,7 @@ function load(path, mocks = {}) {
 const ticketRules = load('utils/tiket-pks.ts');
 const { checkerLoadConflict } = load('utils/transport.ts');
 const support = load('utils/sync-support.ts');
+const tripRules = load('utils/trip.ts');
 
 function processor() {
   return load('services/sync-processor.ts', {
@@ -32,6 +33,7 @@ function processor() {
     '@/stores/useSyncQueueStore': { useSyncQueueStore: { getState: () => ({ updatePayload: async () => {} }) } },
     '@/utils/tiket-pks': ticketRules,
     '@/utils/sync-support': support,
+    '@/utils/trip': tripRules,
   }).processItem;
 }
 

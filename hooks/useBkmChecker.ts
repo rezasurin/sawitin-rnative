@@ -1,10 +1,10 @@
-import { useAuthStore } from '@/stores/useAuthStore';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { bkmCheckerApi } from '@/services/bkm-checker.service';
+import { bkmPanenApi } from '@/services/bkm-panen.service';
+import { estateDate } from '@/utils/estateDate';
 import { bkmCheckerKeys } from '@/services/queryKeys';
 import type { ApiListParams } from '@/types/common';
 import type {
-  BkmChecker,
   CreateBkmCheckerPayload,
   CreateBkmCheckerDetailPayload,
   UpdateBkmCheckerDetailPayload,
@@ -145,33 +145,17 @@ export function useDeleteBkmCheckerDetail() {
   });
 }
 
-// ── Compound mutation: create header + all details + submit ──────────
+// ── Trip lines ───────────────────────────────────────────────────────
 
-export function useSubmitBkmChecker() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      header,
-      details,
-    }: {
-      header: CreateBkmCheckerPayload;
-      details: Omit<CreateBkmCheckerDetailPayload, 'bkm_checker_id'>[];
-    }): Promise<BkmChecker> => {
-      // 1. Create header
-      const checker = await bkmCheckerApi.create(header);
-
-      // 2. Create all details
-      for (const detail of details) {
-        await bkmCheckerApi.addDetail({ ...detail, bkm_checker_id: checker.id });
-      }
-
-      // 3. Submit (set status to SUBMITTED)
-      if (!useAuthStore.getState().hasPermission('mod_bkm_checker', 'update')) return checker;
-      return bkmCheckerApi.update(checker.id, { status: 'SUBMITTED' });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: bkmCheckerKeys.lists() });
-    },
+/**
+ * Panen documents dated `day` (an estate day), for a LANGSUNG line. The recent
+ * list is cached by the operational read, so it also answers offline once it has
+ * been fetched; a Panen still waiting in this phone's queue is not in it yet.
+ */
+export function usePanenOfDay(day: string) {
+  return useQuery({
+    queryKey: ['bkmPanen', 'recent'],
+    queryFn: () => bkmPanenApi.getAll({ limit: 100, sort: 'tanggal_laporan:desc' }),
+    select: (page) => page.data.filter((panen) => panen.status !== 'CANCELLED' && estateDate(new Date(panen.tanggal_laporan)) === day),
   });
 }
