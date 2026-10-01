@@ -147,6 +147,37 @@ test('Checker reject UI sends rejection_note and refreshes on a stale decision',
   await act(async () => tree.unmount());
 });
 
+test('a trip has no approve action, an old single-TPH document still does', async () => {
+  const React = require('react');
+  const { create, act } = require('react-test-renderer');
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  const policy = operationalPolicy('SUBMITTED', { approve: true }, true, 1);
+  const { OperationalActions } = load('components/bkm/OperationalActions.tsx', {
+    'react-native': { Text: 'Text', TextInput: 'TextInput', View: 'View', Button: 'Button', Alert: { alert() {} } },
+    '@tanstack/react-query': { useQueryClient: () => ({ invalidateQueries: async () => {} }) },
+    '@/services/api': { apiClient: {} },
+    '@/services/operational.service': { requireOnline: () => {} },
+    '@/services/database': { lookupCacheDb: {} },
+    '@/stores/useAuthStore': {},
+    '@/hooks/useOperationalPolicy': { useOperationalPolicy: () => policy },
+    '@/stores/useNetworkStore': { useNetworkStore: { getState: () => ({ isOnline: true }) } },
+    '@/stores/useSyncQueueStore': { useSyncQueueStore: { getState: () => ({ queue: [] }) } },
+  });
+  const { isTrip } = load('utils/trip.ts');
+  const titles = async (doc) => {
+    let tree;
+    await act(async () => { tree = create(React.createElement(OperationalActions, { module: 'bkmChecker',
+      document: { id: 'checker', status: 'SUBMITTED', details: [{}] }, exclude: isTrip(doc) ? ['approve'] : [] })); });
+    const names = tree.root.findAllByType('Button').map((b) => b.props.title);
+    await act(async () => tree.unmount());
+    return names;
+  };
+  const trip = await titles({ tph_id: null, nomor_spb: '0012345' });
+  assert.equal(trip.includes('Setujui'), false);
+  assert.equal(trip.includes('Minta revisi'), true);
+  assert.equal((await titles({ tph_id: 'tph-1' })).includes('Setujui'), true);
+});
+
 test('recovery includes blocked descendants so inspect/retry/discard cannot strand work', () => {
   const { recoveryItems } = load('utils/queue-recovery.ts');
   const items = [{ id: 'reopen', status: 'DEAD' }, { id: 'edit', status: 'PENDING', dependsOn: 'reopen' }, { id: 'submit', status: 'PENDING', dependsOn: 'edit' }, { id: 'unrelated', status: 'PENDING' }];

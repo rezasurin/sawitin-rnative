@@ -198,7 +198,8 @@ export default function CheckerDetailScreen() {
           </View>
         ))}
 
-        <OperationalActions module="bkmChecker" document={data} />
+        {/* A trip is approved by the daily close (phase 5); per-document approve answers 409. */}
+        <OperationalActions module="bkmChecker" document={data} exclude={trip ? ['approve'] : []} />
         {!trip && <OperationalDraftEditor module="bkmChecker" document={data} />}
         <OperationalHistory module="bkmChecker" id={id} />
       </ScrollView>
