@@ -21,11 +21,13 @@ import { uploadApi } from '@/services/upload.service';
 import { observasiApi } from '@/services/observasi.service';
 import type { CreateObservasiPayload, JenisObservasi, Observasi, TingkatObservasi } from '@/types/observasi';
 import { estateDate } from '@/utils/estateDate';
+import { parseSampleCount, sampleBjr, SENSUS_BJR_UNIT, sensusBjrError } from '@/utils/observasi';
 
 const TYPES: { value: JenisObservasi; label: string; measure: string; unit: string }[] = [
   { value: 'HAMA', label: 'Hama', measure: 'Pokok terdampak', unit: 'pokok' },
   { value: 'PENYAKIT', label: 'Penyakit', measure: 'Pokok terdampak', unit: 'pokok' },
   { value: 'SENSUS_POKOK', label: 'Sensus pokok', measure: 'Jumlah pokok', unit: 'pokok' },
+  { value: 'SENSUS_BJR', label: 'Sensus BJR', measure: 'Total berat sampel (kg)', unit: SENSUS_BJR_UNIT },
   { value: 'CURAH_HUJAN', label: 'Curah hujan', measure: 'Curah hujan', unit: 'mm' },
   { value: 'INFRASTRUKTUR', label: 'Infrastruktur', measure: 'Panjang / volume', unit: '' },
   { value: 'LAINNYA', label: 'Lainnya', measure: 'Nilai', unit: '' },
@@ -93,6 +95,7 @@ export function ObservationForm() {
   const [tphId, setTphId] = useState('');
   const [date, setDate] = useState(estateDate());
   const [value, setValue] = useState('');
+  const [sampleCount, setSampleCount] = useState('');
   const [unit, setUnit] = useState('mm');
   const [severity, setSeverity] = useState<TingkatObservasi | ''>('');
   const [observer, setObserver] = useState(userName);
@@ -113,6 +116,7 @@ export function ObservationForm() {
     setKind(row.jenis); setGroupId(row.kelompok_lahan_id); setBlockId(row.blok_id ?? '');
     setLandId(row.lahan_id ?? ''); setTphId(row.tph_id ?? ''); setDate(row.tanggal.slice(0, 10));
     setValue(row.nilai == null ? '' : String(row.nilai)); setUnit(row.satuan ?? '');
+    setSampleCount(row.jumlah_sampel == null ? '' : String(row.jumlah_sampel));
     setSeverity(row.tingkat ?? ''); setObserver(row.nama_pengamat); setNote(row.catatan ?? '');
     setExistingPhoto(row.foto_url ?? '');
   }, [remote.data]);
@@ -122,6 +126,7 @@ export function ObservationForm() {
     setKind(selected.value); setUnit(selected.unit);
     if (!severityKinds.includes(selected.value)) setSeverity('');
     if (selected.value === 'CURAH_HUJAN') { setBlockId(''); setLandId(''); setTphId(''); }
+    if (selected.value !== 'SENSUS_BJR') setSampleCount('');
   };
 
   const save = async () => {
@@ -129,12 +134,16 @@ export function ObservationForm() {
     if (!groupId || !date || !observer.trim() || observer.trim().length > 255 || (numeric !== undefined && (!Number.isFinite(numeric) || numeric < 0)) || note.length > 2000 || unit.length > 50) {
       Alert.alert('Data belum valid', 'Isi kebun, tanggal, dan pengamat; periksa nilai, satuan, serta catatan.'); return;
     }
+    const census = kind === 'SENSUS_BJR';
+    const censusError = census ? sensusBjrError({ blockId, sampleCount, totalKg: value }) : null;
+    if (censusError) { Alert.alert('Data belum valid', censusError); return; }
     const input: CreateObservasiPayload = {
       client_request_id: key.current, jenis: kind, kelompok_lahan_id: groupId,
       tanggal: new Date(date).toISOString(), nama_pengamat: observer.trim(),
       ...(blockId ? { blok_id: blockId } : {}), ...(landId ? { lahan_id: landId } : {}),
       ...(tphId ? { tph_id: tphId } : {}), ...(numeric !== undefined ? { nilai: numeric } : {}),
       ...(unit.trim() ? { satuan: unit.trim() } : {}),
+      ...(census ? { jumlah_sampel: parseSampleCount(sampleCount) } : {}),
       ...(severityKinds.includes(kind) && severity ? { tingkat: severity } : {}),
       ...(note.trim() ? { catatan: note.trim() } : {}),
       ...(gps.location ? { geometry: { type: 'Point', coordinates: [gps.location.longitude, gps.location.latitude] },
@@ -160,7 +169,7 @@ export function ObservationForm() {
         const { client_request_id: _replayKey, ...update } = input;
         await observasiApi.update(id!, { ...update,
           blok_id: blockId || null, lahan_id: landId || null, tph_id: tphId || null,
-          nilai: numeric ?? null, satuan: unit.trim() || null, catatan: note.trim() || null,
+          nilai: numeric ?? null, satuan: unit.trim() || null, jumlah_sampel: census ? parseSampleCount(sampleCount) : null, catatan: note.trim() || null,
           foto_url: input.foto_url ?? null,
           foto_hash: input.foto_url ? input.foto_hash : null,
           foto_bytes: input.foto_url ? input.foto_bytes : null,
@@ -180,13 +189,16 @@ export function ObservationForm() {
       <FormSelect label="Jenis" value={kind} options={TYPES} onSelect={changeKind} />
       <FormSelect label="Kebun" value={groupId} options={(groups.data?.data ?? []).map((row) => ({ label: row.nama, value: row.id }))} onSelect={(v) => { setGroupId(v); setBlockId(''); setLandId(''); setTphId(''); }} searchable />
       {kind !== 'CURAH_HUJAN' && <>
-        <FormSelect label="Blok (opsional)" value={blockId} options={[{ label: 'Tanpa blok', value: '' }, ...(blocks.data?.data ?? []).filter((row) => row.kelompok_lahan_id === groupId).map((row) => ({ label: row.nama, value: row.id }))]} onSelect={(v) => { setBlockId(v); setLandId(''); setTphId(''); }} searchable />
+        <FormSelect label={kind === 'SENSUS_BJR' ? 'Blok' : 'Blok (opsional)'} value={blockId} options={[{ label: 'Tanpa blok', value: '' }, ...(blocks.data?.data ?? []).filter((row) => row.kelompok_lahan_id === groupId).map((row) => ({ label: row.nama, value: row.id }))]} onSelect={(v) => { setBlockId(v); setLandId(''); setTphId(''); }} searchable />
         <FormSelect label="Lahan (opsional)" value={landId} options={[{ label: 'Tanpa lahan', value: '' }, ...(lands.data?.data ?? []).filter((row) => row.blok_id === blockId).map((row) => ({ label: row.nama, value: row.id }))]} onSelect={(v) => { setLandId(v); setTphId(''); }} searchable />
         <FormSelect label="TPH (opsional)" value={tphId} options={[{ label: 'Tanpa TPH', value: '' }, ...(tphs.data?.data ?? []).filter((row) => row.lahan_id === landId).map((row) => ({ label: row.nama, value: row.id }))]} onSelect={setTphId} searchable />
       </>}
       <FormDateField label="Tanggal" value={date} onChange={setDate} />
       <FormField label={type.measure} value={value} onChangeText={setValue} keyboardType="decimal-pad" />
-      <FormField label="Satuan" value={unit} onChangeText={setUnit} />
+      {kind === 'SENSUS_BJR' && <FormField label="Jumlah sampel (janjang ditimbang)" value={sampleCount} onChangeText={setSampleCount} keyboardType="number-pad" />}
+      {kind === 'SENSUS_BJR' && parseSampleCount(sampleCount) !== undefined && Number(value) > 0 &&
+        <Text style={styles.muted}>BJR sampel: {sampleBjr(Number(value), parseSampleCount(sampleCount)!)} kg per janjang</Text>}
+      <FormField label="Satuan" value={kind === 'SENSUS_BJR' ? SENSUS_BJR_UNIT : unit} onChangeText={setUnit} editable={kind !== 'SENSUS_BJR'} />
       {severityKinds.includes(kind) && <View style={styles.row}>{(['RINGAN', 'SEDANG', 'BERAT'] as const).map((v) =>
         <Pressable key={v} onPress={() => setSeverity(severity === v ? '' : v)} style={[styles.chip, severity === v && styles.selected]}><Text>{v}</Text></Pressable>)}</View>}
       <FormField label="Nama pengamat" value={observer} onChangeText={setObserver} />
@@ -229,6 +241,7 @@ export function ObservationDetail() {
       {!!row.lahan_id && <Text>Lahan: {row.lahan?.nama ?? row.lahan_id}</Text>}
       <Text>Pengamat: {row.nama_pengamat}</Text>
       {row.nilai != null && <Text>Nilai: {row.nilai} {row.satuan ?? ''}</Text>}
+      {row.jumlah_sampel != null && <Text>Jumlah sampel: {row.jumlah_sampel} janjang</Text>}
       {!!row.tingkat && <Text>Tingkat: {row.tingkat}</Text>}
       {!!row.catatan && <Text>{row.catatan}</Text>}
       {!!row.foto_url && <Image source={{ uri: row.foto_url }} style={{ width: 180, height: 180 }} />}

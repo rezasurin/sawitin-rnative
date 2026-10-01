@@ -30,6 +30,8 @@ export interface CreateBkmPanenPayload {
   grup_pekerja_id?: string;
   tanggal_laporan: string;
   keterangan?: string;
+  /** Required before queueing when the land is TBM on `tanggal_laporan`. */
+  alasan_tbm?: string;
 }
 
 export type UpdateBkmPanenPayload = Partial<CreateBkmPanenPayload> & {

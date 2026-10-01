@@ -166,6 +166,7 @@ export function useSubmitBkmPanen() {
         tanggal_laporan: header.tanggal_laporan,
         keterangan: header.keterangan || undefined,
         grup_pekerja_id: header.grup_pekerja_id || undefined,
+        alasan_tbm: header.alasan_tbm?.trim() || undefined,
       };
 
       const detailPayloads = details.map((d) => ({
