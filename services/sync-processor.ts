@@ -18,10 +18,10 @@ import type { CreateBkmRawatDetailPayload, QueuedBkmRawatPayload, UpdateBkmRawat
 import type { SyncQueueItem } from '@/types/sync';
 import type { CreateObservasiPayload } from '@/types/observasi';
 import type { CreatePemakaianKendaraanPayload } from '@/types/vehicle-usage';
-import type { CreateTiketPksPayload } from '@/types/tiket-pks';
+import type { CreateTiketPksBySpbPayload, CreateTiketPksPayload } from '@/types/tiket-pks';
 import type { SubmitStagingPayload } from '@/types/staging';
 import { isSupportedSyncAction } from '@/utils/sync-support';
-import { isTripHeader, tripConflictOf, tripConflictText } from '@/utils/trip';
+import { isTripHeader, spbConflictOf, spbConflictText, tripConflictOf, tripConflictText } from '@/utils/trip';
 
 interface BkmPanenQueuePayload {
   header: CreateBkmPanenPayload;
@@ -106,6 +106,22 @@ export async function uploadAndCheckpoint<
   return checkpointed;
 }
 
+/**
+ * A taken ticket number, a second ticket or weighing for one SPB, or a retired
+ * V3 QR is for the Krani to resolve, not to retry. Keep why on the payload so
+ * the queue screen can offer the fix, then fail the item as a conflict.
+ */
+async function failOrKeepSpbConflict(
+  itemId: string, payload: Record<string, unknown>, error: unknown, dependencies: ProcessorDependencies,
+): Promise<never> {
+  const conflict = spbConflictOf(error);
+  if (!conflict) throw error;
+  await dependencies.updateQueuePayload(itemId, { ...payload, conflict });
+  throw Object.assign(new Error(spbConflictText(conflict, payload.nomor_spb)), {
+    status: (error as { status?: number }).status ?? 409, code: conflict.code,
+  });
+}
+
 export async function processItem(
   item: SyncQueueItem,
   dependencies: ProcessorDependencies = defaultDependencies,
@@ -122,13 +138,29 @@ export async function processItem(
   const { panenApi, checkerApi, rawatApi } = dependencies;
 
   if (item.module === 'tiket_pks' && item.action === 'CREATE') {
-    const [draft] = await uploadAndCheckpoint(item.id, [item.payload as unknown as CreateTiketPksPayload],
+    const [draft] = await uploadAndCheckpoint(item.id, [item.payload as unknown as CreateTiketPksPayload | CreateTiketPksBySpbPayload],
       (rows) => rows[0] as unknown as Record<string, unknown>, dependencies, 'tiket-pks');
-    const { local_photo_uri: localPhoto, foto_hash: _photoHash, foto_bytes: _photoBytes, ...data } =
-      draft as CreateTiketPksPayload & { local_photo_uri?: string; foto_hash?: string; foto_bytes?: number };
+    const { local_photo_uri: localPhoto, foto_hash: _photoHash, foto_bytes: _photoBytes, conflict: _conflict, ...sent } =
+      draft as (CreateTiketPksPayload | CreateTiketPksBySpbPayload) & { local_photo_uri?: string; foto_hash?: string; foto_bytes?: number; conflict?: unknown };
     const cleanup = async () => {
       if (localPhoto?.startsWith('file://')) await FileSystem.deleteAsync(localPhoto, { idempotent: true }).catch(() => undefined);
     };
+    if ('nomor_spb' in sent) {
+      // By SPB number: a `202` means the server holds the ticket until its trip is dispatched. That is success.
+      try {
+        await dependencies.ticketApi.createBySpb(sent);
+        await cleanup();
+        return;
+      } catch (error) {
+        // A lost response replays as a 409 on the ticket this item already filed.
+        if ((error as { status?: number }).status === 409) {
+          const filed = await dependencies.ticketApi.byNumber(sent.nomor_tiket).catch(() => null);
+          if (sameFiledTicket(filed, sent)) { await cleanup(); return filed; }
+        }
+        return failOrKeepSpbConflict(item.id, draft as unknown as Record<string, unknown>, error, dependencies);
+      }
+    }
+    const data = sent;
     const existing = await dependencies.ticketApi.byTrip(data.krani_timbang_id);
     if (existing) {
       if (!sameFiledTicket(existing, data)) {
@@ -301,8 +333,10 @@ export async function processItem(
   }
 
   if (item.module === 'krani_timbang' && item.action === 'CREATE') {
-    const data = item.payload as unknown as SubmitStagingPayload;
+    const { conflict: _conflict, ...rest } = item.payload as Record<string, unknown>;
+    const data = rest as unknown as SubmitStagingPayload;
     try {
+      // A `202` (menunggu SPB) is success: the server stores it and matches the trip later. Do not resend.
       await dependencies.staging.submitPayload(data);
       return;
     } catch (error) {
@@ -310,10 +344,11 @@ export async function processItem(
       // tare is this item's own earlier POST whose response was lost; anything else
       // is a different weighing of the same SPB and stays a conflict for review.
       const existingId = ((error as { data?: { existing_id?: unknown } }).data)?.existing_id;
-      if ((error as { status?: number }).status !== 409 || typeof existingId !== 'string') throw error;
-      const filed = await dependencies.staging.getPendingLogById(existingId).catch(() => { throw error; });
-      if (Number(filed.timbang_isi) === data.timbang_isi && Number(filed.timbang_kosong) === data.timbang_kosong) return;
-      throw error;
+      if ((error as { status?: number }).status === 409 && typeof existingId === 'string') {
+        const filed = await dependencies.staging.getPendingLogById(existingId).catch(() => null);
+        if (filed && Number(filed.timbang_isi) === data.timbang_isi && Number(filed.timbang_kosong) === data.timbang_kosong) return;
+      }
+      return failOrKeepSpbConflict(item.id, rest, error, dependencies);
     }
   }
 

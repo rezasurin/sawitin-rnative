@@ -14,8 +14,8 @@ export interface TiketPks extends TimestampFields {
   keterangan: string | null;
 }
 
-export interface CreateTiketPksPayload {
-  krani_timbang_id: string;
+/** The ticket's own fields; the trip is named by `krani_timbang_id` or, in the pilot, by `nomor_spb`. */
+export interface TiketPksFields {
   nomor_tiket: string;
   tanggal_tiket: string;
   bruto_pabrik?: number | null;
@@ -26,5 +26,8 @@ export interface CreateTiketPksPayload {
   keterangan?: string | null;
 }
 
-export type UpdateTiketPksPayload = Partial<Omit<CreateTiketPksPayload, 'krani_timbang_id'>>;
+export interface CreateTiketPksPayload extends TiketPksFields { krani_timbang_id: string }
+export interface CreateTiketPksBySpbPayload extends TiketPksFields { nomor_spb: string }
+
+export type UpdateTiketPksPayload = Partial<TiketPksFields>;
 export type TiketPksList = PaginatedResponse<TiketPks>;

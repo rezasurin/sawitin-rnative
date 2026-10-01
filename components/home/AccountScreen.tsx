@@ -22,6 +22,10 @@ function describeError(errorClass: SyncErrorClass | null, item?: Pick<SyncQueueI
   if (errorClass === 'CONFLICT' && item?.module === 'bkm_checker' && item.payload?.conflict) {
     return 'SPB ditolak server dan perlu diperbaiki. Buka Periksa untuk memperbaikinya, lalu kirim ulang.';
   }
+  // A ticket or weighing stopped on a taken ticket number, a second ticket or weighing for the SPB, or a retired V3 QR.
+  if ((item?.module === 'krani_timbang' || item?.module === 'tiket_pks') && item.payload?.conflict) {
+    return 'Ditolak server dan perlu diperbaiki. Buka Periksa untuk memperbaikinya, lalu kirim ulang.';
+  }
   // A weighing is refused on the SPB itself, not because someone edited it, and
   // re-sending the same numbers gets the same answer.
   if (errorClass === 'CONFLICT' && item?.module === 'krani_timbang' && item.action === 'CREATE') {
@@ -50,6 +54,7 @@ const MODULE_LABELS: Record<string, string> = {
   pemakaian_kendaraan: 'Pemakaian Kendaraan',
   bkm_checker_detail: 'Detail BKM Checker',
   krani_timbang: 'Timbangan',
+  tiket_pks: 'Tiket PKS',
   krani_timbang_detail: 'Detail timbangan',
 };
 

@@ -131,3 +131,71 @@ test('offline weighing replays once: a lost response resolves, a different weigh
   await processItem(item, { staging: { submitPayload: async (data) => { posted = data; } } });
   assert.equal(posted.qr_payload, payload.qr_payload);
 });
+
+// ---- Phase 3: mill ticket by SPB number -------------------------------------
+const spbTicket = () => ({ nomor_spb: '0012345', nomor_tiket: 'T-889', tanggal_tiket: '2026-09-30T03:00:00.000Z',
+  netto_pabrik: 3000, bruto_pabrik: 5000, tara_pabrik: 2000, foto_url: 'file:///docs/t.jpg', local_photo_uri: 'file:///docs/t.jpg' });
+const spbDeps = (over) => ({
+  upload: { uploadImage: async () => ({ url: 'https://example.test/t.jpg', hash: 'h', bytes: 1 }) },
+  updateQueuePayload: async () => {}, ...over,
+});
+const conflictError = (status, code) => Object.assign(new Error(code), { status, data: { code } });
+
+test('SPB-number ticket posts by nomor_spb, uploads its photo, and treats 202 menunggu SPB as success', async () => {
+  const processItem = processor();
+  let posted; let byTripCalls = 0;
+  const waiting = { menunggu_spb: true, reconciled: false, nomor_spb: '0012345', staging_id: 's1' };
+  const result = await processItem({ id: 'q-spb', module: 'tiket_pks', action: 'CREATE', payload: spbTicket() }, spbDeps({
+    ticketApi: { byTrip: async () => { byTripCalls++; return null; }, createBySpb: async (data) => { posted = data; return waiting; } },
+  }));
+  assert.equal(result, undefined);
+  assert.equal(posted.nomor_spb, '0012345');
+  assert.equal(posted.krani_timbang_id, undefined);
+  assert.equal(posted.foto_url, 'https://example.test/t.jpg');
+  assert.equal(posted.local_photo_uri, undefined);
+  assert.equal(byTripCalls, 0, 'no weighing id to look up');
+});
+
+test('SPB-number ticket conflicts are kept on the payload for the Krani, never retried or dropped', async () => {
+  const processItem = processor();
+  for (const code of ['SPB_TICKET_EXISTS', 'TICKET_NUMBER_TAKEN']) {
+    let saved;
+    await assert.rejects(processItem({ id: 'q-c', module: 'tiket_pks', action: 'CREATE', payload: spbTicket() }, spbDeps({
+      updateQueuePayload: async (_id, value) => { saved = value; },
+      ticketApi: { createBySpb: async () => { throw conflictError(409, code); }, byNumber: async () => null },
+    })), (error) => error.status === 409 && error.code === code);
+    assert.equal(saved.conflict.code, code);
+    assert.equal(saved.foto_url, 'https://example.test/t.jpg', 'the uploaded photo survives the conflict');
+  }
+});
+
+test('a lost response on an SPB-number ticket resolves to the ticket already filed, a different one stays a conflict', async () => {
+  const processItem = processor();
+  const draft = { ...spbTicket(), foto_url: 'https://example.test/t.jpg' };
+  const filed = { id: 'tk', krani_timbang_id: 'w1', nomor_tiket: 'T-889', tanggal_tiket: draft.tanggal_tiket, netto_pabrik: '3000',
+    bruto_pabrik: '5000', tara_pabrik: '2000', foto_url: 'https://example.test/t.jpg' };
+  const deps = (server) => spbDeps({ ticketApi: { createBySpb: async () => { throw conflictError(409, 'SPB_TICKET_EXISTS'); }, byNumber: async () => server } });
+  await processItem({ id: 'q-r', module: 'tiket_pks', action: 'CREATE', payload: draft }, deps(filed));
+  await assert.rejects(processItem({ id: 'q-r', module: 'tiket_pks', action: 'CREATE', payload: draft },
+    deps({ ...filed, netto_pabrik: '2900' })), (error) => error.code === 'SPB_TICKET_EXISTS');
+});
+
+test('resolving a ticket conflict needs a new ticket number or a new SPB number, and clears the conflict', () => {
+  const taken = { nomor_spb: '1', nomor_tiket: 'T-1', conflict: { code: 'TICKET_NUMBER_TAKEN' } };
+  assert.equal(tripRules.resolveSpbConflict(taken, {}), null);
+  assert.equal(tripRules.resolveSpbConflict(taken, { nomor_tiket: ' T-1 ' }), null);
+  const fixed = tripRules.resolveSpbConflict(taken, { nomor_tiket: ' T-2 ' });
+  assert.equal(fixed.nomor_tiket, 'T-2');
+  assert.equal(fixed.conflict, undefined);
+  const exists = { nomor_spb: '1', nomor_tiket: 'T-1', conflict: { code: 'SPB_TICKET_EXISTS' } };
+  assert.equal(tripRules.resolveSpbConflict(exists, { nomor_tiket: 'T-9' }), null, 'a new ticket number does not fix a second ticket for the SPB');
+  assert.equal(tripRules.resolveSpbConflict(exists, { nomor_spb: '2' }).nomor_spb, '2');
+});
+
+test('the ticket time is read on the estate (WIB) clock whatever the device timezone', () => {
+  assert.equal(ticketRules.parseEstateStamp('2026-09-30 10:00').toISOString(), '2026-09-30T03:00:00.000Z');
+  assert.equal(ticketRules.parseEstateStamp('2026-09-30T10:00').toISOString(), '2026-09-30T03:00:00.000Z');
+  assert.equal(ticketRules.parseEstateStamp('30/09/2026 10:00'), null);
+  assert.equal(ticketRules.parseEstateStamp('2026-13-40 10:00'), null);
+  assert.equal(ticketRules.estateStamp(new Date('2026-09-30T20:30:00.000Z')), '2026-10-01 03:30');
+});
