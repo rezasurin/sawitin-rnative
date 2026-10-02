@@ -6,6 +6,7 @@ import { useSubmitBkmPanen } from '@/hooks/useBkmPanen';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { blokApi, lahanApi, grupPekerjaApi, pekerjaApi, tphApi } from '@/services';
 import { memberLabel } from '@/utils/plantation';
+import { tbmReasonMissing } from '@/utils/maturity';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
@@ -79,12 +80,25 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
   const handleSubmit = async () => {
     if (!confirmed || (isEditing ? !policy.edit : !policy.create)) return;
 
+    // The server answers 400 for this, so a queued item would only dead-letter:
+    // stop it here, online or not.
+    if (tbmReasonMissing({
+      lahan: lahanData?.data?.find((l) => l.id === header.lahan_id),
+      blok: blokData?.data?.find((b) => b.id === header.blok_id),
+      day: header.tanggal_laporan,
+      alasan: header.alasan_tbm,
+    })) {
+      Alert.alert('Alasan panen TBM wajib', 'Lahan ini TBM pada tanggal laporan. Kembali ke langkah 1 dan isi alasan panen.');
+      return;
+    }
+
     const headerPayload = {
       blok_id: header.blok_id!,
       lahan_id: header.lahan_id || undefined,
       tanggal_laporan: header.tanggal_laporan,
       keterangan: header.keterangan || undefined,
       grup_pekerja_id: header.grup_pekerja_id || undefined,
+      alasan_tbm: header.alasan_tbm?.trim() || undefined,
     };
 
     const detailPayloads = details.map((d) => ({
@@ -201,6 +215,9 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
           ) : null}
           {header.keterangan ? (
             <Row label="Keterangan" value={header.keterangan} />
+          ) : null}
+          {header.alasan_tbm ? (
+            <Row label="Alasan TBM" value={header.alasan_tbm} />
           ) : null}
         </View>
 

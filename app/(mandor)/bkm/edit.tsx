@@ -25,6 +25,7 @@ export default function EditBkmScreen() {
         tanggal_laporan: panen.tanggal_laporan,
         keterangan: panen.keterangan ?? undefined,
         grup_pekerja_id: panen.grup_pekerja_id ?? undefined,
+        alasan_tbm: panen.alasan_tbm ?? undefined,
       };
       const details = (panen.details ?? []).map((d) => ({
         bkm_panen_id: d.bkm_panen_id,

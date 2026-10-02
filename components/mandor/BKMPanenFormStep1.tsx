@@ -1,5 +1,6 @@
 import { Button } from "@/components/core/Button";
 import { agronomyLabel, operationalLands } from '@/utils/plantation';
+import { tbmReasonMissing, standMaturityOn } from '@/utils/maturity';
 import { FormDateField, FormField, FormSelect } from "@/components/form";
 import { blokApi, lahanApi, grupPekerjaApi } from "@/services";
 import { useBkmPanenStore } from "@/stores/useBkmPanenStore";
@@ -47,13 +48,16 @@ export function BKMPanenFormStep1({ onNext }: Props) {
     value: g.id,
   }));
 
-  // Warn, not block: a first harvest on a block turning productive is legitimate,
-  // but most harvest recorded on immature (TBM) land is a wrong block or lahan.
+  // Harvest on immature (TBM) land is allowed, but only with a stated reason: most
+  // of it is a wrong block or lahan. Judged on the Panen date with the TM date
+  // when there is one, the same rule the server applies when the queue drains.
   const selectedLahan = lahanData?.data?.find((l) => l.id === header.lahan_id);
   const selectedBlok = blokData?.data?.find((b) => b.id === header.blok_id);
-  const immature = (selectedLahan ?? selectedBlok)?.maturitas === 'TBM';
+  const day = header.tanggal_laporan ?? '';
+  const immature = standMaturityOn(selectedLahan, selectedBlok, day) === 'TBM';
+  const reasonMissing = tbmReasonMissing({ lahan: selectedLahan, blok: selectedBlok, day, alasan: header.alasan_tbm });
 
-  const isValid = !!header.blok_id && !!header.tanggal_laporan
+  const isValid = !!header.blok_id && !!header.tanggal_laporan && !reasonMissing
     && (!header.lahan_id || lahanOptions.some((l) => l.value === header.lahan_id));
 
   return (
@@ -88,7 +92,7 @@ export function BKMPanenFormStep1({ onNext }: Props) {
       />
       {immature && (
         <Text style={styles.warning} accessibilityRole="alert">
-          {selectedLahan ? 'Lahan' : 'Blok'} ini tercatat TBM (belum menghasilkan). Pastikan blok dan lahan sudah benar, atau catat alasan panen di Keterangan.
+          Pada tanggal ini {selectedLahan?.tanggal_tm || selectedLahan?.tahun_tanam != null ? 'lahan' : 'blok'} tercatat TBM (belum menghasilkan). Pastikan blok dan lahan sudah benar; jika memang dipanen, isi alasannya di bawah.
         </Text>
       )}
 
@@ -97,6 +101,18 @@ export function BKMPanenFormStep1({ onNext }: Props) {
         value={header.tanggal_laporan ?? ""}
         onChange={(val) => setHeader({ tanggal_laporan: val })}
       />
+
+      {immature && (
+        <FormField
+          label="Alasan Panen di Lahan TBM"
+          value={header.alasan_tbm ?? ""}
+          onChangeText={(val) => setHeader({ alasan_tbm: val })}
+          placeholder="Wajib diisi untuk lahan TBM"
+          multiline
+          numberOfLines={2}
+          maxLength={500}
+        />
+      )}
 
       <FormField
         label="Keterangan (Opsional)"

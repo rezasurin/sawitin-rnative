@@ -16,6 +16,7 @@ function load(file, mocks = {}) {
 }
 
 const plantation = load('utils/plantation.ts');
+const maturity = load('utils/maturity.ts');
 const estateDate = load('utils/estateDate.ts');
 const lands = [
   { id: 'valid', nama: 'Parcel', blok_id: 'b', user_pic_id: null, luas_lahan: null, nama_dokumen: null, maturitas: null, umur_tanam: null },
@@ -96,6 +97,7 @@ test('Panen picker excludes block-less sources and allow sparse parcels', () => 
     '@/components/form': controls,
     '@/components/core/Button': { Button: 'Button' },
     '@/utils/plantation': plantation,
+    '@/utils/maturity': maturity,
     '@/services': {},
     './TphLocation': { TphLocation: 'TphLocation' },
     '@/services/bkm-panen.service': {},
