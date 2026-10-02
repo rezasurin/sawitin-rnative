@@ -70,7 +70,12 @@ export function QueueInspection({ item, onClose }: { item: SyncQueueItem; onClos
       <Button title="Tutup pemeriksaan" onPress={onClose} />
       <Text style={{ fontSize: 20, fontWeight: '700' }}>Periksa perubahan</Text>
       <Text>Perubahan di perangkat tetap tersimpan. Jika status server bukan DRAFT, buka kembali dokumen sebelum mencoba perubahan bisnis.</Text>
-      {item.module === 'bkm_checker' && conflict && <>
+      {conflict?.code === 'DAY_CLOSED' && <>
+        <Text>{tripConflictText(conflict)}</Text>
+        <Text>Setelah Asisten membuka kembali hari itu, kirim ulang. Data di perangkat tidak berubah.</Text>
+        <Button title="Kirim ulang" onPress={() => void resolveTrip()} />
+      </>}
+      {item.module === 'bkm_checker' && conflict && conflict.code !== 'DAY_CLOSED' && <>
         <Text>{tripConflictText(conflict, (item.payload?.header as { nomor_spb?: string } | undefined)?.nomor_spb)}</Text>
         {conflict.code === 'SPB_NUMBER_TAKEN'
           ? <TextInput value={newSpb} onChangeText={setNewSpb} placeholder="Nomor SPB yang benar" autoCapitalize="characters"

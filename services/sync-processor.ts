@@ -21,7 +21,7 @@ import type { CreatePemakaianKendaraanPayload } from '@/types/vehicle-usage';
 import type { CreateTiketPksBySpbPayload, CreateTiketPksPayload } from '@/types/tiket-pks';
 import type { SubmitStagingPayload } from '@/types/staging';
 import { isSupportedSyncAction } from '@/utils/sync-support';
-import { isTripHeader, spbConflictOf, spbConflictText, tripConflictOf, tripConflictText } from '@/utils/trip';
+import { DAY_CLOSED_TEXT, isTripHeader, spbConflictOf, spbConflictText, tripConflictOf, tripConflictText } from '@/utils/trip';
 
 interface BkmPanenQueuePayload {
   header: CreateBkmPanenPayload;
@@ -125,9 +125,28 @@ async function failOrKeepSpbConflict(
   });
 }
 
+/**
+ * A late Panen or trip for a farm-day the Asisten has closed answers
+ * `409 DAY_CLOSED`. It is never retried blind and never dropped: keep why on the
+ * payload so the queue screen can offer "kirim ulang" once the day is reopened.
+ */
 export async function processItem(
   item: SyncQueueItem,
   dependencies: ProcessorDependencies = defaultDependencies,
+) {
+  try {
+    return await runItem(item, dependencies);
+  } catch (error) {
+    const conflict = tripConflictOf(error);
+    if (conflict?.code !== 'DAY_CLOSED' || !item.payload) throw error;
+    await dependencies.updateQueuePayload(item.id, { ...item.payload, conflict });
+    throw Object.assign(new Error(DAY_CLOSED_TEXT), { status: 409, code: conflict.code });
+  }
+}
+
+async function runItem(
+  item: SyncQueueItem,
+  dependencies: ProcessorDependencies,
 ) {
   // Old unsupported rows can still exist on a device. Mark them for recovery
   // immediately instead of retrying an operation that has no API route.
@@ -286,8 +305,9 @@ export async function processItem(
       } catch (error) {
         // A taken SPB number or a collected restan is for the Mandor to resolve,
         // not to retry: keep why, so the queue screen can offer the fix.
-        const conflict = isTripHeader(header) ? tripConflictOf(error) : null;
-        if (!conflict) throw error;
+        const conflict = tripConflictOf(error);
+        // Only a day-closed answer applies to an old-shape document too.
+        if (!conflict || (conflict.code !== 'DAY_CLOSED' && !isTripHeader(header))) throw error;
         // The Panen is still on this phone's queue (or being sent): keep the trip and retry it later.
         // The server resolves the client id itself once the Panen has synced.
         if (conflict.code === 'PANEN_BELUM_SINKRON' && conflict.bkm_panen_client_request_id) {
