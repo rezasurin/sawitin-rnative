@@ -6,7 +6,8 @@ import { usePanenOfDay } from '@/hooks/useBkmChecker';
 import { useOpenRestan } from '@/hooks/useOpenRestan';
 import { blokApi, lahanApi, tphApi } from '@/services';
 import { useBkmCheckerStore } from '@/stores/useBkmCheckerStore';
-import { restanAgeDays } from '@/utils/dispatch';
+import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
+import { queuedPanenAt, restanAgeDays } from '@/utils/dispatch';
 import { estateDate } from '@/utils/estateDate';
 import { isWholeKg } from '@/utils/field-summary';
 import { agronomyLabel, operationalTphs } from '@/utils/plantation';
@@ -49,7 +50,7 @@ type StoredLine = ReturnType<typeof useBkmCheckerStore.getState>['details'][numb
 function LineCard({ line, onUpdate, onDelete }: { line: StoredLine; onUpdate: (updates: Partial<TripLineDraft>) => void; onDelete: () => void }) {
   const source = line.tipe_pengiriman === 'TITIP'
     ? `Titip · restan ${line.restan_max ?? 0} janjang`
-    : 'Langsung · Panen hari ini';
+    : line.bkm_panen_client_request_id ? 'Langsung · Panen belum terkirim' : 'Langsung · Panen hari ini';
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -122,9 +123,12 @@ export function BKMCheckerFormStep2({ onNext, onBack }: Props) {
   const { data: lahanData } = useQuery({ queryKey: ['lahan', 'all'], queryFn: () => lahanApi.getAll({ limit: 200 }) });
   const panenOfDay = usePanenOfDay(header.tanggal);
   const { loaded: restanLoaded, restan } = useOpenRestan(details);
+  const queue = useSyncQueueStore((state) => state.queue);
 
   const tphs = operationalTphs(tphData?.data ?? [], lahanData?.data ?? [], blokId);
   const panenAtTph = (panenOfDay.data ?? []).filter((panen) => panen.details?.some((row) => row.tph_id === tphId));
+  // Panen recorded on this phone and not synced yet: it has no server id, so the line names its offline id.
+  const queuedAtTph = queuedPanenAt(queue, tphId, header.tanggal, panenOfDay.data);
   const restanAtTph = restan.filter((row) => row.tph_id === tphId);
   const today = estateDate();
 
@@ -132,7 +136,10 @@ export function BKMCheckerFormStep2({ onNext, onBack }: Props) {
     label: `${panen.blok?.nama ?? panen.blok_id ?? 'Panen'} · ${panen.details!.filter((row) => row.tph_id === tphId)
       .reduce((sum, row) => sum + row.jumlah_janjang, 0)} janjang · ${panen.status}`,
     value: panen.id,
-  }));
+  })).concat(queuedAtTph.map((panen) => ({
+    label: `${blokData?.data.find((b) => b.id === panen.blok_id)?.nama ?? 'Panen'} · ${panen.janjang} janjang · belum terkirim`,
+    value: panen.client_request_id,
+  })));
   const restanOptions = restanAtTph.map((row) => ({
     label: `Panen ${estateDate(new Date(row.tanggal))} · ${restanAgeDays(row.tanggal, today)} hari · ${row.jumlah_janjang} janjang`,
     value: row.id,
@@ -146,8 +153,12 @@ export function BKMCheckerFormStep2({ onNext, onBack }: Props) {
     const base = { client_detail_id: newLineKey(), tph_id: tph.id, tph_nama: tph.nama, ...emptyGrading };
     if (tipe === 'LANGSUNG') {
       const panen = panenAtTph.find((row) => row.id === panenId);
-      if (!panen) return;
-      addDetail({ ...base, tipe_pengiriman: 'LANGSUNG', bkm_panen_id: panen.id, panen_day: estateDate(new Date(panen.tanggal_laporan)) });
+      if (panen) {
+        addDetail({ ...base, tipe_pengiriman: 'LANGSUNG', bkm_panen_id: panen.id, panen_day: estateDate(new Date(panen.tanggal_laporan)) });
+      } else if (queuedAtTph.some((row) => row.client_request_id === panenId)) {
+        // The dispatch day was already matched when the queued Panen was listed.
+        addDetail({ ...base, tipe_pengiriman: 'LANGSUNG', bkm_panen_client_request_id: panenId, panen_day: header.tanggal });
+      } else return;
     } else {
       const row = restanAtTph.find((item) => item.id === restanId);
       if (!row) return;
@@ -156,7 +167,7 @@ export function BKMCheckerFormStep2({ onNext, onBack }: Props) {
     }
     setPanenId('');
     setRestanId('');
-  }, [tphs, tphId, tipe, panenAtTph, panenId, restanAtTph, restanId, addDetail]);
+  }, [tphs, tphId, tipe, panenAtTph, queuedAtTph, panenId, restanAtTph, restanId, addDetail, header.tanggal]);
 
   const handleDelete = (tempId: string) =>
     Alert.alert('Hapus Muatan?', 'Muatan TPH ini akan dihapus dari SPB.', [

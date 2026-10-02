@@ -16,6 +16,8 @@ interface SyncQueueStore {
   incrementRetry: (id: string) => Promise<void>;
   retryItem: (id: string, precondition?: string) => Promise<void>;
   discardItem: (id: string) => Promise<void>;
+  /** Read from SQLite, not memory: a pass completes items without touching the in-memory list. */
+  queueStatus: (id: string) => Promise<SyncQueueItem['status'] | null>;
   setProcessing: (processing: boolean) => void;
   clearQueue: () => Promise<void>;
   loadQueue: () => Promise<void>;
@@ -152,6 +154,11 @@ export const useSyncQueueStore = create<SyncQueueStore>((set, get) => ({
       throw new Error('Perubahan lain bergantung pada item ini. Buang perubahan berikutnya terlebih dahulu.');
     }
     await get().removeFromQueue(id);
+  },
+
+  queueStatus: async (id) => {
+    const owner = await currentOwner();
+    return owner ? syncQueueDb.statusOf(owner, id) : null;
   },
 
   setProcessing: (processing) => set({ isProcessing: processing }),

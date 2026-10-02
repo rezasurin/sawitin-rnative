@@ -46,6 +46,26 @@ function loadSyncProcessor(api = {}) {
   return exports;
 }
 
+function loadSyncService({ processItem, queue }) {
+  const exports = {};
+  const mocks = {
+    '@tanstack/react-query': {},
+    '@/services/sync-processor': { processItem },
+    '@/services/database': { syncQueueDb: queue, lookupCacheDb: {} },
+    '@/services/sync-errors': syncErrors,
+    '@/stores/useSyncQueueStore': { currentOwner: async () => ({ userId: 'u', deviceId: 'd' }), MAX_RETRIES: 5 },
+    '@/services/sync.api': { syncApi: { reportTelemetry: async () => {} } },
+    '@/services/master-cache': { openRestanKey: () => 'k', pullMasterDelta: async () => [] },
+    '@/utils/trip': tripExports,
+    './queue-recovery': { latestQueueDocument: async () => ({}), queueModulePaths: {} },
+    './operational.service': { readHistory: async () => [] },
+  };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('services/sync.service.ts', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS },
+  }).outputText, { exports, require: (name) => mocks[name] ?? require(name), console, Error, Date, Promise, setTimeout: (fn) => fn() });
+  return exports;
+}
+
 function dependencies(overrides = {}) {
   return {
     panenApi: {},
@@ -250,13 +270,14 @@ function loadPure(file, mocks = {}) {
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const tripRules = loadPure('utils/trip.ts');
 const dispatchRules = loadPure('utils/dispatch.ts', { '@/utils/estateDate': loadPure('utils/estateDate.ts'), '@/utils/trip': tripRules });
-const { classify } = (() => {
+const syncErrors = (() => {
   const exports = {};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('services/sync-errors.ts', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS },
   }).outputText, { exports, require: (name) => (name === 'axios' ? { isAxiosError: () => false } : require(name)), Date, Math, Error });
   return exports;
 })();
+const { classify } = syncErrors;
 
 const restanRow = (id, tph = 'tph-1', extra = {}) => ({ id, tph_id: tph, tanggal: '2026-09-27T00:30:00.000Z', jumlah_janjang: 40, jumlah_brondol: 6, sudah_dikirim: false, ...extra });
 const tripItem = (id, restanIds) => ({ id, module: 'bkm_checker', action: 'CREATE', status: 'PENDING', payload: {
@@ -362,4 +383,114 @@ test('a 409 on an old-shape document is not turned into a trip conflict', async 
     checkerApi: { create: async () => { throw conflict; } }, updateQueuePayload: async (_id, payload) => saved.push(payload),
   })), (error) => error === conflict);
   assert.equal(saved.length, 0);
+});
+
+// ── Langsung line by a Panen still queued on this phone ──────────────
+
+const panenTrip = (id = 'trip-p') => ({ id, module: 'bkm_checker', action: 'CREATE', status: 'PENDING', retryCount: 0, payload: {
+  header: { nomor_spb: id, tanggal_laporan: '2026-09-30', dispatched_at: '2026-09-30T01:00:00.000Z' },
+  details: [
+    { client_detail_id: `${id}-0`, tipe_pengiriman: 'LANGSUNG', tph_id: 'tph-1', bkm_panen_client_request_id: 'sync_panen', jumlah_janjang: 10, jumlah_brondol: 0 },
+    { client_detail_id: `${id}-1`, tipe_pengiriman: 'LANGSUNG', tph_id: 'tph-2', bkm_panen_id: 'panen-2', jumlah_janjang: 5, jumlah_brondol: 0 },
+  ],
+  submit: true,
+} });
+
+/** A trip server that answers the contract's 409 until the Panen with that client id exists. */
+function panenServer() {
+  const server = tripServer();
+  server.synced = new Set();
+  const addDetail = server.addDetail;
+  server.addDetail = async (body) => {
+    if (body.bkm_panen_client_request_id && !server.synced.has(body.bkm_panen_client_request_id)) {
+      server.calls.push(['addDetail', body.client_detail_id]);
+      throw Object.assign(new Error('belum sinkron'), { status: 409, data: { code: 'PANEN_BELUM_SINKRON', bkm_panen_client_request_id: body.bkm_panen_client_request_id } });
+    }
+    return addDetail(body);
+  };
+  return server;
+}
+
+test('a 409 PANEN_BELUM_SINKRON while the Panen is still queued waits: no conflict is stored, nothing is lost', async () => {
+  for (const state of ['PENDING', 'IN_FLIGHT']) {
+    const { processItem } = loadSyncProcessor();
+    const server = panenServer();
+    const saved = [];
+    const error = await processItem(panenTrip(), dependencies({
+      checkerApi: server, panenState: async (id) => (id === 'sync_panen' ? state : null),
+      updateQueuePayload: async (_id, payload) => saved.push(payload),
+    })).catch((reason) => reason);
+    assert.equal(error.waiting, true, 'the pass defers it instead of classifying a failure');
+    assert.equal(saved.every((payload) => !payload.conflict), true, 'it is not a conflict for the Mandor');
+    assert.equal(saved.at(-1).server_id, 'trip-server', 'the draft is kept for the retry');
+  }
+});
+
+test('a waiting trip is deferred without spending an attempt, so it never reaches DEAD', async () => {
+  const deferred = [];
+  const failed = [];
+  const item = { ...panenTrip(), retryCount: 4 }; // one more counted failure would dead-letter it
+  const { performSync } = loadSyncService({
+    processItem: async () => { throw Object.assign(new Error('Menunggu Panen terkirim'), { waiting: true }); },
+    queue: { claim: async () => (deferred.length ? [] : [item]), defer: async (...args) => deferred.push(args), markFailed: async (...args) => failed.push(args), complete: async () => {}, stats: async () => ({}) },
+  });
+  const result = await performSync({ queryClient: {}, onProgress: () => {} });
+  assert.equal(failed.length, 0, 'no markFailed means no retry_count increment and no DEAD');
+  assert.equal(deferred.length, 1);
+  assert.ok(deferred[0][1] > Date.now(), 'it is retried later, not in a hot loop');
+  assert.deepEqual([result.pushFailed, result.deadLettered, result.conflicts], [0, 0, 0]);
+});
+
+test('a 409 PANEN_BELUM_SINKRON with the Panen DEAD or gone is a conflict the Mandor resolves', async () => {
+  for (const state of ['DEAD', null]) {
+    const { processItem } = loadSyncProcessor();
+    const server = panenServer();
+    const saved = [];
+    const thrown = await processItem(panenTrip(), dependencies({
+      checkerApi: server, panenState: async () => state, updateQueuePayload: async (_id, payload) => saved.push(payload),
+    })).catch((reason) => reason);
+    assert.equal(thrown.status, 409);
+    assert.equal(thrown.code, 'PANEN_BELUM_SINKRON');
+    assert.match(thrown.message, /Panen untuk baris ini belum\/gagal terkirim/);
+    assert.deepEqual(plain(saved.at(-1).conflict), { code: 'PANEN_BELUM_SINKRON', bkm_panen_client_request_id: 'sync_panen' });
+    const failure = classify(thrown, 0, 5);
+    assert.deepEqual([failure.errorClass, failure.dead], ['CONFLICT', true], 'held for a person, like RESTAN_COLLECTED');
+    assert.equal(saved.at(-1).server_id, 'trip-server');
+  }
+});
+
+test('the conflict is fixed by resending or by dropping that line, and the resend succeeds once the Panen synced', async () => {
+  const { processItem } = loadSyncProcessor();
+  const server = panenServer();
+  const saved = [];
+  const item = panenTrip();
+  await processItem(item, dependencies({ checkerApi: server, panenState: async () => 'DEAD', updateQueuePayload: async (_id, payload) => saved.push(payload) })).catch(() => {});
+  const stuck = saved.at(-1);
+
+  // Resend as it is: the payload keeps the client id, only the conflict goes.
+  const resend = plain(tripRules.resolveTripConflict(stuck));
+  assert.equal('conflict' in resend, false);
+  assert.equal(resend.details[0].bkm_panen_client_request_id, 'sync_panen', 'nothing to rewrite: the server resolves the client id');
+  server.synced.add('sync_panen'); // the Panen reached the server meanwhile
+  await processItem({ ...item, payload: resend }, dependencies({ checkerApi: server, panenState: async () => null }));
+  assert.equal(server.lines.length, 2);
+  assert.equal(server.lines[0].bkm_panen_client_request_id, 'sync_panen');
+  assert.equal(plain(server.calls).filter(([name]) => name === 'create').length, 1, 'the draft is reused');
+  assert.deepEqual(plain(server.calls).at(-1), ['submit']);
+
+  // Drop the line instead: the other line stays; dropping the only line leaves nothing to send.
+  const dropped = plain(tripRules.resolveTripConflict(stuck, { drop_panen: true }));
+  assert.deepEqual(dropped.details.map((line) => line.bkm_panen_id), ['panen-2']);
+  assert.equal(tripRules.resolveTripConflict({ ...stuck, details: [stuck.details[0]] }, { drop_panen: true }), null);
+});
+
+test('a trip sent for a Panen already synced needs no rewrite and no wait', async () => {
+  const { processItem } = loadSyncProcessor();
+  const server = panenServer();
+  server.synced.add('sync_panen');
+  let asked = 0;
+  await processItem(panenTrip(), dependencies({ checkerApi: server, panenState: async () => { asked++; return null; } }));
+  assert.equal(asked, 0, 'the queue is only asked when the server answers 409');
+  assert.equal(server.lines[0].bkm_panen_client_request_id, 'sync_panen');
+  assert.equal('bkm_panen_id' in server.lines[0], false);
 });

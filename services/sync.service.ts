@@ -8,6 +8,7 @@ import { openRestanKey, pullMasterDelta } from '@/services/master-cache';
 import type { Restan } from '@/types/restan';
 import { lookupCacheDb } from '@/services/database';
 import type { SyncErrorClass } from '@/types/sync';
+import { isWaitingForPanen } from '@/utils/trip';
 import { latestQueueDocument, queueModulePaths } from './queue-recovery';
 import { readHistory } from './operational.service';
 
@@ -96,6 +97,11 @@ export async function performSync({
         await syncQueueDb.complete(item.id, result?.modified_at);
         pushed++;
       } catch (error) {
+        if (isWaitingForPanen(error)) {
+          // Not a failure: the Panen it names is still queued. Same delay as a first retry, no attempt spent.
+          await syncQueueDb.defer(item.id, backoffUntil(0), (error as Error).message);
+          continue;
+        }
         const failure = classify(error, item.retryCount, MAX_RETRIES);
         await syncQueueDb.markFailed(item.id, {
           errorClass: failure.errorClass,

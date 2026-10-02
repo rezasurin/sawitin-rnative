@@ -36,6 +36,27 @@ export function visibleRestan(
     .sort((a, b) => a.tanggal.localeCompare(b.tanggal));
 }
 
+/**
+ * Panen recorded on this phone and still waiting to sync (not DEAD) that has
+ * harvest at `tphId` on `day`. A Panen the server list already carries under the
+ * same `client_request_id` is left out, so one never appears twice.
+ */
+export function queuedPanenAt(
+  queue: { id: string; module: string; action: string; status?: string; payload: Record<string, unknown> | null }[],
+  tphId: string,
+  day: string,
+  serverPanen: { client_request_id?: string | null }[] = [],
+) {
+  const synced = new Set(serverPanen.map((panen) => panen.client_request_id));
+  return queue.flatMap((item) => {
+    if (item.module !== 'bkm_panen' || item.action !== 'CREATE' || item.status === 'DEAD' || synced.has(item.id)) return [];
+    const header = item.payload?.header as { blok_id?: string; tanggal_laporan?: string } | undefined;
+    const rows = ((item.payload?.details as { tph_id?: string; jumlah_janjang?: number }[] | undefined) ?? []).filter((row) => row.tph_id === tphId);
+    if (!header?.tanggal_laporan || estateDate(new Date(header.tanggal_laporan)) !== day || !rows.length) return [];
+    return [{ client_request_id: item.id, blok_id: header.blok_id, janjang: rows.reduce((sum, row) => sum + (row.jumlah_janjang ?? 0), 0) }];
+  });
+}
+
 /** Everything the server would refuse at submit that the phone can already see. */
 export function tripProblems(header: TripHeaderDraft, lines: TripLineDraft[]): string[] {
   const problems: string[] = [];
@@ -80,7 +101,10 @@ export function buildTripPayload(header: TripHeaderDraft, lines: TripLineDraft[]
       client_detail_id: line.client_detail_id,
       tipe_pengiriman: line.tipe_pengiriman,
       tph_id: line.tph_id,
-      ...(line.tipe_pengiriman === 'LANGSUNG' ? { bkm_panen_id: line.bkm_panen_id } : { restan_id: line.restan_id }),
+      // A Panen still queued has no server id: send its offline id instead, never both.
+      ...(line.tipe_pengiriman === 'TITIP' ? { restan_id: line.restan_id }
+        : line.bkm_panen_client_request_id ? { bkm_panen_client_request_id: line.bkm_panen_client_request_id }
+        : { bkm_panen_id: line.bkm_panen_id }),
       janjang_normal: line.janjang_normal,
       buah_mentah: line.buah_mentah,
       over_ripe: line.over_ripe,
