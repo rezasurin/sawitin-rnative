@@ -27,7 +27,7 @@ const ROLE_TABS: Record<RoleRouteGroup, { permission: string; tabs: Destination[
   '(mandor)': {
     permission: 'mod_bkm_panen',
     tabs: [HOME, PANEN, { name: 'checker', title: 'Checker', icon: 'check-circle-o', nested: true }, ACCOUNT],
-    hidden: ['rawat', 'observasi', 'pemakaian-kendaraan'],
+    hidden: ['rawat', 'observasi', 'pemakaian-kendaraan', 'tutup-harian'],
   },
   '(krani)': {
     permission: 'mod_krani_timbang',
