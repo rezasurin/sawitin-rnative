@@ -62,6 +62,7 @@ test('document cache preserves revision metadata and refuses cached data on perm
     './database': { lookupCacheDb: { save: async (key, data) => cache.set(key, JSON.parse(JSON.stringify(data))), get: async (key) => cache.get(key) } },
     '@/stores/useAuthStore': { useAuthStore: { getState: () => ({ user: { id: 'user' }, hasPermission: () => true }) } },
     '@/utils/operational-policy': load('utils/operational-policy.ts'),
+    '@/utils/close': load('utils/close.ts'),
     '@/stores/useNetworkStore': { useNetworkStore: { getState: () => ({ isOnline: true }) } },
   });
   await readOperational('bkmPanen', '/bkmPanen/x');
@@ -125,11 +126,12 @@ test('Checker reject UI sends rejection_note and refreshes on a stale decision',
     '@/services/database': { lookupCacheDb: {} },
     '@/stores/useAuthStore': {},
     '@/hooks/useOperationalPolicy': { useOperationalPolicy: () => policy },
+    '@/utils/close': load('utils/close.ts'),
     '@/stores/useNetworkStore': { useNetworkStore: { getState: () => ({ isOnline: true }) } },
     '@/stores/useSyncQueueStore': { useSyncQueueStore: { getState: () => ({ queue: [] }) } },
   });
   let tree;
-  const element = () => React.createElement(OperationalActions, { module: 'bkmChecker', document: { id: 'checker', status: 'SUBMITTED', details: [{}] } });
+  const element = () => React.createElement(OperationalActions, { module: 'bkmChecker', document: { id: 'checker', status: 'SUBMITTED', tph_id: 'tph-1', details: [{}] } });
   await act(async () => { tree = create(element()); });
   await act(async () => { tree.root.findByType('TextInput').props.onChangeText('Periksa janjang'); });
   await act(async () => { tree.root.findAllByType('Button').find((b) => b.props.title === 'Minta revisi').props.onPress(); });
@@ -160,14 +162,14 @@ test('a trip has no approve action, an old single-TPH document still does', asyn
     '@/services/database': { lookupCacheDb: {} },
     '@/stores/useAuthStore': {},
     '@/hooks/useOperationalPolicy': { useOperationalPolicy: () => policy },
+    '@/utils/close': load('utils/close.ts'),
     '@/stores/useNetworkStore': { useNetworkStore: { getState: () => ({ isOnline: true }) } },
     '@/stores/useSyncQueueStore': { useSyncQueueStore: { getState: () => ({ queue: [] }) } },
   });
-  const { isTrip } = load('utils/trip.ts');
   const titles = async (doc) => {
     let tree;
     await act(async () => { tree = create(React.createElement(OperationalActions, { module: 'bkmChecker',
-      document: { id: 'checker', status: 'SUBMITTED', details: [{}] }, exclude: isTrip(doc) ? ['approve'] : [] })); });
+      document: { id: 'checker', status: 'SUBMITTED', details: [{}], ...doc } })); });
     const names = tree.root.findAllByType('Button').map((b) => b.props.title);
     await act(async () => tree.unmount());
     return names;

@@ -12,7 +12,7 @@ interface QuickAction {
   icon: string;
   route: Href;
   permission?: string;
-  permissionAction?: "write" | "read";
+  permissionAction?: "write" | "read" | "approve";
   /** Weighbridge entry: shown only when the organization has its own weighbridge. */
   needsWeighbridge?: boolean;
 }
@@ -38,6 +38,7 @@ export const ROLE_ACTIONS: Record<string, QuickAction[]> = {
       icon: "check-square-o",
       route: "/(mandor)/checker/add",
     },
+    { id: "tutup-harian", label: "Tutup Harian", icon: "lock", route: "/(mandor)/tutup-harian" as Href, permission: "mod_bkm_checker", permissionAction: "write" },
     { id: "rawat-add", label: "Buat BKM Rawat", icon: "leaf", route: "/(mandor)/rawat/add" as Href, permission: "mod_bkm_rawat", permissionAction: "write" },
     { id: "rawat-list", label: "BKM Rawat", icon: "list-ul", route: "/(mandor)/rawat" as Href, permission: "mod_bkm_rawat", permissionAction: "read" },
     { id: "observasi-add", label: "Catat Observasi", icon: "eye", route: "/(mandor)/observasi/add" as Href, permission: "mod_bkm_rawat", permissionAction: "write" },
@@ -45,6 +46,7 @@ export const ROLE_ACTIONS: Record<string, QuickAction[]> = {
     { id: "usage-list", label: "Pemakaian Kendaraan", icon: "truck", route: "/(mandor)/pemakaian-kendaraan" as Href, permission: "mod_bkm_rawat", permissionAction: "read" },
   ],
   "(asisten)": [
+    { id: "tutup-harian", label: "Persetujuan Tutup Harian", icon: "lock", route: "/(asisten)/tutup-harian" as Href, permission: "mod_bkm_checker", permissionAction: "approve" },
     { id: "observasi-list", label: "Observasi Lapangan", icon: "eye", route: "/(asisten)/observasi" as Href, permission: "mod_bkm_rawat", permissionAction: "read" },
     { id: "usage-list", label: "Pemakaian Kendaraan", icon: "truck", route: "/(asisten)/pemakaian-kendaraan" as Href, permission: "mod_bkm_rawat", permissionAction: "read" },
     { id: "stock-list", label: "Stok Opname", icon: "list-alt", route: "/(asisten)/stock-opname" as Href, permission: "mod_material", permissionAction: "read" },

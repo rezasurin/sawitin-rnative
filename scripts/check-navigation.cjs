@@ -78,6 +78,45 @@ test('Krani scan, input and detail share the Timbangan stack', () => {
   assert.deepEqual(weighing.children.map((node) => node.route).sort(), ['[detailId]', 'add', 'index', 'scan', 'tiket-spb', 'tiket/[tripId]', 'trace/[tripId]']);
 });
 
+test('Tutup Harian routes: one Mandor screen, an Asisten list and detail, reachable from quick actions', () => {
+  const mandor = routes.children.find((node) => node.route === '(mandor)');
+  assert.ok(mandor.children.some((node) => node.route === 'tutup-harian'));
+  const asisten = routes.children.find((node) => node.route === '(asisten)').children.find((node) => node.route === 'tutup-harian');
+  assert.equal(asisten.type, 'layout');
+  assert.deepEqual(asisten.children.map((node) => node.route).sort(), ['[id]', 'index']);
+  for (const group of ['(mandor)', '(asisten)']) {
+    const hidden = React.Children.toArray(moduleExports.RoleTabs({ group }).props.children)
+      .filter((screen) => screen.props.options.href === null).map((screen) => screen.props.name);
+    assert.ok(hidden.includes('tutup-harian'), `${group} keeps it off the tab bar`);
+  }
+  const quick = {};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(root, 'components/home/QuickActions.tsx'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
+  }).outputText, {
+    exports: quick,
+    require: (name) => ({ 'react-native': { StyleSheet: { create: (value) => value } }, '@/constants/Colors': { BrandColors: {} },
+      '@/stores/useAuthStore': {}, '@/hooks/useOrgConfig': {}, 'expo-router': {}, '@expo/vector-icons/FontAwesome': {} })[name] ?? require(name),
+  });
+  const action = (group) => quick.ROLE_ACTIONS[group].find((entry) => entry.id === 'tutup-harian');
+  assert.deepEqual([action('(mandor)').route, action('(mandor)').permissionAction], ['/(mandor)/tutup-harian', 'write']);
+  assert.deepEqual([action('(asisten)').route, action('(asisten)').permissionAction], ['/(asisten)/tutup-harian', 'approve']);
+});
+
+test('Panen and Checker detail screens for Mandor, Asisten and Administrator share the one actions bar, which has no per-document approve for them', () => {
+  const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+  // Administrator re-exports the Mandor screens, so removing approve there removes it for both.
+  assert.match(read('app/(admin)/bkm/[id].tsx'), /\(mandor\)\/bkm\/\[id\]/);
+  assert.match(read('app/(admin)/checker/[id].tsx'), /\(mandor\)\/checker\/\[id\]/);
+  for (const file of ['app/(mandor)/bkm/[id].tsx', 'app/(asisten)/bkm/[id].tsx']) {
+    assert.match(read(file), /<OperationalActions module="bkmPanen"/, file);
+  }
+  assert.match(read('app/(mandor)/checker/[id].tsx'), /<OperationalActions module="bkmChecker"/);
+  assert.doesNotMatch(read('app/(mandor)/checker/[id].tsx') + read('app/(asisten)/bkm/[id].tsx') + read('app/(mandor)/bkm/[id].tsx'), /useApprove|\/approve/);
+  // The shared bar drops approve through the close rule; check-close-policy renders it.
+  assert.match(read('components/bkm/OperationalActions.tsx'), /approvesViaClose\(module, document\)/);
+  assert.equal(fs.existsSync(path.join(root, 'hooks/useBkmPanen.ts')) && /useApproveBkmPanen/.test(read('hooks/useBkmPanen.ts')), false);
+});
+
 test('Permission guard remains active', () => {
   authorized = false;
   for (const group of Object.keys(expected)) {
@@ -89,7 +128,7 @@ test('Permission guard remains active', () => {
 
 test('Retained hidden root routes keep a visible way back to the main tabs', () => {
   for (const [group, route] of [
-    ['(mandor)', 'rawat'],
+    ['(mandor)', 'rawat'], ['(mandor)', 'tutup-harian'], ['(asisten)', 'tutup-harian'],
     ['(admin)', 'master-data'], ['(admin)', 'users'],
   ]) {
     segments = [group, route];

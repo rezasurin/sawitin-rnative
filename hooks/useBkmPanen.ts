@@ -87,18 +87,6 @@ export function useDeleteBkmPanen() {
   });
 }
 
-export function useApproveBkmPanen() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => bkmPanenApi.approve(id),
-    onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: bkmPanenKeys.detail(id) });
-      queryClient.invalidateQueries({ queryKey: bkmPanenKeys.lists() });
-    },
-  });
-}
-
 export function useRejectBkmPanen() {
   const queryClient = useQueryClient();
 

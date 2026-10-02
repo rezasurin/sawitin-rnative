@@ -27,11 +27,6 @@ export const bkmPanenApi = {
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/bkmPanen/${id}`);
   },
-  approve: async (id: string): Promise<BkmPanen> => {
-    requireOnline();
-    const response = await apiClient.post<BkmPanen>(`/bkmPanen/${id}/approve`);
-    return response.data;
-  },
   reject: async (id: string, rejection_note?: string): Promise<BkmPanen> => {
     requireOnline();
     const response = await apiClient.post<BkmPanen>(`/bkmPanen/${id}/reject`, { rejection_note });

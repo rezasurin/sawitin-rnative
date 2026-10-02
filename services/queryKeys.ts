@@ -84,3 +84,10 @@ export const kelompokLahanKeys = {
   details: () => [...kelompokLahanKeys.all, 'detail'] as const,
   detail: (id: string) => [...kelompokLahanKeys.details(), id] as const,
 };
+
+export const tutupHarianKeys = {
+  all: ['tutupHarian'] as const,
+  preview: (kelompokLahanId: string, tanggal: string) => [...tutupHarianKeys.all, 'preview', kelompokLahanId, tanggal] as const,
+  detail: (id: string) => [...tutupHarianKeys.all, 'detail', id] as const,
+  pending: () => [...tutupHarianKeys.all, 'pending'] as const,
+};

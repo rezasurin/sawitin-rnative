@@ -3,7 +3,7 @@
  * and the queue screen both use this, and the check scripts load it bare.
  */
 
-export type TripConflictCode = 'SPB_NUMBER_TAKEN' | 'RESTAN_COLLECTED' | 'PANEN_BELUM_SINKRON';
+export type TripConflictCode = 'SPB_NUMBER_TAKEN' | 'RESTAN_COLLECTED' | 'PANEN_BELUM_SINKRON' | 'DAY_CLOSED';
 export interface TripConflict { code: TripConflictCode; restan_id?: string; bkm_panen_client_request_id?: string }
 
 /** A stored document is a trip when it has no header TPH; legacy single-TPH rows always do. */
@@ -19,6 +19,8 @@ export function tripConflictOf(error: unknown): TripConflict | null {
   if ((e?.status ?? e?.response?.status) !== 409) return null;
   const body = (e.data ?? e.response?.data) as { code?: unknown; restan_id?: unknown; bkm_panen_client_request_id?: unknown } | undefined;
   if (body?.code === 'SPB_NUMBER_TAKEN') return { code: body.code };
+  // The Asisten closed that farm-day; a late Panen or trip waits for a reopen, it is never retried blind.
+  if (body?.code === 'DAY_CLOSED') return { code: body.code };
   if (body?.code === 'PANEN_BELUM_SINKRON') {
     return { code: body.code, ...(typeof body.bkm_panen_client_request_id === 'string' ? { bkm_panen_client_request_id: body.bkm_panen_client_request_id } : {}) };
   }
@@ -28,7 +30,10 @@ export function tripConflictOf(error: unknown): TripConflict | null {
   return null;
 }
 
+export const DAY_CLOSED_TEXT = 'Hari sudah ditutup — minta Asisten membuka kembali';
+
 export function tripConflictText(conflict: TripConflict, nomorSpb?: unknown): string {
+  if (conflict.code === 'DAY_CLOSED') return DAY_CLOSED_TEXT;
   if (conflict.code === 'PANEN_BELUM_SINKRON') {
     return 'Panen untuk baris ini belum/gagal terkirim. Kirim ulang setelah Panen diperbaiki di antrian, atau buang baris itu dari SPB ini.';
   }
@@ -72,6 +77,8 @@ export function resolveTripConflict(payload: Payload, fix: { nomor_spb?: string;
     const header = payload.header as Payload;
     return nomor && nomor !== header.nomor_spb ? { ...rest, header: { ...header, nomor_spb: nomor } } : null;
   }
+  // Nothing on the phone changes: the Asisten reopens the day, then the same payload goes again.
+  if (conflict?.code === 'DAY_CLOSED') return rest;
   if (conflict?.code === 'PANEN_BELUM_SINKRON') {
     if (!fix.drop_panen) return rest;
     const details = ((payload.details as Line[] | undefined) ?? []).filter((line) => line.bkm_panen_client_request_id !== conflict.bkm_panen_client_request_id);

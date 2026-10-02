@@ -12,12 +12,17 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import type { SyncErrorClass, SyncQueueItem } from '@/types/sync';
 import { formatSyncResult } from '@/services/sync.service';
+import { DAY_CLOSED_TEXT } from '@/utils/trip';
 
 /**
  * Plain language for why an item stopped, because the person reading this is a
  * mandor in a block, not whoever wrote the API.
  */
 function describeError(errorClass: SyncErrorClass | null, item?: Pick<SyncQueueItem, 'module' | 'action' | 'payload'>): string {
+  // The Asisten closed that farm-day: nothing is wrong with the data, the day has to be reopened first.
+  if (errorClass === 'CONFLICT' && (item?.payload?.conflict as { code?: string } | undefined)?.code === 'DAY_CLOSED') {
+    return `${DAY_CLOSED_TEXT}. Setelah dibuka, buka Periksa lalu kirim ulang.`;
+  }
   // An SPB trip stopped on a taken number or a collected restan: the fix is on this phone, not a newer server copy.
   if (errorClass === 'CONFLICT' && item?.module === 'bkm_checker' && item.payload?.conflict) {
     return 'SPB ditolak server dan perlu diperbaiki. Buka Periksa untuk memperbaikinya, lalu kirim ulang.';
