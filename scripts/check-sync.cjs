@@ -416,8 +416,10 @@ test('a 409 PANEN_BELUM_SINKRON while the Panen is still queued waits: no confli
     const { processItem } = loadSyncProcessor();
     const server = panenServer();
     const saved = [];
+    let asked = 0;
     const error = await processItem(panenTrip(), dependencies({
-      checkerApi: server, panenState: async (id) => (id === 'sync_panen' ? state : null),
+      // Not queued at the pre-send check, queued by the time the server answers 409 (another code path put it there).
+      checkerApi: server, panenState: async () => (++asked === 1 ? null : state),
       updateQueuePayload: async (_id, payload) => saved.push(payload),
     })).catch((reason) => reason);
     assert.equal(error.waiting, true, 'the pass defers it instead of classifying a failure');
@@ -490,7 +492,31 @@ test('a trip sent for a Panen already synced needs no rewrite and no wait', asyn
   server.synced.add('sync_panen');
   let asked = 0;
   await processItem(panenTrip(), dependencies({ checkerApi: server, panenState: async () => { asked++; return null; } }));
-  assert.equal(asked, 0, 'the queue is only asked when the server answers 409');
+  assert.equal(asked, 1, 'asked once before sending; the server answered no 409');
   assert.equal(server.lines[0].bkm_panen_client_request_id, 'sync_panen');
   assert.equal('bkm_panen_id' in server.lines[0], false);
+});
+
+test('a trip whose Panen is still queued is held before any request, with no attempt spent', async () => {
+  const { processItem } = loadSyncProcessor();
+  const server = panenServer();
+  const saved = [];
+  const error = await processItem(panenTrip(), dependencies({
+    checkerApi: server, panenState: async (id) => (id === 'sync_panen' ? 'PENDING' : null),
+    updateQueuePayload: async (_id, payload) => saved.push(payload),
+  })).catch((reason) => reason);
+  assert.equal(error.waiting, true);
+  assert.equal(error.message, 'Menunggu Panen terkirim');
+  assert.deepEqual(plain(server.calls), [], 'the server saw no request, not even the header');
+  assert.equal(saved.length, 0, 'no draft checkpoint and no conflict');
+  // performSync defers it (no markFailed, so no retry spent) rather than classifying it.
+  const deferred = [];
+  const failed = [];
+  const { performSync } = loadSyncService({
+    processItem: (item) => processItem(item, dependencies({ checkerApi: server, panenState: async () => 'PENDING' })),
+    queue: { claim: async () => (deferred.length ? [] : [panenTrip()]), defer: async (...args) => deferred.push(args), markFailed: async (...args) => failed.push(args), complete: async () => {}, stats: async () => ({}) },
+  });
+  await performSync({ queryClient: {}, onProgress: () => {} });
+  assert.deepEqual([deferred.length, failed.length, server.calls.length], [1, 0, 0]);
+  assert.equal(deferred[0][2], 'Menunggu Panen terkirim');
 });
