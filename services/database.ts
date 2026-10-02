@@ -294,6 +294,22 @@ export const syncQueueDb = {
     );
   },
 
+  /** An item's status, or null once it is gone (synced or discarded). */
+  statusOf: async (owner: QueueOwner, id: string): Promise<QueueStatus | null> => {
+    const db = await getDb();
+    const row = await db.getFirstAsync<{ status: QueueStatus }>('SELECT status FROM sync_queue WHERE id = ? AND user_id = ?', [id, owner.userId]);
+    return row?.status ?? null;
+  },
+
+  /** Put an item back to wait until `nextAttemptAt` without counting a failed attempt. */
+  defer: async (id: string, nextAttemptAt: number, reason: string) => {
+    const db = await getDb();
+    await db.runAsync(
+      "UPDATE sync_queue SET status = 'PENDING', lease_until = NULL, next_attempt_at = ?, last_error = ? WHERE id = ?",
+      [nextAttemptAt, reason, id]
+    );
+  },
+
   /** Put a dead item back in line, from the queue screen. */
   retryNow: async (id: string, precondition?: string) => {
     const db = await getDb();

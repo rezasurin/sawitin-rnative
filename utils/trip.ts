@@ -3,8 +3,8 @@
  * and the queue screen both use this, and the check scripts load it bare.
  */
 
-export type TripConflictCode = 'SPB_NUMBER_TAKEN' | 'RESTAN_COLLECTED';
-export interface TripConflict { code: TripConflictCode; restan_id?: string }
+export type TripConflictCode = 'SPB_NUMBER_TAKEN' | 'RESTAN_COLLECTED' | 'PANEN_BELUM_SINKRON';
+export interface TripConflict { code: TripConflictCode; restan_id?: string; bkm_panen_client_request_id?: string }
 
 /** A stored document is a trip when it has no header TPH; legacy single-TPH rows always do. */
 export const isTrip = (doc: { tph_id?: string | null }) => !doc.tph_id;
@@ -17,8 +17,11 @@ export const isTripHeader = (header: { nomor_spb?: unknown; tph_id?: unknown } |
 export function tripConflictOf(error: unknown): TripConflict | null {
   const e = error as { status?: number; data?: unknown; response?: { status?: number; data?: unknown } };
   if ((e?.status ?? e?.response?.status) !== 409) return null;
-  const body = (e.data ?? e.response?.data) as { code?: unknown; restan_id?: unknown } | undefined;
+  const body = (e.data ?? e.response?.data) as { code?: unknown; restan_id?: unknown; bkm_panen_client_request_id?: unknown } | undefined;
   if (body?.code === 'SPB_NUMBER_TAKEN') return { code: body.code };
+  if (body?.code === 'PANEN_BELUM_SINKRON') {
+    return { code: body.code, ...(typeof body.bkm_panen_client_request_id === 'string' ? { bkm_panen_client_request_id: body.bkm_panen_client_request_id } : {}) };
+  }
   if (body?.code === 'RESTAN_COLLECTED') {
     return { code: body.code, ...(typeof body.restan_id === 'string' ? { restan_id: body.restan_id } : {}) };
   }
@@ -26,13 +29,22 @@ export function tripConflictOf(error: unknown): TripConflict | null {
 }
 
 export function tripConflictText(conflict: TripConflict, nomorSpb?: unknown): string {
+  if (conflict.code === 'PANEN_BELUM_SINKRON') {
+    return 'Panen untuk baris ini belum/gagal terkirim. Kirim ulang setelah Panen diperbaiki di antrian, atau buang baris itu dari SPB ini.';
+  }
   return conflict.code === 'SPB_NUMBER_TAKEN'
     ? `Nomor SPB ${String(nomorSpb ?? '')} sudah dipakai SPB lain. Ganti nomor SPB, lalu kirim ulang.`
     : 'Restan sudah diambil SPB lain. Buang baris restan itu dari SPB ini, lalu kirim ulang.';
 }
 
+/**
+ * Thrown by the processor when a trip must wait for a Panen still in this phone's
+ * queue. The pass puts the item back with a delay instead of counting a failure.
+ */
+export const isWaitingForPanen = (error: unknown) => (error as { waiting?: unknown } | null)?.waiting === true;
+
 type Payload = Record<string, unknown>;
-type Line = { restan_id?: string | null };
+type Line = { restan_id?: string | null; bkm_panen_client_request_id?: string | null };
 
 /** Restan that queued trips that have not synced yet already claim. */
 export function claimedRestanIds(queue: { module: string; action: string; payload: Payload | null }[]): Set<string> {
@@ -49,14 +61,21 @@ export function claimedRestanIds(queue: { module: string; action: string; payloa
  * nothing is left to send. A replaced SPB number goes back in the header. A
  * collected restan's line is dropped here and, through `drop_restan_ids`, also
  * from the server draft, where the lines posted before the conflict still sit.
+ * An unsynced Panen is either resent as it is (`drop_panen` off) or its line is
+ * dropped; that line never reached the server, so nothing is deleted there.
  */
-export function resolveTripConflict(payload: Payload, fix: { nomor_spb?: string } = {}): Payload | null {
+export function resolveTripConflict(payload: Payload, fix: { nomor_spb?: string; drop_panen?: boolean } = {}): Payload | null {
   const conflict = payload.conflict as TripConflict | undefined;
   const { conflict: _resolved, ...rest } = payload;
   if (conflict?.code === 'SPB_NUMBER_TAKEN') {
     const nomor = fix.nomor_spb?.trim();
     const header = payload.header as Payload;
     return nomor && nomor !== header.nomor_spb ? { ...rest, header: { ...header, nomor_spb: nomor } } : null;
+  }
+  if (conflict?.code === 'PANEN_BELUM_SINKRON') {
+    if (!fix.drop_panen) return rest;
+    const details = ((payload.details as Line[] | undefined) ?? []).filter((line) => line.bkm_panen_client_request_id !== conflict.bkm_panen_client_request_id);
+    return details.length ? { ...rest, details } : null;
   }
   if (conflict?.code === 'RESTAN_COLLECTED' && conflict.restan_id) {
     const details = ((payload.details as Line[] | undefined) ?? []).filter((line) => line.restan_id !== conflict.restan_id);

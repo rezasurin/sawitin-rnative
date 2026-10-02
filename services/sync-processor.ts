@@ -52,6 +52,8 @@ interface ProcessorDependencies {
   staging: typeof stagingApi;
   upload: typeof uploadApi;
   updateQueuePayload: (id: string, payload: Record<string, unknown>) => Promise<void>;
+  /** Where a Panen queued on this phone stands; null when it is no longer in the queue. */
+  panenState: (queueId: string) => Promise<SyncQueueItem['status'] | null>;
 }
 
 const defaultDependencies: ProcessorDependencies = {
@@ -64,6 +66,7 @@ const defaultDependencies: ProcessorDependencies = {
   staging: stagingApi,
   upload: uploadApi,
   updateQueuePayload: (id, payload) => useSyncQueueStore.getState().updatePayload(id, payload),
+  panenState: (queueId) => useSyncQueueStore.getState().queueStatus(queueId),
 };
 
 function isNotFound(error: unknown) {
@@ -258,6 +261,13 @@ export async function processItem(
     if (item.action === 'CREATE') {
       const { header, details, server_id: serverId, drop_restan_ids: dropped } = item.payload as unknown as BkmCheckerQueuePayload;
       let saved = item.payload;
+      // Hold the trip while any Panen it names is still queued here: a half-synced Panen
+      // (created, details still failing) would otherwise dead-letter the trip as VALIDATION.
+      for (const line of details) {
+        const clientId = (line as { bkm_panen_client_request_id?: string }).bkm_panen_client_request_id;
+        const state = clientId ? await dependencies.panenState(clientId) : null;
+        if (state === 'PENDING' || state === 'IN_FLIGHT') throw Object.assign(new Error('Menunggu Panen terkirim'), { waiting: true });
+      }
       try {
         // One item keeps the trip's order: header, then every line, then submit.
         const checker = serverId ? await checkerApi.getById(serverId) : await checkerApi.create({ ...header, client_request_id: item.id });
@@ -278,6 +288,14 @@ export async function processItem(
         // not to retry: keep why, so the queue screen can offer the fix.
         const conflict = isTripHeader(header) ? tripConflictOf(error) : null;
         if (!conflict) throw error;
+        // The Panen is still on this phone's queue (or being sent): keep the trip and retry it later.
+        // The server resolves the client id itself once the Panen has synced.
+        if (conflict.code === 'PANEN_BELUM_SINKRON' && conflict.bkm_panen_client_request_id) {
+          const state = await dependencies.panenState(conflict.bkm_panen_client_request_id);
+          if (state === 'PENDING' || state === 'IN_FLIGHT') {
+            throw Object.assign(new Error('Menunggu Panen terkirim'), { waiting: true });
+          }
+        }
         await dependencies.updateQueuePayload(item.id, { ...saved, conflict });
         throw Object.assign(new Error(tripConflictText(conflict, (header as CreateTripPayload).nomor_spb)), { status: 409, code: conflict.code });
       }

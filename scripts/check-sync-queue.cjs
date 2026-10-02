@@ -238,3 +238,27 @@ test('reopen, edits, detail/media and submit dependencies survive restart and a 
   await queue.complete('detail');
   assert.deepEqual(ids(await queue.claim(owner('user-a'), 25, 500003)), ['submit']);
 });
+
+test('a deferred item waits for its time without spending an attempt or going DEAD', async () => {
+  const { queue, raw } = loadQueueDb();
+  await seed(queue, 'user-a', ['a1']);
+  await queue.claim(owner('user-a'), 10, 5_000);
+
+  await queue.defer('a1', 35_000, 'Menunggu Panen terkirim');
+  const row = raw.prepare('SELECT status, retry_count, next_attempt_at, lease_until FROM sync_queue WHERE id = ?').get('a1');
+  assert.deepEqual({ ...row }, { status: 'PENDING', retry_count: 0, next_attempt_at: 35_000, lease_until: null });
+  assert.deepEqual(ids(await queue.claim(owner('user-a'), 10, 6_000)), [], 'not in a hot loop');
+  assert.deepEqual(ids(await queue.claim(owner('user-a'), 10, 35_000)), ['a1']);
+});
+
+test('statusOf tells a queued item from a synced one, for the owner only', async () => {
+  const { queue } = loadQueueDb();
+  await seed(queue, 'user-a', ['a1', 'a2']);
+  await queue.claim(owner('user-a'), 1, 5_000);
+  await queue.markFailed('a2', { errorClass: 'VALIDATION', lastError: 'x', nextAttemptAt: 0, dead: true });
+  assert.equal(await queue.statusOf(owner('user-a'), 'a1'), 'IN_FLIGHT');
+  assert.equal(await queue.statusOf(owner('user-a'), 'a2'), 'DEAD');
+  assert.equal(await queue.statusOf(owner('user-b'), 'a1'), null, 'another worker\'s row is invisible');
+  await queue.complete('a1');
+  assert.equal(await queue.statusOf(owner('user-a'), 'a1'), null, 'synced means gone');
+});

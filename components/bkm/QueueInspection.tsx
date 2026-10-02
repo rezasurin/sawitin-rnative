@@ -27,8 +27,8 @@ export function QueueInspection({ item, onClose }: { item: SyncQueueItem; onClos
   const updatePayload = useSyncQueueStore((state) => state.updatePayload);
   const retryItem = useSyncQueueStore((state) => state.retryItem);
   // Fix the payload on the phone, then put the item back in line. Nothing is deleted without a choice.
-  const resolveTrip = async () => {
-    const fixed = item.payload && resolveTripConflict(item.payload, { nomor_spb: newSpb });
+  const resolveTrip = async (drop_panen = false) => {
+    const fixed = item.payload && resolveTripConflict(item.payload, { nomor_spb: newSpb, drop_panen });
     if (!fixed) {
       Alert.alert('Belum dapat diperbaiki', conflict?.code === 'SPB_NUMBER_TAKEN'
         ? 'Isi nomor SPB yang berbeda.' : 'Tidak ada muatan lain pada SPB ini. Buang SPB ini dari menu Akun.');
@@ -76,8 +76,10 @@ export function QueueInspection({ item, onClose }: { item: SyncQueueItem; onClos
           ? <TextInput value={newSpb} onChangeText={setNewSpb} placeholder="Nomor SPB yang benar" autoCapitalize="characters"
               style={{ borderWidth: 1, borderColor: '#999', borderRadius: 6, padding: 10 }} />
           : null}
-        <Button title={conflict.code === 'SPB_NUMBER_TAKEN' ? 'Ganti nomor SPB & kirim ulang' : 'Buang baris restan ini & kirim ulang'}
-          onPress={() => void resolveTrip()} />
+        {conflict.code === 'PANEN_BELUM_SINKRON' && <Button title="Kirim ulang" onPress={() => void resolveTrip()} />}
+        <Button title={conflict.code === 'SPB_NUMBER_TAKEN' ? 'Ganti nomor SPB & kirim ulang'
+          : conflict.code === 'PANEN_BELUM_SINKRON' ? 'Buang baris Panen ini & kirim ulang' : 'Buang baris restan ini & kirim ulang'}
+          onPress={() => void resolveTrip(true)} />
       </>}
       {weighingConflict && <>
         <Text>{spbConflictText(weighingConflict, item.payload?.nomor_spb)}</Text>

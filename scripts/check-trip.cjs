@@ -167,3 +167,43 @@ test('a line removed during recovery keeps every other line key', () => {
   const fixed = trip.resolveTripConflict({ ...payload, conflict: { code: 'RESTAN_COLLECTED', restan_id: 'restan-1' } });
   assert.deepEqual(plain(fixed.details).map((line) => line.client_detail_id), ['line-a']);
 });
+
+const queuedPanen = (id, extra = {}) => ({
+  id, module: 'bkm_panen', action: 'CREATE', status: 'PENDING',
+  payload: { header: { blok_id: 'blok-1', tanggal_laporan: '2026-09-30' }, details: [{ tph_id: 'tph-1', jumlah_janjang: 25 }, { tph_id: 'tph-1', jumlah_janjang: 15 }, { tph_id: 'tph-9', jumlah_janjang: 5 }] },
+  ...extra,
+});
+
+test('the Langsung picker lists a Panen still queued on this phone, once, for that TPH and day', () => {
+  const queue = [
+    queuedPanen('sync_a'),
+    queuedPanen('sync_dead', { status: 'DEAD' }),
+    queuedPanen('sync_other_day', { payload: { header: { tanggal_laporan: '2026-09-29' }, details: [{ tph_id: 'tph-1', jumlah_janjang: 9 }] } }),
+    queuedPanen('sync_other_tph', { payload: { header: { tanggal_laporan: '2026-09-30' }, details: [{ tph_id: 'tph-2', jumlah_janjang: 9 }] } }),
+    queuedPanen('sync_update', { action: 'UPDATE' }),
+    { ...queuedPanen('sync_trip'), module: 'bkm_checker' },
+  ];
+  const listed = plain(dispatch.queuedPanenAt(queue, 'tph-1', '2026-09-30', []));
+  assert.deepEqual(listed, [{ client_request_id: 'sync_a', blok_id: 'blok-1', janjang: 40 }], 'only this day and TPH, not DEAD, summed over the TPH rows');
+  // The estate day is WIB: 20:00 UTC on the 29th is already the 30th.
+  const late = queuedPanen('sync_late', { payload: { header: { tanggal_laporan: '2026-09-29T20:00:00.000Z' }, details: [{ tph_id: 'tph-1', jumlah_janjang: 3 }] } });
+  assert.equal(dispatch.queuedPanenAt([late], 'tph-1', '2026-09-30').length, 1);
+  // Once the server list carries it (its client_request_id), it is not listed twice.
+  assert.deepEqual(plain(dispatch.queuedPanenAt(queue, 'tph-1', '2026-09-30', [{ client_request_id: 'sync_a' }, { client_request_id: null }])), []);
+  // A synced Panen has left the queue, so only the server row remains.
+  assert.deepEqual(plain(dispatch.queuedPanenAt([], 'tph-1', '2026-09-30')), []);
+});
+
+test('a line built from a queued Panen sends its client id and never bkm_panen_id', () => {
+  const queued = { ...langsung, client_detail_id: 'line-q', bkm_panen_id: undefined, bkm_panen_client_request_id: 'sync_a' };
+  const [fromQueue, fromServer, restan] = plain(dispatch.buildTripPayload(header, [queued, langsung, titip], true, now).details);
+  assert.equal(fromQueue.bkm_panen_client_request_id, 'sync_a');
+  assert.equal('bkm_panen_id' in fromQueue, false);
+  assert.equal(fromServer.bkm_panen_id, 'panen-1');
+  assert.equal('bkm_panen_client_request_id' in fromServer, false);
+  assert.equal('bkm_panen_client_request_id' in restan || 'bkm_panen_id' in restan, false);
+  // Whatever the draft carried, one id wins and the other is not sent.
+  const both = plain(dispatch.buildTripPayload(header, [{ ...queued, bkm_panen_id: 'panen-1' }], true, now).details[0]);
+  assert.deepEqual([both.bkm_panen_client_request_id, 'bkm_panen_id' in both], ['sync_a', false]);
+  assert.deepEqual(plain(dispatch.tripProblems(header, [queued])), [], 'a queued Panen passes the dispatch-day check');
+});

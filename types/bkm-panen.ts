@@ -4,6 +4,8 @@ import { Blok, GrupPekerja, Lahan, Pekerja, Tph } from "./master-data";
 export interface BkmPanen extends TimestampFields {
   id: string;
   org_id: string;
+  /** The offline id the phone created it under, when it came from the queue. */
+  client_request_id?: string | null;
   lahan_id: string;
   blok_id: string | null;
   grup_pekerja_id: string | null;

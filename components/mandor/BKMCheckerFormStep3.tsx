@@ -79,7 +79,7 @@ export function BKMCheckerFormStep3({ onBack, onSuccess, onSavingChange }: Props
         <Text style={styles.sectionTitle}>Muatan per TPH</Text>
         {details.map((d) => (
           <View key={d._tempId} style={styles.detailCard}>
-            <Text style={styles.detailCardTitle}>{d.tph_nama} · {d.tipe_pengiriman === 'TITIP' ? 'Titip (restan)' : 'Langsung'}</Text>
+            <Text style={styles.detailCardTitle}>{d.tph_nama} · {d.tipe_pengiriman === 'TITIP' ? 'Titip (restan)' : d.bkm_panen_client_request_id ? 'Langsung (Panen belum terkirim)' : 'Langsung'}</Text>
             <Text style={styles.detailCardValue}>
               Normal: {d.janjang_normal} | Mentah: {d.buah_mentah} | Over: {d.over_ripe} | T.Panjang: {d.tangkai_panjang}
             </Text>

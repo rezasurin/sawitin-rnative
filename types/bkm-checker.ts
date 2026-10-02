@@ -109,6 +109,8 @@ export interface CreateBkmCheckerDetailPayload {
   /** Trip line: the TPH loaded from, and either today's Panen (LANGSUNG) or the restan collected (TITIP). */
   tph_id?: string;
   bkm_panen_id?: string;
+  /** LANGSUNG for a Panen not synced yet: its offline `client_request_id`, instead of `bkm_panen_id`. */
+  bkm_panen_client_request_id?: string;
   restan_id?: string;
   kendaraan_id?: string | null;
   supir_id?: string | null;
@@ -152,6 +154,8 @@ export interface TripLineDraft {
   tph_id: string;
   tph_nama: string;
   bkm_panen_id?: string;
+  /** Set instead of `bkm_panen_id` for a Panen still in this phone's queue. */
+  bkm_panen_client_request_id?: string;
   /** Estate day of that Panen; the server refuses one that is not the dispatch day. */
   panen_day?: string;
   restan_id?: string;
