@@ -143,3 +143,15 @@ export function closeFailure(error: unknown): CloseFailure {
       return { text: e?.status === 403 ? 'Izin tindakan ini tidak tersedia.' : e?.message || 'Terjadi kesalahan.', refetch };
   }
 }
+
+const UTC_OFFSET_HOURS: Record<string, number> = { 'Asia/Jakarta': 7, 'Asia/Makassar': 8, 'Asia/Jayapura': 9 };
+
+/**
+ * The pending list carries no `terlambat`, so the Asisten's list works it out:
+ * the deadline is `jam`:00 local on the day after `tanggal`. The detail shows
+ * the server's own flag. ponytail: Indonesian zones only; others read as WIB.
+ */
+export function pastDeadline(tanggal: string, jam: number, timezone: string, now = Date.now()) {
+  const offset = UTC_OFFSET_HOURS[timezone] ?? 7;
+  return now > Date.parse(`${tanggal}T00:00:00Z`) + (24 + jam - offset) * 3600 * 1000;
+}
