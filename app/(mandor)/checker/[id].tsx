@@ -198,8 +198,8 @@ export default function CheckerDetailScreen() {
           </View>
         ))}
 
-        {/* A trip is approved by the daily close (phase 5); per-document approve answers 409. */}
-        <OperationalActions module="bkmChecker" document={data} exclude={trip ? ['approve'] : []} />
+        {/* A trip is approved by the daily close (phase 5); only an old single-TPH Checker keeps its own approve. */}
+        <OperationalActions module="bkmChecker" document={data} />
         {!trip && <OperationalDraftEditor module="bkmChecker" document={data} />}
         <OperationalHistory module="bkmChecker" id={id} />
       </ScrollView>

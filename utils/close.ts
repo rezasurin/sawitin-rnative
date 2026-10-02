@@ -5,7 +5,18 @@
 import type { CloseException, CloseTph, SubmitClosePayload, TutupHarianPreview } from '@/types/tutup-harian';
 
 export const CLOSE_OFFLINE_TEXT = 'Tutup harian butuh koneksi';
-export const DAY_CLOSED_TEXT = 'Hari sudah ditutup — minta Asisten membuka kembali';
+
+/**
+ * Per-document approve is retired (P5-BE-06): the close approves Panen and trips.
+ * Old single-TPH Checkers (header `tph_id`) keep their own approve until the
+ * backend's `V3_QR_ACCEPT_UNTIL` (default below). The server stays the judge:
+ * past a different date it answers `APPROVE_VIA_TUTUP_HARIAN` and the app says so.
+ */
+export const OLD_SHAPE_APPROVE_UNTIL = Date.parse('2026-12-31T16:59:59.999Z');
+export function approvesViaClose(module: string, doc: { tph_id?: string | null }, now = Date.now()) {
+  if (module === 'bkmPanen') return true;
+  return module === 'bkmChecker' && (!doc.tph_id || now > OLD_SHAPE_APPROVE_UNTIL);
+}
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: 'Draft', SUBMITTED: 'Diajukan', APPROVED: 'Disetujui', REVISION_REQUESTED: 'Ditolak',

@@ -12,7 +12,6 @@ export {
   useCreateBkmPanen,
   useUpdateBkmPanen,
   useDeleteBkmPanen,
-  useApproveBkmPanen,
   useRejectBkmPanen,
   useAddBkmPanenDetail,
   useUpdateBkmPanenDetail,

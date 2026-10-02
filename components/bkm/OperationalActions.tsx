@@ -6,6 +6,7 @@ import { requireOnline } from '@/services/operational.service';
 import { lookupCacheDb } from '@/services/database';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
+import { approvesViaClose } from '@/utils/close';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import type { DocumentStatus } from '@/types/common';
@@ -17,10 +18,13 @@ type Action = keyof typeof labels;
 
 export function OperationalActions({ module, document, onDeleted, exclude = [] }: {
   module: OperationalModule;
-  document: { id: string; status: DocumentStatus; details?: unknown[]; detail_rawat?: unknown[]; rejected_by?: string | null; rejected_at?: string | null; rejection_note?: string | null; created_by?: string | null };
+  document: { id: string; status: DocumentStatus; tph_id?: string | null; details?: unknown[]; detail_rawat?: unknown[]; rejected_by?: string | null; rejected_at?: string | null; rejection_note?: string | null; created_by?: string | null };
   onDeleted?: () => void;
   exclude?: OperationalAction[];
 }) {
+  // Panen and trips are approved by the daily close; only an old single-TPH Checker keeps its own approve.
+  const viaClose = approvesViaClose(module, document);
+  if (viaClose) exclude = [...exclude, 'approve'];
   const count = (document.detail_rawat ?? document.details ?? []).length;
   const policy = useOperationalPolicy(module, document.status, count, document.created_by);
   const client = useQueryClient();
@@ -59,11 +63,13 @@ export function OperationalActions({ module, document, onDeleted, exclude = [] }
     } catch (error) {
       await client.invalidateQueries();
       const status = (error as { status?: number }).status;
-      Alert.alert('Tindakan gagal', status === 409 ? 'Dokumen telah berubah. Data terbaru dimuat; periksa sebelum mencoba kembali.' : status === 403 ? 'Izin tindakan ini tidak tersedia.' : status === 401 ? 'Sesi berakhir. Silakan masuk kembali.' : (error as Error).message);
+      const code = (error as { data?: { code?: string } }).data?.code;
+      Alert.alert('Tindakan gagal', code === 'APPROVE_VIA_TUTUP_HARIAN' ? 'Dokumen ini disetujui lewat Tutup Harian oleh Asisten.' : status === 409 ? 'Dokumen telah berubah. Data terbaru dimuat; periksa sebelum mencoba kembali.' : status === 403 ? 'Izin tindakan ini tidak tersedia.' : status === 401 ? 'Sesi berakhir. Silakan masuk kembali.' : (error as Error).message);
     } finally { setBusy(false); }
   };
   if (document.id.startsWith('local:')) return null;
   return <View style={{ padding: 16, gap: 12 }}>
+    {viaClose && document.status === 'SUBMITTED' && <Text>Dokumen ini disetujui lewat Tutup Harian. Minta revisi tetap tersedia.</Text>}
     {document.status === 'REVISION_REQUESTED' && <Text>Buka kembali sebagai draft sebelum mengubah dokumen.</Text>}
     {!!document.rejection_note && <Text>Alasan revisi: {document.rejection_note}</Text>}
     {!!document.rejected_by && <Text>Diminta oleh: {document.rejected_by}</Text>}
