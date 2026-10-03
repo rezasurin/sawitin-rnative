@@ -200,3 +200,28 @@ test('Shared module links stay in Administrator and preserve original role route
     assert.equal(exports.useModuleGroup(fallback), fallback);
   }
 });
+
+test('Home screens follow permissions, so a renamed role lands where its grants say', () => {
+  const exports = {};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(root, 'utils/route-group.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS },
+  }).outputText, { exports });
+  const grant = (id, actions) => ({ id, write: actions.includes('w'), approve: actions.includes('a') });
+  // Grants of the seeded roles (prisma/seeder/roleSeeder.ts) and where their names used to route.
+  const seeded = {
+    '(admin)': [grant('mod_role', 'wa'), grant('mod_bkm_panen', 'wa'), grant('mod_krani_timbang', 'wa')],
+    '(asisten)': [grant('mod_bkm_panen', 'wa'), grant('mod_bkm_rawat', 'w'), grant('mod_role', '')],
+    '(mandor)': [grant('mod_bkm_panen', 'w'), grant('mod_bkm_checker', 'wa'), grant('mod_bkm_rawat', 'w')],
+    '(krani)': [grant('mod_krani_timbang', 'w'), grant('mod_bkm_panen', '')],
+    '(pemanen)': [grant('mod_bkm_panen', '')],
+  };
+  for (const [group, permissions] of Object.entries(seeded)) {
+    assert.equal(exports.getRouteGroup(permissions), group);
+  }
+  // Manajer Kebun holds full access everywhere except role management.
+  assert.equal(exports.getRouteGroup([grant('mod_bkm_panen', 'wa'), grant('mod_krani_timbang', 'wa')]), '(asisten)');
+  // A user with two roles gets the wider one, not whichever role the API lists first.
+  assert.equal(exports.getRouteGroup([...seeded['(pemanen)'], ...seeded['(mandor)']]), '(mandor)');
+  assert.equal(exports.getRouteGroup([]), '(pemanen)');
+  assert.equal(exports.isAdministrator(seeded['(asisten)']), false);
+});

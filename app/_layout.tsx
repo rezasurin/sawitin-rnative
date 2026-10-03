@@ -1,7 +1,7 @@
 import { Stack, router } from "expo-router";
 import { useEffect } from "react";
 
-import { getRoleRouteGroup } from "@/constants/navigation";
+import { getRouteGroup } from "@/utils/route-group";
 import { QueryProvider } from "@/providers";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useSyncProcessor } from "@/hooks/useSyncProcessor";
@@ -30,7 +30,7 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
-  const roles = useAuthStore((s) => s.roles);
+  const permissions = useAuthStore((s) => s.permissions);
 
   // Process offline sync queue when authenticated and online
   useSyncProcessor();
@@ -44,10 +44,8 @@ function RootLayoutNav() {
       return;
     }
 
-    const primaryRole = roles[0]?.nama ?? "pemanen";
-    const routeGroup = getRoleRouteGroup(primaryRole);
-    router.replace(`/${routeGroup}` as never);
-  }, [isAuthenticated, isLoading, roles]);
+    router.replace(`/${getRouteGroup(permissions)}` as never);
+  }, [isAuthenticated, isLoading, permissions]);
 
   return (
     <Stack screenOptions={{ headerShown: false, animation: "fade" }}>

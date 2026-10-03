@@ -4,6 +4,7 @@ import { AuthState, User, Role, Permission } from '@/types/auth';
 import { authApi } from '@/services/auth';
 import { ApiError, REFRESH_TOKEN_KEY, TOKEN_KEY } from '@/services/api';
 import { lookupCacheDb } from '@/services/database';
+import { isAdministrator } from '@/utils/route-group';
 
 const OFFLINE_PROFILE_KEY = 'auth_last_profile';
 
@@ -123,13 +124,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   hasPermission: (moduleId, action) => {
-    const { roles, permissions } = get();
+    const { permissions } = get();
 
-    // Superuser bypass for Administrator
-    const isSuperAdmin = roles.some(
-      (role) => role.nama.toLowerCase() === 'administrator'
-    );
-    if (isSuperAdmin) return true;
+    if (isAdministrator(permissions)) return true;
 
     const perm = permissions.find((p) => p.id === moduleId);
     if (!perm) return false;
