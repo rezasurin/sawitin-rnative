@@ -90,11 +90,12 @@ function FieldSummaryCard({ group, summary }: { group: string; summary: FieldSum
             <Text style={styles.approvalName}>{approvalLabel(row.dokumen)}{target ? ' ›' : ''}</Text>
             <Text style={styles.muted}>{displayMeasure(row.menunggu)} menunggu · tertua {displayMeasure(row.tertua_hari)} hari</Text>
             {row.dikembalikan > 0 && <Text style={styles.muted}>{displayMeasure(row.dikembalikan)} dikembalikan ke pembuat</Text>}
+            {!!row.terlambat && <Text style={styles.muted}>{displayMeasure(row.terlambat)} melewati batas persetujuan</Text>}
           </Pressable>;
         })}
       <Text style={styles.note}>Persetujuan mencakup seluruh organisasi.</Text>
     </View>
-    <Text style={styles.footer}>{data.definition.id} v{data.definition.version} · {data.timezone} · BJR {displayMeasure(data.bjr_used)}</Text>
+    <Text style={styles.footer}>{data.definition.id} v{data.definition.version} · {data.timezone} · BJR organisasi {displayMeasure(data.bjr_used)}</Text>
   </SectionCard>;
 }
 
