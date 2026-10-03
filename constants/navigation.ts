@@ -30,24 +30,3 @@ export const TAB_BAR_ITEM_STYLE = {
 };
 
 export type RoleRouteGroup = '(pemanen)' | '(mandor)' | '(krani)' | '(asisten)' | '(admin)';
-
-const ROLE_ROUTE_MAP: Record<string, RoleRouteGroup> = {
-  pemanen: '(pemanen)',
-  mandor: '(mandor)',
-  'mandor panen': '(mandor)',
-  'mandor rawat': '(mandor)',
-  'krani timbang': '(krani)',
-  krani: '(krani)',
-  asisten: '(asisten)',
-  'asisten afdeling': '(asisten)',
-  manajer: '(asisten)',
-  manager: '(asisten)',
-  'manajer kebun': '(asisten)',
-  admin: '(admin)',
-  administrator: '(admin)',
-};
-
-export function getRoleRouteGroup(roleName: string): RoleRouteGroup {
-  const normalized = roleName.toLowerCase().trim();
-  return ROLE_ROUTE_MAP[normalized] ?? '(pemanen)';
-}

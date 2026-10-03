@@ -103,6 +103,7 @@ test('offline restart restores only the last authenticated profile, then logout 
     '@/services/auth': { authApi: auth },
     '@/services/api': { ApiError: class ApiError extends Error {}, TOKEN_KEY: 'auth_token', REFRESH_TOKEN_KEY: 'auth_refresh_token' },
     '@/services/database': { lookupCacheDb: { clearAll: async () => { cleared++; } } },
+    '@/utils/route-group': load('utils/route-group.ts'),
   }).useAuthStore;
   await makeStore().getState().login('mandor', 'password');
   const restarted = makeStore();
