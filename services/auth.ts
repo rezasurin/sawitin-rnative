@@ -27,10 +27,12 @@ export const authApi = {
   },
 
   /**
-   * Logout current user
+   * Logout current user. Passing the refresh token ends only this device's
+   * session; without it the server cannot tell which device is leaving and
+   * ends every session the user has.
    */
-  logout: async (token: string): Promise<void> => {
-    await apiClient.post('/logout', null, {
+  logout: async (token: string, refreshToken?: string | null): Promise<void> => {
+    await apiClient.post('/logout', refreshToken ? { refresh_token: refreshToken } : null, {
       headers: {
         Authorization: token,
       },

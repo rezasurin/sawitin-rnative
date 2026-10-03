@@ -2,26 +2,28 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
   View,
-  Text,
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button } from '@/components/core/Button';
 import { FormSelect, FormField, FormDateField } from '@/components/form';
-import { BrandColors } from '@/constants/Colors';
 import {
   useLahanList,
   useBlokList,
   useKelompokLahanList,
 } from '@/hooks';
 import { useCreateBkmRawat } from '@/hooks/useBkmRawat';
+import { useBkmRawatLookups } from '@/hooks/useBkmRawat';
+import { useNetworkStore } from '@/stores/useNetworkStore';
+import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
+import { agronomyLabel, operationalLands } from '@/utils/plantation';
+import { estateDate } from '@/utils/estateDate';
 
 interface Props {
-  onSuccess: () => void;
+  onSuccess: (id: string) => void;
 }
 
 interface FormErrors {
@@ -35,13 +37,15 @@ interface FormErrors {
 export function BKMRawatForm({ onSuccess }: Props) {
   const insets = useSafeAreaInsets();
   const createMutation = useCreateBkmRawat();
+  const isOnline = useNetworkStore((state) => state.isOnline);
+  const addToQueue = useSyncQueueStore((state) => state.addToQueue);
+  const { data: rawatLookups } = useBkmRawatLookups();
 
   const [kelompokLahanId, setKelompokLahanId] = useState('');
   const [lahanId, setLahanId] = useState('');
   const [blokId, setBlokId] = useState('');
-  const [tanggal, setTanggal] = useState(
-    new Date().toISOString().split('T')[0],
-  );
+  // Estate day (WIB): the UTC date is still yesterday before 07:00.
+  const [tanggal, setTanggal] = useState(estateDate());
   const [namaPengawas, setNamaPengawas] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -58,41 +62,44 @@ export function BKMRawatForm({ onSuccess }: Props) {
 
   const kelompokLahanOptions = useMemo(
     () =>
-      (kelompokLahanList?.data ?? []).map((g) => ({
+      (kelompokLahanList?.data ?? rawatLookups?.groups ?? []).map((g) => ({
         label: g.nama,
         value: g.id,
       })),
-    [kelompokLahanList],
+    [kelompokLahanList, rawatLookups],
   );
 
   const blokOptions = useMemo(
     () =>
-      (blokList?.data ?? []).map((b) => ({
-        label: b.nama,
+      (blokList?.data ?? rawatLookups?.blocks ?? []).filter((b) => b.kelompok_lahan_id === kelompokLahanId).map((b) => ({
+        label: agronomyLabel(b),
         value: b.id,
       })),
-    [blokList],
+    [blokList, rawatLookups, kelompokLahanId],
   );
 
   const lahanOptions = useMemo(
     () => [
       { label: 'Tanpa Lahan', value: '' },
-      ...(lahanList?.data ?? []).map((l) => ({
-        label: l.nama,
+      ...operationalLands(lahanList?.data ?? rawatLookups?.lands ?? [], blokId).map((l) => ({
+        label: agronomyLabel(l),
         value: l.id,
       })),
     ],
-    [lahanList],
+    [lahanList, rawatLookups, blokId],
   );
 
   const validate = useCallback((): boolean => {
     const nextErrors: FormErrors = {};
 
     if (!kelompokLahanId) {
-      nextErrors.kelompok_lahan_id = 'Kelompok lahan wajib dipilih';
+      nextErrors.kelompok_lahan_id = 'Kebun wajib dipilih';
     }
     if (!blokId) {
       nextErrors.blok_id = 'Blok wajib dipilih';
+    }
+    if (lahanId && !lahanOptions.some((l) => l.value === lahanId)) {
+      nextErrors.lahan_id = 'Pilih lahan yang terhubung ke blok ini';
     }
     if (!tanggal) {
       nextErrors.tanggal = 'Tanggal pelaksanaan wajib diisi';
@@ -109,7 +116,7 @@ export function BKMRawatForm({ onSuccess }: Props) {
       nama_pengawas: true,
     });
     return Object.keys(nextErrors).length === 0;
-  }, [kelompokLahanId, blokId, tanggal, namaPengawas]);
+  }, [kelompokLahanId, blokId, lahanId, lahanOptions, tanggal, namaPengawas]);
 
   const handleKelompokChange = useCallback((value: string) => {
     setKelompokLahanId(value);
@@ -143,7 +150,7 @@ export function BKMRawatForm({ onSuccess }: Props) {
     setLahanId(value);
   }, []);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!validate()) return;
 
     const payload = {
@@ -154,10 +161,35 @@ export function BKMRawatForm({ onSuccess }: Props) {
       nama_pengawas: namaPengawas.trim(),
     };
 
+    if (!isOnline) {
+      try {
+        const queued = await addToQueue({
+          module: 'bkm_rawat',
+          action: 'CREATE',
+          endpoint: '/bkmRawat',
+          payload: {
+            header: payload,
+            details: [],
+            submit: false,
+            display: {
+              kelompok_lahan_nama: kelompokLahanOptions.find((option) => option.value === kelompokLahanId)?.label,
+              blok_nama: blokOptions.find((option) => option.value === blokId)?.label,
+              lahan_nama: lahanOptions.find((option) => option.value === lahanId)?.label,
+            },
+          },
+        });
+        Alert.alert('Tersimpan offline', 'Tambahkan pekerjaan lalu kirim dokumen. Data akan disinkronkan saat online.');
+        onSuccess(`local:${queued.id}`);
+      } catch (error) {
+        Alert.alert('Gagal Menyimpan', error instanceof Error ? error.message : 'Antrian offline gagal disimpan.');
+      }
+      return;
+    }
+
     createMutation.mutate(payload, {
-      onSuccess: () => {
+      onSuccess: (created) => {
         Alert.alert('Berhasil', 'Dokumen BKM Rawat berhasil dibuat.');
-        onSuccess();
+        onSuccess(created.id);
       },
       onError: (err) => {
         Alert.alert(
@@ -176,11 +208,17 @@ export function BKMRawatForm({ onSuccess }: Props) {
     tanggal,
     namaPengawas,
     createMutation,
+    isOnline,
+    addToQueue,
+    kelompokLahanOptions,
+    blokOptions,
+    lahanOptions,
     onSuccess,
   ]);
 
   const isValid =
-    !!kelompokLahanId && !!blokId && !!tanggal && !!namaPengawas.trim();
+    !!kelompokLahanId && !!blokId && !!tanggal && !!namaPengawas.trim()
+    && (!lahanId || lahanOptions.some((l) => l.value === lahanId));
 
   return (
     <KeyboardAvoidingView
@@ -198,8 +236,8 @@ export function BKMRawatForm({ onSuccess }: Props) {
         showsVerticalScrollIndicator={false}
       >
         <FormSelect
-          label="Kelompok Lahan"
-          placeholder="Pilih kelompok lahan kebun"
+          label="Kebun"
+          placeholder="Pilih kebun"
           value={kelompokLahanId}
           options={kelompokLahanOptions}
           onSelect={handleKelompokChange}
@@ -214,7 +252,7 @@ export function BKMRawatForm({ onSuccess }: Props) {
               ? isFetchingBlok
                 ? 'Memuat blok...'
                 : 'Pilih blok kebun'
-              : 'Pilih kelompok lahan terlebih dahulu'
+              : 'Pilih kebun terlebih dahulu'
           }
           value={blokId}
           options={blokOptions}
@@ -260,21 +298,14 @@ export function BKMRawatForm({ onSuccess }: Props) {
           error={touched.nama_pengawas ? errors.nama_pengawas : undefined}
         />
 
-        <TouchableOpacity
-          style={[
-            styles.submitBtn,
-            (!isValid || createMutation.isPending) && styles.submitBtnDisabled,
-          ]}
-          activeOpacity={0.7}
+        <Button
+          title="Simpan BKM Rawat"
           onPress={handleSubmit}
-          disabled={!isValid || createMutation.isPending}
-        >
-          {createMutation.isPending ? (
-            <ActivityIndicator color={BrandColors.white} />
-          ) : (
-            <Text style={styles.submitBtnText}>Simpan BKM Rawat</Text>
-          )}
-        </TouchableOpacity>
+          loading={createMutation.isPending}
+          disabled={!isValid}
+          variant="primary"
+          style={styles.submitBtn}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -292,19 +323,6 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   submitBtn: {
-    backgroundColor: BrandColors.button,
-    height: 48,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginTop: 24,
-  },
-  submitBtnDisabled: {
-    opacity: 0.5,
-  },
-  submitBtnText: {
-    color: BrandColors.white,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

@@ -1,6 +1,8 @@
 export interface User {
   id: string;
   username: string;
+  /** Matches `created_by` on documents. Absent on profiles cached before it was sent. */
+  user_code?: string;
   member: {
     id: string;
     nama: string;
@@ -27,6 +29,10 @@ export interface Permission {
 
 export interface LoginResponse {
   token: string;
+  /** Single-use; replaced by every successful refresh. */
+  refresh_token?: string;
+  /** Access token lifetime in seconds. */
+  expires_in?: number;
   user: User;
   roles: Role[];
   permissions: Permission[];

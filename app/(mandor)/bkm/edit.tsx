@@ -1,28 +1,31 @@
 import { BKMPanenForm } from '@/components/mandor/BKMPanenForm';
+import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
+import { Text } from 'react-native';
 import { PageHeader } from '@/components/home';
 import { View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { useBkmPanenDetail } from '@/hooks/useBkmPanen';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, StyleSheet } from 'react-native';
 
 export default function EditBkmScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { data: panen, isLoading } = useBkmPanenDetail(id ?? '');
+  const policy = useOperationalPolicy('bkmPanen', panen?.status, panen?.details?.length);
   const startEditing = useBkmPanenStore((s) => s.startEditing);
 
   useEffect(() => {
-    if (panen && id) {
+    if (panen && id && policy.edit) {
       const header = {
         blok_id: panen.blok_id ?? '',
         lahan_id: panen.lahan_id ?? '',
         tanggal_laporan: panen.tanggal_laporan,
         keterangan: panen.keterangan ?? undefined,
         grup_pekerja_id: panen.grup_pekerja_id ?? undefined,
+        alasan_tbm: panen.alasan_tbm ?? undefined,
       };
       const details = (panen.details ?? []).map((d) => ({
         bkm_panen_id: d.bkm_panen_id,
@@ -44,36 +47,19 @@ export default function EditBkmScreen() {
         _tempId: d.id,
         serverId: d.id,
       }));
-      startEditing(id, header, details);
+      // The baseline this edit is against; it rides with a queued update as
+      // If-Unmodified-Since so a stale change is refused rather than applied.
+      startEditing(id, header, details, panen.modified_at ?? null);
     }
-  }, [panen, id, startEditing]);
-
-  const BackButton = (
-    <Pressable
-      onPress={() => router.back()}
-      style={({ pressed }) => [
-        {
-          opacity: pressed ? 0.7 : 1,
-          width: 40,
-          height: 40,
-          borderRadius: 12,
-          backgroundColor: 'rgba(255,255,255,0.15)',
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-      ]}
-    >
-      <FontAwesome name="arrow-left" size={20} color={BrandColors.white} />
-    </Pressable>
-  );
+  }, [panen, id, startEditing, policy.edit]);
 
   if (!id || isLoading || !panen) {
     return (
       <View style={styles.container}>
         <PageHeader
           title="Edit BKM"
-          showMenuButton={false}
-          actionBtn={BackButton}
+          showBackButton
+          onBack={() => router.back()}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={BrandColors.primary} />
@@ -86,10 +72,10 @@ export default function EditBkmScreen() {
     <View style={styles.container}>
       <PageHeader
         title="Edit BKM"
-        showMenuButton={false}
-        actionBtn={BackButton}
+        showBackButton
+        onBack={() => router.back()}
       />
-      <BKMPanenForm onSuccess={() => router.back()} />
+      {policy.edit ? <BKMPanenForm onSuccess={() => router.back()} /> : <Text>Hanya dokumen DRAFT dengan izin ubah dapat diedit. Buka kembali dokumen revisi terlebih dahulu.</Text>}
     </View>
   );
 }

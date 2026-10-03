@@ -1,4 +1,5 @@
 import { GlobalStatus, TimestampFields } from './common';
+import type { MappedRecord } from './geometry';
 
 export interface Organization {
   id: string;
@@ -9,25 +10,27 @@ export interface Organization {
 }
 
 export interface Member extends TimestampFields {
+  /** Farm's person code, distinct from nik; absent in older cached records. */
+  kode?: string | null;
   id: string;
   org_id: string;
   nama: string;
   email: string | null;
-  phone_number: string;
+  phone_number: string | null;
   nik: string | null;
-  address: string;
+  address: string | null;
   emergency_contact: string | null;
-  birth_date: string;
-  join_date: string;
+  birth_date: string | null;
+  join_date: string | null;
   status: GlobalStatus;
 }
 
 export interface CreateMemberPayload {
   nama: string;
   email?: string;
-  phone_number: string;
+  phone_number?: string;
   nik?: string;
-  address: string;
+  address?: string;
   emergency_contact?: string;
   birth_date?: string;
   join_date?: string;
@@ -36,7 +39,7 @@ export interface CreateMemberPayload {
 
 export type UpdateMemberPayload = Partial<CreateMemberPayload>;
 
-export interface KelompokLahan extends TimestampFields {
+export interface KelompokLahan extends TimestampFields, MappedRecord {
   id: string;
   org_id: string;
   nama: string;
@@ -44,7 +47,7 @@ export interface KelompokLahan extends TimestampFields {
   status: GlobalStatus;
 }
 
-export interface CreateKelompokLahanPayload {
+export interface CreateKelompokLahanPayload extends MappedRecord {
   nama: string;
   deskripsi?: string;
   status?: GlobalStatus;
@@ -52,80 +55,99 @@ export interface CreateKelompokLahanPayload {
 
 export type UpdateKelompokLahanPayload = Partial<CreateKelompokLahanPayload>;
 
-export interface Lahan extends TimestampFields {
+/** Server-derived values; absent in caches written by pre-Phase-2 builds. */
+export interface AgronomyMetadata {
+  varietas?: string | null;
+  umur_tanam?: number | null;
+  maturitas?: 'TBM' | 'TM' | 'TUA' | null;
+}
+
+export interface Lahan extends TimestampFields, AgronomyMetadata, MappedRecord {
   id: string;
   org_id: string;
-  user_pic_id: string;
+  user_pic_id: string | null;
   member_id: string;
   blok_id: string | null;
   nama: string;
   deskripsi: string | null;
-  luas_lahan: number;
-  nama_pemilik: string;
-  alamat: string;
-  tipe_dokumen: string;
-  nama_dokumen: string;
+  luas_lahan: number | null;
+  nama_pemilik: string | null;
+  alamat: string | null;
+  tipe_dokumen: string | null;
+  nama_dokumen: string | null;
   url_dokumen: string | null;
-  tanggal_dokumen: string;
-  status_pemilik: string;
-  koordinat_lokasi: number;
+  tanggal_dokumen: string | null;
+  status_pemilik: string | null;
+  /** Legacy coordinates are read-only, in latitude/longitude order. */
+  koordinat_lokasi: number[] | null;
+  tahun_tanam?: number | null;
+  /** Date (YYYY-MM-DD) the parcel counts as mature; null falls back to the planting-year rule. */
+  tanggal_tm?: string | null;
+  jumlah_pokok?: number | null;
   status: GlobalStatus;
   blok?: Blok;
   member?: Member;
 }
 
-export interface CreateLahanPayload {
-  user_pic_id: string;
+export interface CreateLahanPayload extends MappedRecord {
+  user_pic_id?: string | null;
   member_id: string;
-  blok_id: string;
+  blok_id?: string | null;
   nama: string;
   deskripsi?: string;
-  luas_lahan: number;
-  nama_pemilik: string;
-  alamat: string;
-  tipe_dokumen: string;
-  nama_dokumen: string;
+  luas_lahan?: number;
+  nama_pemilik?: string;
+  alamat?: string;
+  tipe_dokumen?: string;
+  nama_dokumen?: string;
   url_dokumen?: string;
-  tanggal_dokumen: string;
-  status_pemilik: string;
-  koordinat_lokasi: number;
+  tanggal_dokumen?: string;
+  status_pemilik?: string;
+  tahun_tanam?: number;
+  jumlah_pokok?: number;
+  varietas?: string;
   status?: GlobalStatus;
 }
 
 export type UpdateLahanPayload = Partial<CreateLahanPayload>;
 
-export interface Blok extends TimestampFields {
+export interface Blok extends TimestampFields, AgronomyMetadata, MappedRecord {
   id: string;
   org_id: string;
   kelompok_lahan_id: string;
   nama: string;
   deskripsi: string | null;
-  luas_blok: number;
-  luas_planted: number;
-  luas_unplanted: number;
-  jumlah_pokok: number;
-  tahun_tanam: number;
-  tahun_panen: number;
+  luas_blok: number | null;
+  luas_planted: number | null;
+  luas_unplanted: number | null;
+  jumlah_pokok: number | null;
+  tahun_tanam: number | null;
+  tahun_panen: number | null;
+  /** Average bunch weight in kg. Prisma serializes the decimal as a string; null falls back to the organization BJR. */
+  bjr?: string | number | null;
+  /** Date (YYYY-MM-DD) the block counts as mature; null falls back to the planting-year rule. */
+  tanggal_tm?: string | null;
   status: GlobalStatus;
   kelompok_lahan?: KelompokLahan;
 }
 
-export interface CreateBlokPayload {
+export interface CreateBlokPayload extends MappedRecord {
   kelompok_lahan_id: string;
   nama: string;
   deskripsi?: string;
-  luas_blok: number;
+  luas_blok?: number;
   luas_planted?: number;
   luas_unplanted?: number;
-  jumlah_pokok: number;
-  tahun_tanam: number;
+  jumlah_pokok?: number;
+  tahun_tanam?: number;
+  varietas?: string;
   tahun_panen?: number;
   status?: GlobalStatus;
 }
 
 export type UpdateBlokPayload = Partial<CreateBlokPayload>;
 
-export interface Tph extends TimestampFields {
+export interface Tph extends TimestampFields, MappedRecord {
   id: string;
   org_id: string;
   lahan_id: string;
@@ -137,7 +159,7 @@ export interface Tph extends TimestampFields {
   lahan?: Lahan;
 }
 
-export interface CreateTphPayload {
+export interface CreateTphPayload extends MappedRecord {
   lahan_id: string;
   nama: string;
   deskripsi?: string;
@@ -150,6 +172,7 @@ export type UpdateTphPayload = Partial<CreateTphPayload>;
 
 export interface TipePekerjaan extends TimestampFields {
   id: string;
+  org_id: string | null;
   nama: string;
   deskripsi: string | null;
   status: GlobalStatus;
@@ -167,14 +190,14 @@ export interface Pekerja extends TimestampFields {
   id: string;
   org_id: string;
   member_id: string;
-  join_date: string;
+  join_date: string | null;
   status: GlobalStatus;
   member?: Member;
 }
 
 export interface CreatePekerjaPayload {
   member_id: string;
-  join_date: string;
+  join_date?: string;
   status?: GlobalStatus;
   selectedTipePekerjaanID?: string[];
   selectedGrupPekerjaID?: string[];

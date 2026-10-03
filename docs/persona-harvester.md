@@ -1,5 +1,7 @@
 # Harvester (Pemanen) Persona Documentation
 
+> **Historical design draft:** Absensi is deferred as of 20 September 2026. The current Pemanen app has only Beranda and Akun tabs; the Absensi route and dashboard entry point described below were removed. This page records earlier design ideas, not the current release contract. See [documentation hub](README.md) for current status.
+
 ## 1. Overview & Purpose
 The `Harvester` (Pemanen) persona interface is tailored for physical field workers who harvest Fresh Fruit Bunches (FFB) and pick loose fruit. It offers a simplified, high-contrast, offline-compatible dashboard to review personal daily target counts, log attendance, and manage profile configurations.
 

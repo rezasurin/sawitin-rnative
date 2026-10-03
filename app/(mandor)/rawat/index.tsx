@@ -1,14 +1,19 @@
 import { FAB } from '@/components/core/FAB';
+import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
+import { useRouter } from 'expo-router';
+import { useModuleGroup } from '@/hooks/useModuleGroup';
+import { Card } from '@/components/core/Card';
+import { ListEmptyState } from '@/components/core/ListEmptyState';
 import { PageHeader } from '@/components/home';
 import { View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { useBkmRawatList, useDeleteBkmRawat } from '@/hooks/useBkmRawat';
 import { DocStatusBadge } from '@/components/bkm/DocStatusBadge';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import React from 'react';
+import { useNetworkStore } from '@/stores/useNetworkStore';
+import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
+import type { BkmRawat, QueuedBkmRawatPayload } from '@/types/bkm-rawat';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   RefreshControl,
@@ -19,7 +24,14 @@ import {
 
 export default function RawatScreen() {
   const router = useRouter();
-
+  const group = useModuleGroup('(mandor)');
+  const policy = useOperationalPolicy('bkmRawat', 'DRAFT');
+  const canDelete = policy.delete;
+  const canCreate = policy.create;
+  const isOnline = useNetworkStore((state) => state.isOnline);
+  const queue = useSyncQueueStore((state) => state.queue);
+  const addToQueue = useSyncQueueStore((state) => state.addToQueue);
+  const removeFromQueue = useSyncQueueStore((state) => state.removeFromQueue);
   const {
     data: rawatList,
     isLoading,
@@ -29,8 +41,25 @@ export default function RawatScreen() {
   } = useBkmRawatList({ limit: 50 });
   const deleteMutation = useDeleteBkmRawat();
 
-  const rawatData = rawatList?.data ?? [];
-  const totalItems = rawatList?.pagination?.total ?? 0;
+  const queuedDeletes = new Set(queue.filter((item) => item.module === 'bkm_rawat' && item.action === 'DELETE').map((item) => (item.payload as { id?: string } | null)?.id).filter(Boolean));
+  const localRawat = queue.filter((item) => item.module === 'bkm_rawat' && item.action === 'CREATE').flatMap((item) => {
+    const payload = item.payload as unknown as QueuedBkmRawatPayload | null;
+    if (!payload) return [];
+    return [{
+      id: `local:${item.id}`,
+      org_id: 'local',
+      ...payload.header,
+      lahan_id: payload.header.lahan_id ?? null,
+      status: payload.submit ? 'SUBMITTED' : 'DRAFT',
+      approved_by: null, approved_at: null, rejected_by: null, rejected_at: null, rejection_note: null,
+      created_at: new Date(item.createdAt).toISOString(), created_by: 'local', modified_at: new Date(item.createdAt).toISOString(), modified_by: null,
+      kelompok_lahan: { id: payload.header.kelompok_lahan_id, nama: payload.display?.kelompok_lahan_nama ?? payload.header.kelompok_lahan_id },
+      blok: { id: payload.header.blok_id, nama: payload.display?.blok_nama ?? payload.header.blok_id },
+      lahan: payload.header.lahan_id ? { id: payload.header.lahan_id, nama: payload.display?.lahan_nama ?? payload.header.lahan_id } : undefined,
+    } as BkmRawat];
+  });
+  const rawatData = [...localRawat, ...(rawatList?.data ?? []).filter((item) => !queuedDeletes.has(item.id))];
+  const totalItems = Math.max(0, (rawatList?.pagination?.total ?? 0) + localRawat.length - queuedDeletes.size);
   const hasDraft = rawatData.some((item) => item.status === 'DRAFT');
 
   const handleDelete = (id: string) => {
@@ -42,10 +71,29 @@ export default function RawatScreen() {
         {
           text: 'Hapus',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
+            if (id.startsWith('local:')) {
+              await removeFromQueue(id.slice('local:'.length));
+              Alert.alert('Berhasil', 'Draft offline berhasil dihapus.');
+              return;
+            }
+            if (!isOnline) {
+              try {
+                await addToQueue({
+                  module: 'bkm_rawat',
+                  action: 'DELETE',
+                  endpoint: `/bkmRawat/${id}`,
+                  payload: { id },
+                });
+                Alert.alert('Disimpan offline', 'Penghapusan akan dikirim saat koneksi tersedia.');
+              } catch (error) {
+                Alert.alert('Gagal', error instanceof Error ? error.message : 'Gagal menyimpan penghapusan offline.');
+              }
+              return;
+            }
             deleteMutation.mutate(id, {
               onSuccess: () => {
-                Alert.alert('Berhasil', 'Dokumen berhasil dihapus.');
+                Alert.alert('Berhasil', 'Dokumen berhasil dihapus.', [{ text: 'Tutup' }, { text: 'Lihat riwayat', onPress: () => router.push(`/${group}/rawat/${id}` as never) }]);
                 refetch();
               },
               onError: (err) => {
@@ -76,45 +124,50 @@ export default function RawatScreen() {
             year: 'numeric',
           });
           return (
-            <TouchableOpacity
-              style={styles.card}
-              onLongPress={() =>
-                item.status === 'DRAFT' && handleDelete(item.id)
-              }
-              delayLongPress={600}
-              activeOpacity={0.7}
-            >
-              <View style={styles.cardHeader}>
-                <View style={styles.cardHeaderInfo}>
-                  <Text style={styles.cardTitle}>
-                    {item.lahan?.nama || 'Lahan Bebas'}
-                  </Text>
-                  <Text style={styles.cardDate}>
-                    {itemDate} · {item.nama_pengawas}
-                  </Text>
+            <Card>
+              <TouchableOpacity
+                onPress={() => router.push(`/${group}/rawat/${item.id}` as never)}
+                onLongPress={() =>
+                  canDelete && item.status === 'DRAFT' && handleDelete(item.id)
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`BKM Rawat ${item.nama_pengawas}, ${item.status}`}
+                accessibilityHint="Buka detail dokumen"
+                delayLongPress={600}
+                activeOpacity={0.7}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardHeaderInfo}>
+                    <Text style={styles.cardTitle}>
+                      {item.lahan?.nama || 'Lahan Bebas'}
+                    </Text>
+                    <Text style={styles.cardDate}>
+                      {itemDate} · {item.nama_pengawas}
+                    </Text>
+                  </View>
+                  <DocStatusBadge status={item.status} />
                 </View>
-                <DocStatusBadge status={item.status} />
-              </View>
-              <View style={styles.cardBody}>
-                <Text style={styles.cardMeta}>
-                  Kelompok: {item.kelompok_lahan?.nama || '-'}
-                </Text>
+                <View style={styles.cardBody}>
+                  <Text style={styles.cardMeta}>
+                    Kebun: {item.kelompok_lahan?.nama || '—'}
+                  </Text>
                 {item.blok?.nama && (
                   <Text style={styles.cardMeta}>
                     Blok: {item.blok.nama}
                   </Text>
                 )}
               </View>
-            </TouchableOpacity>
+              </TouchableOpacity>
+            </Card>
           );
         }}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <Text style={styles.headerSubtitle}>
-              {totalItems > 0 ? totalItems : rawatData.length} dokumen perawatan kebun
+              {totalItems} dokumen perawatan kebun
             </Text>
-            {hasDraft && (
+            {hasDraft && canDelete && (
               <Text style={styles.headerHint}>
                 Tekan lama untuk menghapus DRAFT
               </Text>
@@ -122,35 +175,15 @@ export default function RawatScreen() {
           </View>
         }
         ListEmptyComponent={
-          isLoading ? (
-            <View style={styles.centered}>
-              <ActivityIndicator size="large" color={BrandColors.primary} />
-            </View>
-          ) : isError ? (
-            <View style={styles.centered}>
-              <Ionicons
-                name="alert-circle-outline"
-                size={40}
-                color={BrandColors.error}
-              />
-              <Text style={styles.errorText}>Gagal memuat data</Text>
-              <TouchableOpacity onPress={() => refetch()}>
-                <Text style={styles.retryText}>Coba lagi</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.centered}>
-              <Ionicons
-                name="document-text-outline"
-                size={48}
-                color={BrandColors.textMuted}
-              />
-              <Text style={styles.emptyText}>Belum ada data BKM Rawat</Text>
-              <Text style={styles.emptySubtext}>
-                Tambahkan dokumen rawat baru dengan menekan tombol +
-              </Text>
-            </View>
-          )
+          <ListEmptyState
+            isLoading={isLoading}
+            isError={isError && rawatData.length === 0}
+            isEmpty={!isLoading && rawatData.length === 0}
+            onRetry={() => refetch()}
+            emptyIcon="document-text-outline"
+            emptyText="Belum ada data BKM Rawat"
+            emptySubtext="Tambahkan dokumen rawat baru dengan menekan tombol +"
+          />
         }
         refreshControl={
           <RefreshControl
@@ -160,8 +193,7 @@ export default function RawatScreen() {
           />
         }
       />
-
-      <FAB onPress={() => router.push('/(mandor)/rawat/add')} />
+      {canCreate && <FAB onPress={() => router.push(`/${group}/rawat/add`)} />}
     </View>
   );
 }
@@ -184,40 +216,6 @@ const styles = StyleSheet.create({
     color: BrandColors.textMuted,
     marginTop: 6,
     fontStyle: 'italic',
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    color: BrandColors.textMuted,
-    fontSize: 15,
-    marginTop: 12,
-  },
-  emptySubtext: {
-    color: BrandColors.textMuted,
-    fontSize: 13,
-    marginTop: 4,
-  },
-  errorText: {
-    color: BrandColors.error,
-    fontSize: 15,
-    marginTop: 12,
-  },
-  retryText: {
-    color: BrandColors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 8,
-  },
-  card: {
-    backgroundColor: BrandColors.cardBg,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 8,
-    padding: 16,
   },
   cardHeader: {
     flexDirection: 'row',

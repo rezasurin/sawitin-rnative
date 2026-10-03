@@ -5,13 +5,14 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, Text } from "react-native";
 import { GradeItem } from "./GradeItem";
+import { memberLabel } from '@/utils/plantation';
 
 export function DetailCard({ detail }: { detail: BkmPanenDetailType }) {
   return (
     <View style={styles.card}>
       <View style={styles.header}>
         <Ionicons name="person" size={16} color={BrandColors.primary} />
-        <Text style={styles.title}>{detail.pekerja?.member?.nama ?? detail.pekerja_id}</Text>
+        <Text style={styles.title}>{memberLabel(detail.pekerja?.member, detail.pekerja_id)}</Text>
       </View>
       <Text style={styles.meta}>
         TPH: {detail.tph?.nama ?? detail.tph_id} &bull; {detail.jenis_pekerjaan}
@@ -25,7 +26,7 @@ export function DetailCard({ detail }: { detail: BkmPanenDetailType }) {
         <GradeItem label="Kosong" value={detail.janjang_kosong} />
       </View>
       {detail.jumlah_brondol != null && (
-        <Text style={styles.brondol}>Brondolan: {detail.jumlah_brondol} kg</Text>
+        <Text style={styles.brondol}>Brondol (kg): {detail.jumlah_brondol}</Text>
       )}
       {detail.note && <Text style={styles.note}>Catatan: {detail.note}</Text>}
       <Text style={styles.total}>Total Janjang: {detail.jumlah_janjang}</Text>

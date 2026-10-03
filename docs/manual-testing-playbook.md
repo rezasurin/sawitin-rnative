@@ -1,6 +1,8 @@
 # Sawitin Mobile App - Manual & E2E Testing Playbook
 
-Buku panduan ini dirancang untuk memandu proses pengujian manual dan *end-to-end* (E2E) pada aplikasi mobile **Sawitin** (React Native Expo). Panduan ini mencakup seluruh fitur utama: wizard BKM Panen 4-langkah, BKM Checker + QR SPB, jembatan timbang (krani), persetujuan asisten, **estimasi tonase BJR**, **rekonsiliasi janjang Checker↔Panen**, absensi geofence, BKM Rawat, dan sinkronisasi luring SQLite.
+Buku panduan ini dirancang untuk memandu proses pengujian manual dan *end-to-end* (E2E) pada aplikasi mobile **Sawitin** (React Native Expo). Panduan ini mencakup alur BKM Panen, BKM Checker + QR SPB, jembatan timbang (krani), persetujuan asisten, estimasi tonase BJR, rekonsiliasi janjang Checker↔Panen, BKM Rawat, dan sinkronisasi luring SQLite.
+
+> **Keputusan produk (20 September 2026):** Absensi ditunda dan tidak tersedia di aplikasi mobile. Jangan gunakan skenario Absensi lama sebagai kriteria rilis. Catatan modul 5 di bawah hanya menjelaskan status penundaan.
 
 > **Catatan versi:** Playbook ini sudah diselaraskan dengan seed data terbaru dan perubahan data-model mobile (lahan → `blok_id`, blok → `kelompok_lahan_id`, tph → `lahan_id`).
 
@@ -13,7 +15,7 @@ Buku panduan ini dirancang untuk memandu proses pengujian manual dan *end-to-end
 4. [Modul 2: BKM Checker, QR SPB & Rekonsiliasi Janjang (Mandor)](#modul-2-bkm-checker-qr-spb--rekonsiliasi-janjang-mandor)
 5. [Modul 3: Pemindaian Kamera & Jembatan Timbang (Krani Timbang)](#modul-3-pemindaian-kamera--jembatan-timbang-krani-timbang)
 6. [Modul 4: Aksi Persetujuan & Penolakan BKM (Asisten)](#modul-4-aksi-persetujuan--penolakan-bkm-asisten)
-7. [Modul 5: Absensi Mandiri & Validasi Geofence GPS (Mandor / Pemanen)](#modul-5-absensi-mandiri--validasi-geofence-gps-mandor--pemanen)
+7. [Modul 5: Absensi ditunda](#modul-5-absensi-ditunda)
 8. [Modul 6: Pencatatan Log Perawatan Kebun / BKM Rawat (Mandor)](#modul-6-pencatatan-log-perawatan-kebun--bkm-rawat-mandor)
 9. [Modul 7: Simulasi Cache Luring & Sinkronisasi SQLite (Semua Peran)](#modul-7-simulasi-cache-luring--sinkronisasi-sqlite-semua-peran)
 
@@ -59,11 +61,11 @@ Gunakan kredensial berikut untuk login sesuai dengan skenario peran. Password se
 | Peran (Role) | Username | Password | Lahan PIC (Blok) | Modul Utama yang Diuji |
 | :--- | :--- | :--- | :--- | :--- |
 | **Administrator** | `admin` | `admin` | Semua | Setup, fallback approve, pembersihan data |
-| **Mandor Panen** | `mandor1` | `password123` | Lahan Blok A (Blok A1) | BKM Panen, BKM Checker, Absensi, BKM Rawat |
+| **Mandor Panen** | `mandor1` | `password123` | Lahan Blok A (Blok A1) | BKM Panen, BKM Checker, BKM Rawat |
 | **Mandor Panen 2** | `mandor2` | `password123` | Lahan Blok B (Blok A2) | (opsional) |
 | **Asisten Afdeling** | `asisten1` | `password123` | Lahan Blok C (Blok B1) | Persetujuan (Approve/Reject) BKM Panen |
 | **Krani Timbang** | `krani1` | `password123` | – | Pemindai QR SPB, Form Jembatan Timbang |
-| **Pemanen** | `pemanen1` | `password123` | – | Absensi Harian |
+| **Pemanen** | `pemanen1` | `password123` | – | Beranda dan Akun; tidak ada alur Absensi saat ini |
 
 ### Master Data Tersedia (dari seed)
 | Entitas | Nilai |
@@ -156,21 +158,9 @@ Pastikan sudah ada **BKM Panen berstatus `APPROVED`** yang dibuat di Modul 1 dan
 
 ---
 
-## Modul 5: Absensi Mandiri & Validasi Geofence GPS (Mandor / Pemanen)
+## Modul 5: Absensi ditunda
 
-*Tujuan: Memvalidasi verifikasi wilayah kerja (GPS Geofencing) saat absen masuk.*
-
-*   **Aktor Uji Coba**: Login sebagai Mandor Panen (`mandor1`) atau Pemanen (`pemanen1`, akun baru tersedia).
-*   **Pilihan Data Valid (Happy Path)**:
-    *   Pilih **Blok pertama** di daftar lokasi (biasanya *Blok A1*).
-    *   Ketuk tombol lingkaran besar **CLOCK IN**.
-    *   **Hasil**: Koordinat *Blok A1* disimulasikan sama dengan koordinat GPS (Jarak 0m / dalam batas 100m). Absen berhasil dengan badge hijau **"Sesuai"**.
-*   **Pilihan Data Tidak Valid (Unhappy Path / Peringatan)**:
-    *   Pilih **Blok kedua atau lainnya** (*Blok A2* / *Blok B1*).
-    *   Ketuk **CLOCK IN** → koordinat blok lain disimulasikan ~160m dari GPS (di luar 100m) → muncul modal **⚠️ Peringatan Geofencing**.
-    *   Ketik alasan (misal "Absen di pos afdeling dekat gerbang") dan ketuk **Kirim Absen** → tersimpan dengan badge jingga **"Luar Blok"**.
-
-> ⚠️ Catatan: geofencing saat ini masih memakai koordinat simulasi (`MOCK_BLOCK_COORDINATES`) karena master blok belum memiliki polygon batas. Ini disengaja untuk demo.
+Absensi tidak memiliki route mobile atau API backend. Tidak ada pengujian clock-in, geofence, atau sinkronisasi absensi untuk rilis ini. Tabel SQLite lokal dan komponen layar lama dipertahankan sebagai bahan implementasi mendatang.
 
 ---
 
@@ -193,13 +183,13 @@ Pastikan sudah ada **BKM Panen berstatus `APPROVED`** yang dibuat di Modul 1 dan
 
 *Tujuan: Memvalidasi ketangguhan aplikasi saat terputus dari jaringan internet.*
 
-*   **Aktor Uji Coba**: Dapat menggunakan akun Mandor (`mandor1`) atau Pemanen (`pemanen1`).
+*   **Aktor Uji Coba**: Gunakan akun Mandor (`mandor1`).
 *   **Pilihan Data Valid (Happy Path)**:
-    *   Saat online, buka menu **Panen** dan **Absensi** untuk memastikan data ter-cache.
+    *   Saat online, buka menu **Panen** untuk memastikan data ter-cache.
     *   Aktifkan **Mode Pesawat (Airplane Mode)**.
     *   Buka kembali daftar **Panen**. Pastikan data BKM Panen ter-cache tetap bisa dibaca (offline fallback).
-    *   Lakukan Absen Masuk (Modul 5) saat offline → transaksi disimpan ke SQLite lokal (`sync_queue`).
-    *   Aktifkan kembali internet → antrean offline otomatis tersinkronisasi ke backend dan histori absen ter-update.
+    *   Buat atau ubah dokumen BKM yang mendukung antrean luring. Pastikan perubahan tersimpan di `sync_queue`.
+    *   Aktifkan kembali internet → periksa antrean terkirim dan dokumen muncul di backend.
 *   **Pilihan Data Tidak Valid (Unhappy Path)**:
     *   Lakukan sinkronisasi paksa saat jaringan masih mati → sistem tidak crash dan mempertahankan data antrean luring dengan aman hingga koneksi pulih.
 

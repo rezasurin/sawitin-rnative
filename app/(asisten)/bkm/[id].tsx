@@ -1,35 +1,28 @@
 import { PageHeader } from "@/components/home";
+import { OperationalActions } from '@/components/bkm/OperationalActions';
+import { OperationalHistory } from '@/components/bkm/OperationalHistory';
 import { View } from "@/components/Themed";
 import { DetailCard } from "@/components/bkm/DetailCard";
 import { DocStatusBadge } from "@/components/bkm/DocStatusBadge";
 import { MetricCard } from "@/components/bkm/MetricCard";
 import { BrandColors } from "@/constants/Colors";
-import { useBkmPanenDetail, useApproveBkmPanen, useRejectBkmPanen } from "@/hooks/useBkmPanen";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { useBkmPanenDetail } from "@/hooks/useBkmPanen";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   Alert,
 } from "react-native";
-import { ConfirmModal } from "@/components/core/ConfirmModal";
 
 export default function AsistenBkmDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading, isError, refetch } = useBkmPanenDetail(id);
-
-  const approveMutation = useApproveBkmPanen();
-  const rejectMutation = useRejectBkmPanen();
-
-  const [approveVisible, setApproveVisible] = useState(false);
-  const [rejectVisible, setRejectVisible] = useState(false);
 
   const metrics = useMemo(() => {
     const details = data?.details ?? [];
@@ -45,60 +38,17 @@ export default function AsistenBkmDetailScreen() {
       0,
     );
     const totalBrondol = details.reduce((sum, d) => sum + (Number(d.jumlah_brondol) || 0), 0);
+    const hasBrondol = details.some((d) => d.jumlah_brondol != null);
     const tphCount = new Set(details.map((d) => d.tph_id)).size;
-    return { totalJanjang, totalBrondol, tphCount };
+    return { totalJanjang, totalBrondol, hasBrondol, tphCount };
   }, [data]);
 
-  const handleApprove = () => {
-    if (!id) return;
-    approveMutation.mutate(id, {
-      onSuccess: () => {
-        setApproveVisible(false);
-        Alert.alert("Berhasil", "BKM Panen telah disetujui.");
-        refetch();
-      },
-      onError: (err) => {
-        Alert.alert("Gagal", err instanceof Error ? err.message : "Gagal menyetujui BKM.");
-      },
-    });
-  };
-
-  const handleReject = (note?: string) => {
-    if (!id) return;
-    if (!note || note.trim() === "") {
-      Alert.alert("Validasi Input", "Alasan penolakan/revisi wajib diisi.");
-      return;
-    }
-    rejectMutation.mutate(
-      { id, note },
-      {
-        onSuccess: () => {
-          setRejectVisible(false);
-          Alert.alert("Berhasil", "BKM Panen telah dikirim kembali untuk revisi.");
-          refetch();
-        },
-        onError: (err) => {
-          Alert.alert("Gagal", err instanceof Error ? err.message : "Gagal memproses penolakan BKM.");
-        },
-      },
-    );
-  };
-
-  const BackButton = (
-    <Pressable
-      onPress={() => router.back()}
-      style={({ pressed }) => [
-        { opacity: pressed ? 0.7 : 1, width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
-      ]}
-    >
-      <FontAwesome name="arrow-left" size={20} color={BrandColors.white} />
-    </Pressable>
-  );
+  const routerBack = () => router.back();
 
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <PageHeader title="Detail BKM" showMenuButton={false} actionBtn={BackButton} />
+        <PageHeader title="Detail BKM" showBackButton onBack={routerBack} />
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={BrandColors.primary} />
         </View>
@@ -109,10 +59,11 @@ export default function AsistenBkmDetailScreen() {
   if (isError || !data) {
     return (
       <View style={styles.container}>
-        <PageHeader title="Detail BKM" showMenuButton={false} actionBtn={BackButton} />
+        <PageHeader title="Detail BKM" showBackButton onBack={routerBack} />
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={40} color={BrandColors.error} />
           <Text style={styles.errorText}>Gagal memuat data</Text>
+          <OperationalHistory module="bkmPanen" id={id} />
           <TouchableOpacity onPress={() => refetch()}>
             <Text style={styles.retryText}>Coba lagi</Text>
           </TouchableOpacity>
@@ -125,7 +76,7 @@ export default function AsistenBkmDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <PageHeader title="Detail BKM" showMenuButton={false} actionBtn={BackButton} />
+      <PageHeader title="Detail BKM" showBackButton onBack={routerBack} />
       
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.sectionHeader}>
@@ -150,7 +101,7 @@ export default function AsistenBkmDetailScreen() {
           <MetricCard label="Pekerja" value={String(details.length)} />
           <MetricCard label="TPH" value={String(metrics.tphCount)} />
           <MetricCard label="Total Janjang" value={String(metrics.totalJanjang)} />
-          <MetricCard label="Brondolan" value={`${metrics.totalBrondol} kg`} />
+          <MetricCard label="Brondol (kg)" value={metrics.hasBrondol ? `${metrics.totalBrondol} kg` : '—'} />
         </View>
 
         <Text style={styles.sectionLabel}>Detail per Pekerja</Text>
@@ -162,55 +113,10 @@ export default function AsistenBkmDetailScreen() {
             <Text style={styles.emptyDetailsText}>Belum ada detail</Text>
           </View>
         )}
+        <OperationalActions module="bkmPanen" document={data} />
+        <OperationalHistory module="bkmPanen" id={id} />
       </ScrollView>
 
-      {/* Approve & Reject Action Bar */}
-      {data.status === 'SUBMITTED' && (
-        <View style={styles.actionBar}>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.rejectBtn]}
-            onPress={() => setRejectVisible(true)}
-            disabled={approveMutation.isPending || rejectMutation.isPending}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.rejectBtnText}>Minta Revisi</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.approveBtn]}
-            onPress={() => setApproveVisible(true)}
-            disabled={approveMutation.isPending || rejectMutation.isPending}
-            activeOpacity={0.7}
-          >
-            {approveMutation.isPending ? (
-              <ActivityIndicator color={BrandColors.white} size="small" />
-            ) : (
-              <Text style={styles.approveBtnText}>Setujui</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Confirmation Modals */}
-      <ConfirmModal
-        visible={approveVisible}
-        title="Setujui BKM Panen?"
-        message="Dokumen BKM Panen ini akan disetujui dan diajukan ke tahap berikutnya."
-        confirmText="Setujui"
-        onConfirm={handleApprove}
-        onCancel={() => setApproveVisible(false)}
-      />
-
-      <ConfirmModal
-        visible={rejectVisible}
-        title="Minta Revisi BKM?"
-        message="Masukkan alasan penolakan atau instruksi revisi untuk Mandor."
-        confirmText="Kirim"
-        showInput
-        inputPlaceholder="Contoh: Jumlah janjang di TPH 02 salah..."
-        onConfirm={handleReject}
-        onCancel={() => setRejectVisible(false)}
-      />
     </View>
   );
 }

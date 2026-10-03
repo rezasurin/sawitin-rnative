@@ -1,23 +1,16 @@
 import { FormField } from '@/components/form/FormField';
 import { FormSelect } from '@/components/form/FormSelect';
+import { Button } from '@/components/core/Button';
 import { PageHeader } from '@/components/home';
 import { View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
-import { useCreateMaterial } from '@/hooks/useMaterial';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { ModulePermissionGuard } from '@/components/core/ModulePermissionGuard';
+import { useCreateMaterial, useMaterialDetail, useUpdateMaterial } from '@/hooks/useMaterial';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'expo-router';
-import React from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -25,8 +18,10 @@ const schema = z.object({
   nama: z.string().min(1, 'Nama wajib diisi'),
   kategori: z.string().min(1, 'Kategori wajib diisi'),
   satuan: z.string().min(1, 'Satuan wajib diisi'),
-  harga_satuan: z.number().optional(),
-  stok: z.number().optional(),
+  harga_satuan: z.number().nonnegative().optional(),
+  stok: z.number().nonnegative().optional(),
+  bahan_aktif: z.string().max(255).optional(),
+  konsentrasi: z.string().max(100).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']),
 });
 
@@ -37,13 +32,18 @@ const STATUS_OPTIONS = [
   { label: 'Nonaktif', value: 'INACTIVE' },
 ];
 
-export default function AddMaterialScreen() {
+function MaterialFormScreen() {
   const router = useRouter();
-  const mutation = useCreateMaterial();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const createMutation = useCreateMaterial();
+  const updateMutation = useUpdateMaterial();
+  const material = useMaterialDetail(id ?? '');
+  const editing = Boolean(id);
 
   const {
     control,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema) as any,
@@ -52,40 +52,33 @@ export default function AddMaterialScreen() {
     },
   });
 
+  useEffect(() => {
+    if (!material.data) return;
+    const value = material.data;
+    reset({ kode: value.kode, nama: value.nama, kategori: value.kategori, satuan: value.satuan,
+      harga_satuan: value.harga_satuan ?? undefined, bahan_aktif: value.bahan_aktif ?? undefined,
+      konsentrasi: value.konsentrasi ?? undefined, status: value.status });
+  }, [material.data, reset]);
+
   const onSubmit = async (data: FormData) => {
     try {
-      await mutation.mutateAsync(data);
+      const normalized = { ...data, bahan_aktif: data.bahan_aktif?.trim() || null, konsentrasi: data.konsentrasi?.trim() || null };
+      if (id) {
+        const { stok: _openingStock, ...update } = normalized;
+        await updateMutation.mutateAsync({ id, data: update });
+      } else await createMutation.mutateAsync(normalized);
       router.back();
     } catch {
       Alert.alert('Gagal', 'Tidak dapat menyimpan material. Silakan coba lagi.');
     }
   };
 
-  const BackButton = (
-    <Pressable
-      onPress={() => router.back()}
-      style={({ pressed }) => [
-        {
-          opacity: pressed ? 0.7 : 1,
-          width: 40,
-          height: 40,
-          borderRadius: 12,
-          backgroundColor: 'rgba(255,255,255,0.15)',
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-      ]}
-    >
-      <FontAwesome name="arrow-left" size={20} color={BrandColors.white} />
-    </Pressable>
-  );
-
   return (
     <View style={styles.container}>
       <PageHeader
-        title="Tambah Material"
-        showMenuButton={false}
-        actionBtn={BackButton}
+        title={editing ? 'Ubah Material' : 'Tambah Material'}
+        showBackButton
+        onBack={() => router.back()}
       />
       <ScrollView
         style={styles.scrollView}
@@ -168,7 +161,14 @@ export default function AddMaterialScreen() {
           )}
         />
 
-        <Controller
+        <Controller control={control} name="bahan_aktif" render={({ field: { onChange, onBlur, value } }) => (
+          <FormField label="Bahan aktif" value={value ?? ''} onChangeText={onChange} onBlur={onBlur} error={errors.bahan_aktif?.message} />
+        )} />
+        <Controller control={control} name="konsentrasi" render={({ field: { onChange, onBlur, value } }) => (
+          <FormField label="Konsentrasi" value={value ?? ''} onChangeText={onChange} onBlur={onBlur} error={errors.konsentrasi?.message} />
+        )} />
+
+        {editing ? <><Text style={{ color: BrandColors.textSecondary }}>Stok saat ini: {material.data?.stok ?? '—'}. Penyesuaian stok dicatat melalui stok opname.</Text><Button title="Lihat stok opname" variant="secondary" onPress={() => router.push('/(admin)/stock-opname' as never)} /></> : <Controller
           control={control}
           name="stok"
           render={({ field: { onChange, onBlur, value } }) => (
@@ -182,7 +182,7 @@ export default function AddMaterialScreen() {
               error={errors.stok?.message}
             />
           )}
-        />
+        />}
 
         <Controller
           control={control}
@@ -198,21 +198,21 @@ export default function AddMaterialScreen() {
           )}
         />
 
-        <TouchableOpacity
-          style={[styles.submitBtn, mutation.isPending && styles.submitBtnDisabled]}
+        <Button
+          title="Simpan"
+          loading={createMutation.isPending || updateMutation.isPending}
+          disabled={createMutation.isPending || updateMutation.isPending || (editing && !material.data)}
           onPress={handleSubmit(onSubmit as any)}
-          disabled={mutation.isPending}
-          activeOpacity={0.8}
-        >
-          {mutation.isPending ? (
-            <ActivityIndicator color={BrandColors.white} />
-          ) : (
-            <Text style={styles.submitBtnText}>Simpan</Text>
-          )}
-        </TouchableOpacity>
+          style={styles.submitBtn}
+        />
       </ScrollView>
     </View>
   );
+}
+
+export default function AddMaterialScreen() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  return <ModulePermissionGuard module="mod_material" action={id ? 'update' : 'write'}><MaterialFormScreen /></ModulePermissionGuard>;
 }
 
 const styles = StyleSheet.create({
@@ -220,19 +220,6 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 40 },
   submitBtn: {
-    backgroundColor: BrandColors.primary,
-    height: 48,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginTop: 8,
-  },
-  submitBtnDisabled: {
-    opacity: 0.6,
-  },
-  submitBtnText: {
-    color: BrandColors.white,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

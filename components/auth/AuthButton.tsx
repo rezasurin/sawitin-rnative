@@ -1,13 +1,6 @@
 import React from 'react';
-import {
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  ViewStyle,
-  TextStyle,
-} from 'react-native';
-import { BrandColors } from '@/constants/Colors';
+import type { TextStyle, ViewStyle } from 'react-native';
+import { Button } from '@/components/core/Button';
 
 interface AuthButtonProps {
   title: string;
@@ -19,87 +12,15 @@ interface AuthButtonProps {
   variant?: 'primary' | 'secondary' | 'text';
 }
 
+const VARIANT_MAP = {
+  primary: 'primary',
+  secondary: 'secondary',
+  text: 'ghost',
+} as const;
+
 export default function AuthButton({
-  title,
-  onPress,
-  loading = false,
-  disabled = false,
-  style,
-  textStyle,
   variant = 'primary',
+  ...props
 }: AuthButtonProps) {
-  const isDisabled = disabled || loading;
-
-  const buttonStyles = [
-    styles.button,
-    variant === 'primary' && styles.buttonPrimary,
-    variant === 'secondary' && styles.buttonSecondary,
-    variant === 'text' && styles.buttonText,
-    isDisabled && styles.buttonDisabled,
-    style,
-  ];
-
-  const textStyles = [
-    styles.text,
-    variant === 'primary' && styles.textPrimary,
-    variant === 'secondary' && styles.textSecondary,
-    variant === 'text' && styles.textLink,
-    textStyle,
-  ];
-
-  return (
-    <TouchableOpacity
-      style={buttonStyles}
-      onPress={onPress}
-      disabled={isDisabled}
-      activeOpacity={0.8}
-    >
-      {loading ? (
-        <ActivityIndicator
-          color={variant === 'primary' ? BrandColors.white : BrandColors.primary}
-        />
-      ) : (
-        <Text style={textStyles}>{title}</Text>
-      )}
-    </TouchableOpacity>
-  );
+  return <Button variant={VARIANT_MAP[variant]} {...props} />;
 }
-
-const styles = StyleSheet.create({
-  button: {
-    height: 48,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  buttonPrimary: {
-    backgroundColor: BrandColors.button,
-  },
-  buttonSecondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: BrandColors.primary,
-  },
-  buttonText: {
-    backgroundColor: 'transparent',
-    height: 'auto',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  text: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  textPrimary: {
-    color: BrandColors.white,
-  },
-  textSecondary: {
-    color: BrandColors.primary,
-  },
-  textLink: {
-    color: BrandColors.primary,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-});

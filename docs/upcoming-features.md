@@ -1,5 +1,7 @@
 # Upcoming Mobile Features Technical Specification
 
+> **Status:** Absensi and its geofence workflow are deferred. This document is a future design proposal, not current mobile behavior.
+
 This document outlines the technical specifications, data structures, and implementation logic for upcoming mobile features in the React Native application (`sawitin`).
 
 ---

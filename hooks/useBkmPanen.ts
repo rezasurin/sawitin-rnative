@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from '@tansta
 import { bkmPanenApi } from '@/services/bkm-panen.service';
 import { bkmPanenKeys } from '@/services/queryKeys';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
+import { useAuthStore } from '@/stores/useAuthStore';
 import type { ApiListParams } from '@/types/common';
 import type {
   BkmPanen,
@@ -86,18 +87,6 @@ export function useDeleteBkmPanen() {
   });
 }
 
-export function useApproveBkmPanen() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => bkmPanenApi.approve(id),
-    onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: bkmPanenKeys.detail(id) });
-      queryClient.invalidateQueries({ queryKey: bkmPanenKeys.lists() });
-    },
-  });
-}
-
 export function useRejectBkmPanen() {
   const queryClient = useQueryClient();
 
@@ -165,6 +154,7 @@ export function useSubmitBkmPanen() {
         tanggal_laporan: header.tanggal_laporan,
         keterangan: header.keterangan || undefined,
         grup_pekerja_id: header.grup_pekerja_id || undefined,
+        alasan_tbm: header.alasan_tbm?.trim() || undefined,
       };
 
       const detailPayloads = details.map((d) => ({
@@ -189,8 +179,11 @@ export function useSubmitBkmPanen() {
       if (isEditing && editingId) {
         const { deletedDetailIds } = useBkmPanenStore.getState();
 
+        // Revalidate before writing; revision documents must be reopened explicitly.
+        const current = await bkmPanenApi.getById(editingId);
+        if (current.status !== 'DRAFT') throw Object.assign(new Error('Dokumen berubah. Buka kembali sebagai draft sebelum mengedit.'), { status: 409 });
         // 1. Update header
-        await bkmPanenApi.update(editingId, headerPayload);
+        await bkmPanenApi.update(editingId, headerPayload, useBkmPanenStore.getState().editingModifiedAt);
 
         // 2. Delete removed details
         if (deletedDetailIds && deletedDetailIds.length > 0) {
@@ -228,6 +221,7 @@ export function useSubmitBkmPanen() {
           bkmPanenApi.addDetail({ ...d, bkm_panen_id: panen.id }),
         ),
       );
+      if (!useAuthStore.getState().hasPermission('mod_bkm_panen', 'update')) return panen;
       return bkmPanenApi.update(panen.id, {
         status: 'SUBMITTED',
       });

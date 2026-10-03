@@ -1,12 +1,18 @@
 import { apiClient } from './api';
+import { lookupCacheDb } from './database';
+import { readThroughCache } from './master-cache';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { PaginatedResponse, ApiListParams } from '@/types/common';
 import { Member, CreateMemberPayload, UpdateMemberPayload } from '@/types/master-data';
 
 export const memberApi = {
-  getAll: async (params?: ApiListParams): Promise<PaginatedResponse<Member>> => {
+  getAll: async (params?: ApiListParams): Promise<PaginatedResponse<Member>> => readThroughCache({
+    getUserId: () => useAuthStore.getState().user?.id,
+    save: lookupCacheDb.save, read: lookupCacheDb.get,
+  }, 'member', params, async () => {
     const response = await apiClient.get<PaginatedResponse<Member>>('/member', { params });
     return response.data;
-  },
+  }),
   getById: async (id: string): Promise<Member> => {
     const response = await apiClient.get<Member>(`/member/${id}`);
     return response.data;

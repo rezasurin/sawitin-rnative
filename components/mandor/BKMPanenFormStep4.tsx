@@ -1,8 +1,12 @@
 import { Text, View } from '@/components/Themed';
+import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
+import { Button } from '@/components/core/Button';
 import { BrandColors } from '@/constants/Colors';
 import { useSubmitBkmPanen } from '@/hooks/useBkmPanen';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { blokApi, lahanApi, grupPekerjaApi, pekerjaApi, tphApi } from '@/services';
+import { memberLabel } from '@/utils/plantation';
+import { tbmReasonMissing } from '@/utils/maturity';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
@@ -10,7 +14,6 @@ import { useQuery } from '@tanstack/react-query';
 import React, { useMemo, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -23,7 +26,8 @@ interface Props {
 }
 
 export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
-  const { header, details, isEditing, editingId, deletedDetailIds, reset } = useBkmPanenStore();
+  const { header, details, isEditing, editingId, editingModifiedAt, deletedDetailIds, reset } = useBkmPanenStore();
+  const policy = useOperationalPolicy('bkmPanen', 'DRAFT', details.length);
   const submitMutation = useSubmitBkmPanen();
   const insets = useSafeAreaInsets();
   const isOnline = useNetworkStore((s) => s.isOnline);
@@ -44,7 +48,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
   const grupName = useMemo(() => grupData?.data?.find((g) => g.id === header.grup_pekerja_id)?.nama ?? header.grup_pekerja_id, [grupData, header.grup_pekerja_id]);
   const pekerjaMap = useMemo(() => {
     const map = new Map<string, string>();
-    (pekerjaData?.data ?? []).forEach((p) => map.set(p.id, p.member?.nama ?? p.id));
+    (pekerjaData?.data ?? []).forEach((p) => map.set(p.id, memberLabel(p.member, p.id)));
     return map;
   }, [pekerjaData]);
   const tphMap = useMemo(() => {
@@ -69,11 +73,24 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
     (sum, d) => sum + (Number(d.jumlah_brondol) || 0),
     0,
   );
+  const hasBrondol = details.some((d) => d.jumlah_brondol != null);
 
   const estimatedTons = (totalJanjang * bjr) / 1000;
 
-  const handleSubmit = () => {
-    if (!confirmed) return;
+  const handleSubmit = async () => {
+    if (!confirmed || (isEditing ? !policy.edit : !policy.create)) return;
+
+    // The server answers 400 for this, so a queued item would only dead-letter:
+    // stop it here, online or not.
+    if (tbmReasonMissing({
+      lahan: lahanData?.data?.find((l) => l.id === header.lahan_id),
+      blok: blokData?.data?.find((b) => b.id === header.blok_id),
+      day: header.tanggal_laporan,
+      alasan: header.alasan_tbm,
+    })) {
+      Alert.alert('Alasan panen TBM wajib', 'Lahan ini TBM pada tanggal laporan. Kembali ke langkah 1 dan isi alasan panen.');
+      return;
+    }
 
     const headerPayload = {
       blok_id: header.blok_id!,
@@ -81,6 +98,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
       tanggal_laporan: header.tanggal_laporan,
       keterangan: header.keterangan || undefined,
       grup_pekerja_id: header.grup_pekerja_id || undefined,
+      alasan_tbm: header.alasan_tbm?.trim() || undefined,
     };
 
     const detailPayloads = details.map((d) => ({
@@ -98,11 +116,14 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
       foto_url: d.foto_url ?? undefined,
       lat: d.lat ?? undefined,
       lng: d.lng ?? undefined,
+      gps_accuracy: d.gps_accuracy ?? undefined,
+      captured_at: d.captured_at ?? undefined,
       note: d.note ?? undefined,
     }));
 
     // Offline: queue for later sync
     if (!isOnline) {
+      try {
       if (isEditing && editingId) {
         const detailPayloadsWithServerId = details.map((d) => ({
           pekerja_id: d.pekerja_id,
@@ -119,27 +140,34 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
           foto_url: d.foto_url ?? undefined,
           lat: d.lat ?? undefined,
           lng: d.lng ?? undefined,
+          gps_accuracy: d.gps_accuracy ?? undefined,
+          captured_at: d.captured_at ?? undefined,
           note: d.note ?? undefined,
           serverId: d.serverId,
         }));
 
-        addToQueue({
+        await addToQueue({
           module: 'bkm_panen',
           action: 'UPDATE',
           endpoint: `/bkmPanen/${editingId}`,
           payload: {
             id: editingId,
+            documentId: editingId,
+            expectedStatus: 'DRAFT',
             header: headerPayload,
             details: detailPayloadsWithServerId,
             deletedDetailIds,
           },
+          // What this edit was based on. Days may pass before it is sent, and
+          // without this it would silently overwrite anything changed since.
+          precondition: editingModifiedAt,
         });
       } else {
-        addToQueue({
+        await addToQueue({
           module: 'bkm_panen',
           action: 'CREATE',
           endpoint: '/bkmPanen',
-          payload: { header: headerPayload, details: detailPayloads },
+          payload: { header: headerPayload, details: detailPayloads, submit: policy.submit },
         });
       }
       reset();
@@ -148,6 +176,9 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
         'Data tersimpan dan akan dikirim saat online.',
         [{ text: 'OK', onPress: onSuccess }],
       );
+      } catch (error) {
+        Alert.alert('Gagal Menyimpan', error instanceof Error ? error.message : 'Antrian offline gagal disimpan.');
+      }
       return;
     }
 
@@ -185,6 +216,9 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
           {header.keterangan ? (
             <Row label="Keterangan" value={header.keterangan} />
           ) : null}
+          {header.alasan_tbm ? (
+            <Row label="Alasan TBM" value={header.alasan_tbm} />
+          ) : null}
         </View>
 
         <Text style={styles.sectionTitle}>Ringkasan Produksi</Text>
@@ -198,8 +232,8 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
             value={String(totalJanjang)}
           />
           <MetricCard
-            label="Brondolan"
-            value={`${totalBrondol} kg`}
+            label="Brondol (kg)"
+            value={hasBrondol ? `${totalBrondol} kg` : '—'}
           />
           <MetricCard
             label="Estimasi Tonase"
@@ -223,7 +257,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
             </Text>
             <Text style={styles.detailCardValue}>
               Abnormal: {d.buah_abnormal} | Kosong: {d.janjang_kosong} |
-              Brondol: {d.jumlah_brondol ?? 0} kg
+              Brondol (kg): {d.jumlah_brondol ?? '—'}
             </Text>
             {d.note ? (
               <Text style={styles.detailCardNote}>Catatan: {d.note}</Text>
@@ -261,22 +295,14 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
           <Text style={styles.editButtonText}>Edit Data</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.submitButton,
-            (!confirmed || submitMutation.isPending) &&
-              styles.submitButtonDisabled,
-          ]}
+        <Button
+          title={policy.submit ? 'Submit BKM' : 'Simpan draft'}
           onPress={handleSubmit}
-          disabled={!confirmed || submitMutation.isPending}
-          activeOpacity={0.7}
-        >
-          {submitMutation.isPending ? (
-            <ActivityIndicator color={BrandColors.white} />
-          ) : (
-            <Text style={styles.submitButtonText}>Submit BKM</Text>
-          )}
-        </TouchableOpacity>
+          variant="primary"
+          disabled={!confirmed}
+          loading={submitMutation.isPending}
+          style={{ flex: 2 }}
+        />
       </View>
     </View>
   );
@@ -437,19 +463,5 @@ const styles = StyleSheet.create({
     color: BrandColors.textSecondary,
     fontSize: 16,
     fontWeight: '500',
-  },
-  submitButton: {
-    flex: 2,
-    backgroundColor: BrandColors.button,
-    height: 48,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButtonDisabled: { opacity: 0.5 },
-  submitButtonText: {
-    color: BrandColors.white,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

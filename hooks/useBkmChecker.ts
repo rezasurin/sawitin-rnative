@@ -1,9 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { bkmCheckerApi } from '@/services/bkm-checker.service';
+import { bkmPanenApi } from '@/services/bkm-panen.service';
+import { estateDate } from '@/utils/estateDate';
 import { bkmCheckerKeys } from '@/services/queryKeys';
 import type { ApiListParams } from '@/types/common';
 import type {
-  BkmChecker,
   CreateBkmCheckerPayload,
   CreateBkmCheckerDetailPayload,
   UpdateBkmCheckerDetailPayload,
@@ -15,6 +16,26 @@ export function useBkmCheckerList(params?: ApiListParams) {
   return useQuery({
     queryKey: bkmCheckerKeys.list(params),
     queryFn: () => bkmCheckerApi.getAll(params),
+  });
+}
+
+export function useBkmCheckerInfinite(params?: ApiListParams) {
+  return useInfiniteQuery({
+    queryKey: bkmCheckerKeys.list(params),
+    queryFn: ({ pageParam = 1 }) =>
+      bkmCheckerApi.getAll({
+        ...params,
+        page: pageParam,
+        limit: params?.limit ?? 20,
+      }),
+    getNextPageParam: (lastPage) => {
+      if (!lastPage?.pagination) return undefined;
+      if (lastPage.pagination.page < lastPage.pagination.totalPages) {
+        return lastPage.pagination.page + 1;
+      }
+      return undefined;
+    },
+    initialPageParam: 1,
   });
 }
 
@@ -124,34 +145,17 @@ export function useDeleteBkmCheckerDetail() {
   });
 }
 
-// ── Compound mutation: create header + all details + submit ──────────
+// ── Trip lines ───────────────────────────────────────────────────────
 
-export function useSubmitBkmChecker() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      header,
-      details,
-    }: {
-      header: CreateBkmCheckerPayload;
-      details: Omit<CreateBkmCheckerDetailPayload, 'bkm_checker_id'>[];
-    }): Promise<BkmChecker> => {
-      // 1. Create header
-      const checker = await bkmCheckerApi.create(header);
-
-      // 2. Create all details
-      await Promise.all(
-        details.map((d) =>
-          bkmCheckerApi.addDetail({ ...d, bkm_checker_id: checker.id })
-        )
-      );
-
-      // 3. Submit (set status to SUBMITTED)
-      return bkmCheckerApi.update(checker.id, { status: 'SUBMITTED' });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: bkmCheckerKeys.lists() });
-    },
+/**
+ * Panen documents dated `day` (an estate day), for a LANGSUNG line. The recent
+ * list is cached by the operational read, so it also answers offline once it has
+ * been fetched; a Panen still waiting in this phone's queue is not in it yet.
+ */
+export function usePanenOfDay(day: string) {
+  return useQuery({
+    queryKey: ['bkmPanen', 'recent'],
+    queryFn: () => bkmPanenApi.getAll({ limit: 100, sort: 'tanggal_laporan:desc' }),
+    select: (page) => page.data.filter((panen) => panen.status !== 'CANCELLED' && estateDate(new Date(panen.tanggal_laporan)) === day),
   });
 }

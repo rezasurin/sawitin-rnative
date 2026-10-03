@@ -1,4 +1,6 @@
+import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
 import { FAB } from '@/components/core/FAB';
+import { ListEmptyState } from '@/components/core/ListEmptyState';
 import { PageHeader } from '@/components/home';
 import { View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
@@ -9,7 +11,7 @@ import { FilterSortSheet, type FilterSortState } from '@/components/bkm/FilterSo
 import { Ionicons } from '@expo/vector-icons';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +26,8 @@ interface BkmPanenListProps {
   onCardPress: (id: string) => void;
   onCreatePress?: () => void;
   emptyHint?: string;
+  initialStatus?: string | null;
+  onStatusChange?: (status: string | null) => void;
 }
 
 /**
@@ -32,11 +36,12 @@ interface BkmPanenListProps {
  *  - onCreatePress renders the FAB (mandor creates, asisten reviews)
  *  - long-press delete of DRAFT is mandor-only (asisten has no delete permission)
  */
-export function BkmPanenList({ onCardPress, onCreatePress, emptyHint }: BkmPanenListProps) {
+export function BkmPanenList({ onCardPress, onCreatePress, emptyHint, initialStatus = null, onStatusChange }: BkmPanenListProps) {
+  const policy = useOperationalPolicy('bkmPanen', 'DRAFT');
   const [showFilter, setShowFilter] = useState(false);
   const [filterState, setFilterState] = useState<FilterSortState>({
     sort: 'tanggal_laporan:desc',
-    status: null,
+    status: initialStatus,
     blok_id: null,
     lahan_id: null,
   });
@@ -51,6 +56,11 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint }: BkmPanen
       filters: Object.keys(filters).length > 0 ? JSON.stringify(filters) : undefined,
     };
   }, [filterState]);
+
+  // Dashboard links must update the filter even when this tab is already mounted.
+  useEffect(() => {
+    setFilterState((current) => ({ ...current, status: initialStatus }));
+  }, [initialStatus]);
 
   const {
     data,
@@ -78,7 +88,7 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint }: BkmPanen
 
   const handleLongPress = useCallback(
     (item: BkmPanen) => {
-      if (item.status !== 'DRAFT') return;
+      if (item.status !== 'DRAFT' || !policy.delete) return;
 
       Alert.alert('Hapus BKM Panen?', 'Data akan dihapus permanen.', [
         { text: 'Batal', style: 'cancel' },
@@ -99,12 +109,12 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint }: BkmPanen
               );
               return;
             }
-            deleteMutation.mutate(item.id);
+            deleteMutation.mutate(item.id, { onSuccess: () => Alert.alert('Draft dihapus', 'Riwayat tetap tersedia.', [{ text: 'Tutup' }, { text: 'Lihat riwayat', onPress: () => onCardPress(item.id) }]) });
           },
         },
       ]);
     },
-    [isOnline, deleteMutation, addToQueue],
+    [isOnline, deleteMutation, addToQueue, policy.delete, onCardPress],
   );
 
   return (
@@ -117,7 +127,7 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint }: BkmPanen
           <PanenCard
             item={item}
             onPress={() => onCardPress(item.id)}
-            onLongPress={onCreatePress ? () => handleLongPress(item) : undefined}
+            onLongPress={policy.delete ? () => handleLongPress(item) : undefined}
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -130,7 +140,7 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint }: BkmPanen
                 <Text style={styles.headerSubtitle}>
                   {totalItems > 0 ? totalItems : panenList.length} dokumen panen
                 </Text>
-                {hasDraft && onCreatePress && (
+                {hasDraft && policy.delete && (
                   <Text style={styles.headerHint}>
                     Tekan lama untuk menghapus DRAFT
                   </Text>
@@ -154,35 +164,15 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint }: BkmPanen
           ) : null
         }
         ListEmptyComponent={
-          isLoading ? (
-            <View style={styles.centered}>
-              <ActivityIndicator size="large" color={BrandColors.primary} />
-            </View>
-          ) : isError ? (
-            <View style={styles.centered}>
-              <Ionicons
-                name="alert-circle-outline"
-                size={40}
-                color={BrandColors.error}
-              />
-              <Text style={styles.errorText}>Gagal memuat data</Text>
-              <TouchableOpacity onPress={() => refetch()}>
-                <Text style={styles.retryText}>Coba lagi</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.centered}>
-              <Ionicons
-                name="document-text-outline"
-                size={48}
-                color={BrandColors.textMuted}
-              />
-              <Text style={styles.emptyText}>Belum ada data BKM Panen</Text>
-              {emptyHint ? (
-                <Text style={styles.emptySubtext}>{emptyHint}</Text>
-              ) : null}
-            </View>
-          )
+          <ListEmptyState
+            isLoading={isLoading}
+            isError={isError}
+            isEmpty={!isLoading && !isError}
+            onRetry={() => refetch()}
+            emptyIcon="document-text-outline"
+            emptyText="Belum ada data BKM Panen"
+            emptySubtext={emptyHint}
+          />
         }
         refreshControl={
           <RefreshControl
@@ -193,13 +183,16 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint }: BkmPanen
         }
       />
 
-      {onCreatePress && <FAB onPress={onCreatePress} />}
+      {onCreatePress && policy.create && <FAB onPress={onCreatePress} />}
 
       <FilterSortSheet
         visible={showFilter}
         onClose={() => setShowFilter(false)}
         initialState={filterState}
-        onApply={setFilterState}
+        onApply={(next) => {
+          setFilterState(next);
+          onStatusChange?.(next.status);
+        }}
       />
     </View>
   );
@@ -246,32 +239,5 @@ const styles = StyleSheet.create({
   footerLoader: {
     paddingVertical: 16,
     alignItems: 'center',
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    color: BrandColors.textMuted,
-    fontSize: 15,
-    marginTop: 12,
-  },
-  emptySubtext: {
-    color: BrandColors.textMuted,
-    fontSize: 13,
-    marginTop: 4,
-  },
-  errorText: {
-    color: BrandColors.error,
-    fontSize: 15,
-    marginTop: 12,
-  },
-  retryText: {
-    color: BrandColors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 8,
   },
 });

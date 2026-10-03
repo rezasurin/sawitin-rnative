@@ -1,6 +1,9 @@
 import { Text, View } from '@/components/Themed';
+import { Button } from '@/components/core/Button';
 import { BrandColors } from '@/constants/Colors';
 import { pekerjaApi, tphApi, uploadApi } from '@/services';
+import { memberLabel } from '@/utils/plantation';
+import { isWholeKg } from '@/utils/field-summary';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,7 +36,7 @@ function calcTotal(detail: Record<string, unknown>) {
 
 interface GradingRowProps {
   detail: ReturnType<typeof useBkmPanenStore.getState>['details'][number];
-  onUpdate: (updates: Record<string, number>) => void;
+  onUpdate: (updates: Record<string, number | undefined>) => void;
   onPhotoCapture: () => void;
   photoLoading: boolean;
   uploading: boolean;
@@ -98,7 +101,7 @@ function GradingRow({ detail, onUpdate, onPhotoCapture, photoLoading, uploading,
       </View>
 
       <View style={styles.brondolRow}>
-        <Text style={styles.brondolLabel}>Brondolan (kg)</Text>
+        <Text style={styles.brondolLabel}>Brondol (kg)</Text>
         <TextInput
           style={styles.brondolInput}
           value={String(detail.jumlah_brondol ?? '')}
@@ -106,8 +109,8 @@ function GradingRow({ detail, onUpdate, onPhotoCapture, photoLoading, uploading,
           placeholder="0"
           placeholderTextColor={BrandColors.textMuted}
           onChangeText={(val) => {
-            const n = parseInt(val, 10);
-            onUpdate({ jumlah_brondol: isNaN(n) ? 0 : n });
+            if (val === '') onUpdate({ jumlah_brondol: undefined });
+            else if (isWholeKg(val)) onUpdate({ jumlah_brondol: Number(val) });
           }}
         />
       </View>
@@ -175,7 +178,7 @@ export function BKMPanenFormStep3({ onNext, onBack }: Props) {
 
   const pekerjaMap = useMemo(() => {
     const map = new Map<string, string>();
-    (pekerjaData?.data ?? []).forEach((p) => map.set(p.id, p.member?.nama ?? p.id));
+    (pekerjaData?.data ?? []).forEach((p) => map.set(p.id, memberLabel(p.member, p.id)));
     return map;
   }, [pekerjaData]);
 
@@ -235,7 +238,7 @@ export function BKMPanenFormStep3({ onNext, onBack }: Props) {
             onPhotoCapture={() => handlePhotoCapture(item._tempId)}
             photoLoading={photoLoading && activePhotoTempId === item._tempId}
             uploading={uploadingTempIds.has(item._tempId)}
-            onUpdate={(updates: Record<string, number>) =>
+            onUpdate={(updates: Record<string, number | undefined>) =>
               updateDetail(item._tempId, updates)
             }
           />
@@ -244,21 +247,19 @@ export function BKMPanenFormStep3({ onNext, onBack }: Props) {
       />
 
       <View style={[styles.navButtons, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity
-          style={styles.backButton}
+        <Button
+          title="Kembali"
           onPress={onBack}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.backButtonText}>Kembali</Text>
-        </TouchableOpacity>
+          variant="secondary"
+          style={{ flex: 1 }}
+        />
 
-        <TouchableOpacity
-          style={styles.nextButton}
+        <Button
+          title="Review & Konfirmasi"
           onPress={onNext}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.nextButtonText}>Review & Konfirmasi</Text>
-        </TouchableOpacity>
+          variant="primary"
+          style={{ flex: 2 }}
+        />
       </View>
     </View>
   );
@@ -434,32 +435,5 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.background,
     borderTopWidth: 1,
     borderTopColor: BrandColors.inputBorder,
-  },
-  backButton: {
-    flex: 1,
-    height: 48,
-    borderWidth: 1,
-    borderColor: BrandColors.inputBorder,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backButtonText: {
-    color: BrandColors.textSecondary,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  nextButton: {
-    flex: 2,
-    backgroundColor: BrandColors.button,
-    height: 48,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nextButtonText: {
-    color: BrandColors.white,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

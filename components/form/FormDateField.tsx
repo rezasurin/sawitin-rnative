@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BrandColors } from '@/constants/Colors';
 
 interface FormDateFieldProps {
@@ -55,7 +56,8 @@ export function FormDateField({
 }: FormDateFieldProps) {
   const [showPicker, setShowPicker] = useState(false);
   const [tempDate, setTempDate] = useState<Date>(new Date());
-  
+  const insets = useSafeAreaInsets();
+
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   const displayDate = formatDisplay(value);
@@ -115,13 +117,26 @@ export function FormDateField({
           style={[styles.trigger, error && styles.triggerError]}
           onPress={handleOpen}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          accessibilityHint="Membuka pemilih tanggal"
+          accessibilityState={{ expanded: showPicker }}
         >
           <Text style={[styles.triggerText, !value && styles.placeholder]}>
             {displayDate || placeholder}
           </Text>
           <Ionicons name="calendar-outline" size={18} color={BrandColors.textMuted} />
         </TouchableOpacity>
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {error ? (
+          <View
+            style={styles.errorContainer}
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+          >
+            <Ionicons name="alert-circle" size={14} color={BrandColors.error} />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
       </View>
 
       {Platform.OS === 'ios' && (
@@ -160,12 +175,18 @@ export function FormDateField({
                     }),
                   },
                 ],
+                paddingBottom: Math.max(insets.bottom, 16),
               },
             ]}
           >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>{label}</Text>
-                <Pressable onPress={handleCancel} hitSlop={8}>
+                <Pressable
+                  onPress={handleCancel}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tutup"
+                >
                   <Ionicons name="close" size={24} color={BrandColors.textPrimary} />
                 </Pressable>
               </View>
@@ -178,7 +199,7 @@ export function FormDateField({
                   onChange={handleChange}
                   locale="id-ID"
                   themeVariant="light"
-                  textColor="#000000"
+                  textColor={BrandColors.textPrimary}
                 />
               </View>
 
@@ -186,6 +207,8 @@ export function FormDateField({
                   style={styles.confirmButton}
                   onPress={handleConfirm}
                   activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Konfirmasi tanggal"
                 >
                   <Text style={styles.confirmButtonText}>Konfirmasi</Text>
                 </TouchableOpacity>
@@ -237,21 +260,26 @@ const styles = StyleSheet.create({
   placeholder: {
     color: BrandColors.textMuted,
   },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
+    marginTop: 6,
+  },
   errorText: {
     fontSize: 12,
     color: BrandColors.error,
-    marginTop: 4,
+    flex: 1,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: BrandColors.overlayBg,
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: BrandColors.white,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    paddingBottom: 32,
   },
   modalHeader: {
     flexDirection: 'row',

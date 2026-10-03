@@ -1,84 +1,59 @@
 import { create } from 'zustand';
-import { CreateBkmCheckerPayload, CreateBkmCheckerDetailPayload } from '@/types/bkm-checker';
-import { buildQrPayload as buildQrPayloadV2 } from '@/utils/qr';
+import { estateDate } from '@/utils/estateDate';
+import type { TripHeaderDraft, TripLineDraft } from '@/types/bkm-checker';
 
-interface BkmCheckerDetailDraft extends CreateBkmCheckerDetailPayload {
+export interface TripLine extends TripLineDraft {
   _tempId: string;
 }
 
-interface BkmCheckerDraftState {
-  header: CreateBkmCheckerPayload;
-  details: BkmCheckerDetailDraft[];
-  isEditing: boolean;
-  editingId: string | null;
-}
-
-interface BkmCheckerStore extends BkmCheckerDraftState {
-  setHeader: (header: Partial<CreateBkmCheckerPayload>) => void;
-  addDetail: (detail: CreateBkmCheckerDetailPayload) => void;
-  updateDetail: (tempId: string, data: Partial<CreateBkmCheckerDetailPayload>) => void;
+interface BkmCheckerStore {
+  header: TripHeaderDraft;
+  details: TripLine[];
+  setHeader: (header: Partial<TripHeaderDraft>) => void;
+  addDetail: (detail: TripLineDraft) => void;
+  updateDetail: (tempId: string, data: Partial<TripLineDraft>) => void;
   removeDetail: (tempId: string) => void;
-  startEditing: (id: string, header: CreateBkmCheckerPayload, details: BkmCheckerDetailDraft[]) => void;
-  buildQrPayload: (checkerId: string, tphId: string, quantity: number, timestamp: number) => string;
   reset: () => void;
 }
 
-const initialHeader: CreateBkmCheckerPayload = {
-  lahan_id: '',
-  tph_id: '',
-  blok_id: '',
-  tanggal_laporan: '',
-};
+/** A new trip starts on today's estate day, never the device's. */
+const initialHeader = (): TripHeaderDraft => ({
+  nomor_spb: '',
+  tanggal: estateDate(),
+  kendaraan_id: '',
+  supir_id: '',
+  nomor_truk: '',
+  nama_sopir: '',
+  tujuan_kirim: '',
+  keterangan: '',
+});
 
 let tempIdCounter = 0;
 const generateTempId = () => `temp_checker_${++tempIdCounter}`;
 
-export const useBkmCheckerStore = create<BkmCheckerStore>((set) => ({
-  header: { ...initialHeader },
-  details: [],
-  isEditing: false,
-  editingId: null,
+/** The pieces of the janjang total, so the line always adds up to what was graded. */
+const total = (line: TripLineDraft) =>
+  line.janjang_normal + line.buah_mentah + line.over_ripe + line.tangkai_panjang + line.buah_abnormal + line.janjang_kosong;
 
-  setHeader: (partial) =>
-    set((state) => ({ header: { ...state.header, ...partial } })),
+export const useBkmCheckerStore = create<BkmCheckerStore>((set) => ({
+  header: initialHeader(),
+  details: [],
+
+  setHeader: (partial) => set((state) => ({ header: { ...state.header, ...partial } })),
 
   addDetail: (detail) =>
-    set((state) => ({
-      details: [...state.details, { ...detail, _tempId: generateTempId() }],
-    })),
+    set((state) => ({ details: [...state.details, { ...detail, jumlah_janjang: total(detail), _tempId: generateTempId() }] })),
 
   updateDetail: (tempId, data) =>
     set((state) => ({
       details: state.details.map((d) => {
         if (d._tempId !== tempId) return d;
         const updated = { ...d, ...data };
-        updated.jumlah_janjang =
-          (updated.janjang_normal ?? 0) +
-          (updated.buah_mentah ?? 0) +
-          (updated.over_ripe ?? 0) +
-          (updated.tangkai_panjang ?? 0) +
-          (updated.buah_abnormal ?? 0) +
-          (updated.janjang_kosong ?? 0);
-        return updated;
+        return { ...updated, jumlah_janjang: total(updated) };
       }),
     })),
 
-  removeDetail: (tempId) =>
-    set((state) => ({
-      details: state.details.filter((d) => d._tempId !== tempId),
-    })),
+  removeDetail: (tempId) => set((state) => ({ details: state.details.filter((d) => d._tempId !== tempId) })),
 
-  startEditing: (id, header, details) =>
-    set({ isEditing: true, editingId: id, header, details }),
-
-  buildQrPayload: (checkerId, tphId, quantity, timestamp) =>
-    buildQrPayloadV2(checkerId, tphId, quantity, timestamp),
-
-  reset: () =>
-    set({
-      header: { ...initialHeader },
-      details: [],
-      isEditing: false,
-      editingId: null,
-    }),
+  reset: () => set({ header: initialHeader(), details: [] }),
 }));

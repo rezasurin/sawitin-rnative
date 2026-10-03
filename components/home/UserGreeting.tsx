@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { BrandColors } from '@/constants/Colors';
 import { useUserGreeting } from '@/hooks';
 import { useNetworkStatus } from '@/hooks';
@@ -14,14 +14,29 @@ export function UserGreeting() {
   const { isOnline } = useNetworkStatus();
 
   return (
-    <View className="flex-row items-center justify-between px-4 py-3">
-      <Text
-        className="text-lg font-semibold"
-        style={{ color: BrandColors.textPrimary }}
-      >
+    <View style={styles.container}>
+      <Text style={styles.greetingText} numberOfLines={1}>
         {greeting}
       </Text>
       <StatusBadge isOnline={isOnline} />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 6,
+  },
+  greetingText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: BrandColors.textPrimary,
+    flex: 1,
+    marginRight: 10,
+  },
+});

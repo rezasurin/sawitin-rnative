@@ -1,5 +1,7 @@
-import React, { useCallback, useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { usePreventRemove } from 'expo-router/react-navigation';
+import { useNavigation } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { Stepper } from '../core/Stepper';
 import { BrandColors } from '@/constants/Colors';
 import { BKMCheckerFormStep1 } from './BKMCheckerFormStep1';
@@ -8,8 +10,8 @@ import { BKMCheckerFormStep3 } from './BKMCheckerFormStep3';
 import { useBkmCheckerStore } from '@/stores/useBkmCheckerStore';
 
 const STEPS = [
-  { label: 'Dokumen', value: 1, icon: 'file-text-o' as const },
-  { label: 'Truk & Grading', value: 2, icon: 'truck' as const },
+  { label: 'SPB', value: 1, icon: 'file-text-o' as const },
+  { label: 'Muatan TPH', value: 2, icon: 'truck' as const },
   { label: 'Review', value: 3, icon: 'check-square-o' as const },
 ];
 
@@ -19,12 +21,41 @@ interface Props {
 
 export function BKMCheckerForm({ onSuccess }: Props) {
   const [step, setStep] = useState(1);
-  const reset = useBkmCheckerStore((s) => s.reset);
+  const { header, details, reset } = useBkmCheckerStore();
+  const navigation = useNavigation();
+  const [isSaving, setIsSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [leaveAction, setLeaveAction] = useState<Parameters<typeof navigation.dispatch>[0] | null>(null);
+  // The day is pre-filled, so it alone is not unsaved work.
+  const { tanggal: _prefilled, ...typed } = header;
+  const isDirty = Object.values(typed).some(Boolean) || details.length > 0;
+  usePreventRemove((isDirty || isSaving) && !saved && !leaveAction, ({ data }) => {
+    if (isSaving) {
+      Alert.alert("Sedang Menyimpan", "Tunggu sampai penyimpanan selesai.");
+      return;
+    }
+    Alert.alert('Batal Mengisi Form?', 'Perubahan yang belum disimpan akan hilang.', [
+      { text: 'Lanjutkan', style: 'cancel' },
+      { text: 'Keluar', style: 'destructive', onPress: () => setLeaveAction(data.action) },
+    ]);
+  });
+  useEffect(() => {
+    if (leaveAction) navigation.dispatch(leaveAction);
+    else if (saved) onSuccess();
+  }, [leaveAction, saved, navigation, onSuccess]);
 
   const handleSuccess = useCallback(() => {
+    setStep(1);
     reset();
-    onSuccess();
+    setSaved(true);
   }, [reset, onSuccess]);
+
+  useEffect(() => {
+    return () => {
+      setStep(1);
+      reset();
+    };
+  }, [reset]);
 
   return (
     <View style={styles.container}>
@@ -50,6 +81,7 @@ export function BKMCheckerForm({ onSuccess }: Props) {
           <BKMCheckerFormStep3
             onBack={() => setStep(2)}
             onSuccess={handleSuccess}
+            onSavingChange={setIsSaving}
           />
         )}
       </KeyboardAvoidingView>

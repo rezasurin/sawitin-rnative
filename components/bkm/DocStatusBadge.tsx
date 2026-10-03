@@ -1,8 +1,7 @@
-import { View } from "@/components/Themed";
+import { Badge } from "@/components/core/Badge";
 import { BrandColors } from "@/constants/Colors";
 import type { DocumentStatus } from "@/types";
 import React from "react";
-import { StyleSheet, Text } from "react-native";
 
 const STATUS_CONFIG: Record<DocumentStatus, { color: string; bg: string; label: string }> = {
   DRAFT: { color: BrandColors.textMuted, bg: "#F0F0F0", label: "Draft" },
@@ -14,14 +13,5 @@ const STATUS_CONFIG: Record<DocumentStatus, { color: string; bg: string; label: 
 
 export function DocStatusBadge({ status }: { status: DocumentStatus }) {
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.DRAFT;
-  return (
-    <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
-      <Text style={[styles.text, { color: cfg.color }]}>{cfg.label}</Text>
-    </View>
-  );
+  return <Badge label={cfg.label} color={cfg.color} bg={cfg.bg} />;
 }
-
-const styles = StyleSheet.create({
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  text: { fontSize: 12, fontWeight: "600" },
-});

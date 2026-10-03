@@ -1,5 +1,7 @@
 # Administrator (Admin) Persona Documentation
 
+> **Historical design draft:** Absensi and Laporan are deferred as of 20 September 2026. The current Admin Menu and quick actions do not expose either feature. See [documentation hub](README.md) and `components/core/RoleTabs.tsx` for current navigation.
+
 ## 1. Overview & Purpose
 The `Administrator` (Admin) persona governs configurations, settings, master data properties, and the materials/chemical inventories catalog. The interface runs on a Drawer layout system and grants root access bypasses to manage user roles and static databases.
 

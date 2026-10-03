@@ -1,19 +1,21 @@
 
 ## 🛠 Panduan Pengembangan: Frontend (React Native)
 
+> **Status:** Dokumen ini adalah rancangan awal. Absensi ditunda dan tidak tersedia di navigasi mobile. Definisi tab saat ini ada di `components/core/RoleTabs.tsx`.
+
 Fokus utama frontend adalah memberikan pengalaman pengguna yang mulus di lapangan, penanganan data lokal secara mandiri, dan kontrol penuh terhadap integrasi hardware perangkat mobile.
 
 ### 1. Arsitektur Navigasi Berbasis Peran
 
 Implementasikan gerbang peran (_Role Gate_) menggunakan _Root Navigator_ untuk mengarahkan pengguna ke antarmuka yang sesuai:
 
--   **Pemanen**: Menggunakan _Bottom Tab_ dengan 3 tab utama: Beranda, Absensi, dan Profil.
+-   **Pemanen**: Menggunakan _Bottom Tab_ dengan 2 tab: Beranda dan Akun.
     
--   **Mandor**: Menggunakan _Bottom Tab_ dengan 5 tab utama: Dashboard, Absen, BKM (Buku Kerja Mandor), Rawat, dan Profil.
+-   **Mandor**: Menggunakan _Bottom Tab_ dengan 4 tab: Beranda, BKM Panen, Checker, dan Akun. Rawat dapat dibuka lewat menu yang tersedia.
     
--   **Asisten & Manajer**: Menggunakan kombinasi _Tab + Drawer_ untuk memfasilitasi akses laporan mendalam dan persetujuan dokumen.
+-   **Asisten**: Menggunakan tab Beranda, BKM Panen, dan Akun.
     
--   **Admin**: Menggunakan navigator _Drawer_ penuh untuk manajemen master data dan konfigurasi sistem.
+-   **Admin**: Menggunakan tab Beranda, BKM Panen, Menu, dan Akun.
     
 
 ### 2. Implementasi QR Code & Integrasi Kamera

@@ -1,5 +1,10 @@
 import type { ApiListParams } from '@/types/common';
 
+export const hargaTbsKeys = {
+  all: ['hargaTbs'] as const,
+  latest: () => [...hargaTbsKeys.all, 'latest'] as const,
+};
+
 export const bkmPanenKeys = {
   all: ['bkmPanen'] as const,
   lists: () => [...bkmPanenKeys.all, 'list'] as const,
@@ -78,4 +83,11 @@ export const kelompokLahanKeys = {
   list: (filters?: ApiListParams) => [...kelompokLahanKeys.lists(), filters ?? {}] as const,
   details: () => [...kelompokLahanKeys.all, 'detail'] as const,
   detail: (id: string) => [...kelompokLahanKeys.details(), id] as const,
+};
+
+export const tutupHarianKeys = {
+  all: ['tutupHarian'] as const,
+  preview: (kelompokLahanId: string, tanggal: string) => [...tutupHarianKeys.all, 'preview', kelompokLahanId, tanggal] as const,
+  detail: (id: string) => [...tutupHarianKeys.all, 'detail', id] as const,
+  pending: () => [...tutupHarianKeys.all, 'pending'] as const,
 };

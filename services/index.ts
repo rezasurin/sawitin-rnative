@@ -21,5 +21,4 @@ export { penjualanApi } from './penjualan.service';
 export { modAppApi } from './mod-app.service';
 export { filterOptionsApi } from './filter-options.service';
 export * from './org-config.service';
-export { getDb, syncQueueDb, bkmPanenCacheDb, attendanceDb } from './database';
-
+export { getDb, syncQueueDb, bkmPanenCacheDb } from './database';

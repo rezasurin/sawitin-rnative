@@ -1,12 +1,11 @@
 import { Stack, router } from "expo-router";
 import { useEffect } from "react";
 
-import "./globals.css";
-
 import { getRoleRouteGroup } from "@/constants/navigation";
 import { QueryProvider } from "@/providers";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useSyncProcessor } from "@/hooks/useSyncProcessor";
+import { useMasterCacheWarmup } from "@/hooks/useMasterCacheWarmup";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -35,6 +34,7 @@ function RootLayoutNav() {
 
   // Process offline sync queue when authenticated and online
   useSyncProcessor();
+  useMasterCacheWarmup();
 
   useEffect(() => {
     if (isLoading) return;

@@ -1,5 +1,7 @@
 # Foreman (Mandor) Persona Documentation
 
+> **Historical design draft:** Absensi is deferred as of 20 September 2026. The current Mandor app has Beranda, BKM Panen, Checker, and Akun tabs; the Absensi route described below was removed. See [documentation hub](README.md) for current status.
+
 ## 1. Overview & Purpose
 The `Foreman` (Mandor) is the core operational user in the field. Foremen register daily crew check-ins, record harvested bunches per worker per TPH block, register upkeep maintenance, and generate cargo check transport documents (BKM Checker) utilizing offline queues and hardware-agnostic barcode payloads.
 
@@ -33,13 +35,14 @@ The `Foreman` (Mandor) is the core operational user in the field. Foremen regist
    - Automatically computes `jumlah_janjang` by aggregating grading items (`janjang_normal`, `buah_mentah`, `over_ripe`, `tangkai_panjang`, `buah_abnormal`, `janjang_kosong`).
 2. **`useBkmCheckerStore`**:
    - Manages checker documents and FFB cargo validation parameters.
-   - **Flat Payload Generator (`buildQrPayload`)**: Outputs a signed flat string payload (`V2|<checkerId>|<tphId>|<quantity>|<timestamp>|<signature>`) where signature is HMAC-SHA256 of the first five fields using `EXPO_PUBLIC_QR_SECRET_KEY` (base64url).
+   - Approved Checkers request their V3 SPB QR from `GET /bkmChecker/:id/spb`; signing remains on the backend.
 3. **`useSyncQueueStore`**:
    - Holds pending offline mutation actions (CREATE/UPDATE/DELETE) with endpoints and payloads.
 
 ### B. Background Sync Processor (`useSyncProcessor`)
 - Automatically triggers on app launch and monitors `isOnline` network state changes.
-- Intercepts local image paths starting with `file://`, triggers `uploadApi.uploadImage(foto_url, 'bkm-panen')`, and replaces details paths with server URL paths before dispatching the payload transaction.
+- Intercepts local image paths starting with `file://`, triggers `uploadApi.uploadImage(foto_url, 'bkm-panen')`, and checkpoints each returned remote URL into SQLite before dispatching later API calls. Retries reuse the checkpointed URL.
+- Keeps new BKM Rawat drafts under a local queue ID. Detail and material changes update that draft payload; sync creates the header and nested details with stable idempotency keys and then submits it when requested.
 
 ---
 
@@ -51,7 +54,7 @@ The `Foreman` (Mandor) is the core operational user in the field. Foremen regist
 
 ### B. Fruit Cargo Dispatches (BKM Checker)
 - Logs transporter details, driver identity, afdeling, block, and grading check details.
-- Generates a local QR Code graphic utilizing `react-native-qrcode-svg` containing the flat string signature for krani timbang to scan.
+- Displays the server-issued SPB with `react-native-qrcode-svg` for Krani Timbang to scan. The QR cannot be issued before approval or after weighing.
 
 ---
 
