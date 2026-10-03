@@ -9,6 +9,7 @@ import { BrandColors } from '@/constants/Colors';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { kraniTimbangApi } from '@/services/krani-timbang.service';
 import type { HarvestTrace, TraceGrade } from '@/types/harvest-trace';
+import { nettoSumberLabel, traceLineRows } from '@/utils/harvest-trace';
 
 const labels: Record<string, string> = {
   checker_grading_breakdown_mismatch: 'Grading Checker tidak cocok',
@@ -17,6 +18,7 @@ const labels: Record<string, string> = {
   restan_exceeds_weighed: 'Restan melebihi jumlah ditimbang',
   no_pks_ticket: 'Tiket PKS belum ada',
   vehicle_not_registered: 'Kendaraan belum terdaftar',
+  no_internal_weighing: 'Tidak ditimbang di jembatan timbang sendiri',
 };
 
 function Row({ label, value }: { label: string; value: string | number | null | undefined }) {
@@ -65,10 +67,15 @@ export default function HarvestTraceScreen() {
               <Text style={{ fontWeight: '700', color: BrandColors.error }}>{labels[flag.code] ?? flag.code}</Text>
               <Text>{flag.detail}</Text></View>)}
         </Section>
-        <Section title="Sumber: Panen dan TPH">
+        <Section title="Sumber: baris SPB dan Panen">
+          <Row label="SPB" value={data.trip.nomor_spb} />
           <Row label="Janjang Panen" value={data.quantities.janjang.panen} />
-          <Row label="Checker total" value={data.quantities.janjang.checker_total} />
-          {data.sources.map((source) => <View key={source.bkm_checker.id} style={{ paddingVertical: 7 }}>
+          <Row label="Janjang di baris SPB" value={data.quantities.janjang.checker_total} />
+          {data.lines ? traceLineRows(data).map((line) => <View key={line.key} style={{ paddingVertical: 7 }}>
+            <Text style={{ fontWeight: '600' }}>{line.tempat}</Text>
+            <Text>{line.sumber}</Text>
+            <Text>{line.janjang} janjang · brondol {line.brondol} kg</Text>
+          </View>) : data.sources.map((source) => <View key={source.bkm_checker.id} style={{ paddingVertical: 7 }}>
             <Text>{source.bkm_checker.blok?.nama ?? 'Blok —'} · {source.bkm_checker.lahan?.nama ?? 'Lahan —'} · {source.bkm_checker.tph?.nama ?? 'TPH —'}</Text>
             <Text>Checker {source.bkm_checker.id.slice(0, 8)} · {source.bkm_checker.status} · Disetujui: {source.bkm_checker.approved_by ?? '—'}</Text>
             {!!source.bkm_panen && <Text>Panen {source.bkm_panen.id.slice(0, 8)}</Text>}
@@ -101,6 +108,8 @@ export default function HarvestTraceScreen() {
           <Row label="Bruto PKS (kg)" value={data.quantities.berat_kg.pks_bruto} />
           <Row label="Tara PKS (kg)" value={data.quantities.berat_kg.pks_tara} />
           <Row label="Netto PKS (kg)" value={data.quantities.berat_kg.pks_netto} />
+          <Row label="Netto acuan (kg)" value={data.quantities.berat_kg.netto_acuan} />
+          <Row label="Sumber netto acuan" value={nettoSumberLabel(data.quantities.berat_kg.netto_sumber)} />
           <Row label="Susut (kg)" value={data.quantities.berat_kg.susut} />
           <Row label="Netto penjualan (kg)" value={data.quantities.berat_kg.sale_netto_pabrik} />
         </Section>
