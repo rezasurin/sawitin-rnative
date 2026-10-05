@@ -2,7 +2,7 @@
   "expo": {
     "name": "sawitin",
     "slug": "sawitin",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "sawitin",
@@ -11,6 +11,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.bahaumlabs.sawitin",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"

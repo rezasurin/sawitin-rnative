@@ -20,6 +20,21 @@ The [Phase 7 mobile implementation tasks](phase-7-mobile-implementation-plan.md)
 
 The [Phase 7 mobile implementation record](phase-7-mobile-implementation.md) describes the delivered code, automated checks, and open device and backend verification.
 
+## Building the UAT APK
+
+Field phones get an Android APK through EAS internal distribution. `eas.json` profile `uat` points the app at `https://api.demo.bahaumlabs.com`. EAS builds don't read `.env.local`, so the API URL lives in that profile.
+
+```bash
+npx eas-cli login                                   # the project's Expo account
+npx eas-cli init                                    # first time only: links the project, writes extra.eas.projectId to app.json
+npx eas-cli build --profile uat --platform android
+```
+
+The build page gives an install link and QR code. Phones need "install unknown apps" allowed for the browser.
+
+- **Versions.** The user-facing version is `version` in `app.json` (1.1.0 = the trip model; 1.0.0 at `4eb222b` is the last old-shape build). EAS keeps and raises the Android `versionCode` itself (`appVersionSource: remote`), so each new build installs over the last one. Bump `version` only when the release changes.
+- **Package id.** `com.bahaumlabs.sawitin` is fixed once phones have the app. Changing it installs a second app beside the first, and the queued offline work stays in the old one.
+
 ---
 
 ## 👥 Persona Documentation Links
