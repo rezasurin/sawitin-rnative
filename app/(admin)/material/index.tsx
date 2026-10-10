@@ -54,7 +54,7 @@ function MaterialCard({
         </View>
         <View style={styles.cardBody}>
           <Text style={styles.cardMeta}>Kode: {item.kode}</Text>
-          <Text style={styles.cardMeta}>Kategori: {item.kategori}</Text>
+          <Text style={styles.cardMeta}>Kategori: {item.kategori_material?.nama ?? '—'}</Text>
           <Text style={styles.cardMeta}>Satuan: {item.satuan}</Text>
           {!!item.bahan_aktif && <Text style={styles.cardMeta}>Bahan aktif: {item.bahan_aktif}</Text>}
           {!!item.konsentrasi && <Text style={styles.cardMeta}>Konsentrasi: {item.konsentrasi}</Text>}

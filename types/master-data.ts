@@ -274,4 +274,4 @@ export interface FilterOption {
   value: string;
 }
 
-export { Material, CreateMaterialPayload, UpdateMaterialPayload } from './material';
+export { Material, KategoriMaterial, CreateMaterialPayload, UpdateMaterialPayload } from './material';

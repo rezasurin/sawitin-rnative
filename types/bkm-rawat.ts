@@ -84,7 +84,7 @@ export interface BkmRawatLookups {
   types: { id: string; nama: string }[];
   categories: { id: string; nama: string }[];
   items: { id: string; nama: string; kategori_pekerjaan_id: string }[];
-  materials: { id: string; nama: string; satuan: string; bahan_aktif?: string | null; konsentrasi?: string | null }[];
+  materials: { id: string; nama: string; satuan: string; bahan_aktif?: string | null; konsentrasi?: string | null; kategori_material?: { is_bbm: boolean } }[];
   vehicles?: { id: string; nomor_kendaraan: string; jenis_kendaraan: string; status: 'ACTIVE' | 'INACTIVE' }[];
   drivers?: { id: string; nama: string; status: 'ACTIVE' | 'INACTIVE' }[];
   groups: { id: string; nama: string }[];

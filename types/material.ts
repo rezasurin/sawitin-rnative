@@ -1,11 +1,20 @@
 import { GlobalStatus, DocumentStatus, TransactionType, TimestampFields } from './common';
 
+export interface KategoriMaterial {
+  id: string;
+  nama: string;
+  /** Materials in this category may be issued as vehicle fuel. */
+  is_bbm: boolean;
+  status?: GlobalStatus;
+}
+
 export interface Material extends TimestampFields {
   id: string;
   org_id: string;
   kode: string;
   nama: string;
-  kategori: string;
+  kategori_material_id: string;
+  kategori_material?: KategoriMaterial;
   satuan: string;
   harga_satuan: number | null;
   stok: number | null;
@@ -17,7 +26,7 @@ export interface Material extends TimestampFields {
 export interface CreateMaterialPayload {
   kode: string;
   nama: string;
-  kategori: string;
+  kategori_material_id: string;
   satuan: string;
   harga_satuan?: number;
   stok?: number;
