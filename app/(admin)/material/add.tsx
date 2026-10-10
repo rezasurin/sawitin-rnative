@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/home';
 import { View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { ModulePermissionGuard } from '@/components/core/ModulePermissionGuard';
-import { useCreateMaterial, useMaterialDetail, useUpdateMaterial } from '@/hooks/useMaterial';
+import { useCreateMaterial, useKategoriMaterialList, useMaterialDetail, useUpdateMaterial } from '@/hooks/useMaterial';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
@@ -16,7 +16,7 @@ import { z } from 'zod';
 const schema = z.object({
   kode: z.string().min(1, 'Kode wajib diisi'),
   nama: z.string().min(1, 'Nama wajib diisi'),
-  kategori: z.string().min(1, 'Kategori wajib diisi'),
+  kategori_material_id: z.string().min(1, 'Kategori wajib dipilih'),
   satuan: z.string().min(1, 'Satuan wajib diisi'),
   harga_satuan: z.number().nonnegative().optional(),
   stok: z.number().nonnegative().optional(),
@@ -38,6 +38,7 @@ function MaterialFormScreen() {
   const createMutation = useCreateMaterial();
   const updateMutation = useUpdateMaterial();
   const material = useMaterialDetail(id ?? '');
+  const kategori = useKategoriMaterialList();
   const editing = Boolean(id);
 
   const {
@@ -55,7 +56,7 @@ function MaterialFormScreen() {
   useEffect(() => {
     if (!material.data) return;
     const value = material.data;
-    reset({ kode: value.kode, nama: value.nama, kategori: value.kategori, satuan: value.satuan,
+    reset({ kode: value.kode, nama: value.nama, kategori_material_id: value.kategori_material_id, satuan: value.satuan,
       harga_satuan: value.harga_satuan ?? undefined, bahan_aktif: value.bahan_aktif ?? undefined,
       konsentrasi: value.konsentrasi ?? undefined, status: value.status });
   }, [material.data, reset]);
@@ -117,15 +118,17 @@ function MaterialFormScreen() {
 
         <Controller
           control={control}
-          name="kategori"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <FormField
+          name="kategori_material_id"
+          render={({ field: { onChange, value } }) => (
+            <FormSelect
               label="Kategori"
-              placeholder="Masukkan kategori"
               value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              error={errors.kategori?.message}
+              // An inactive category stays listed only for the material that already uses it.
+              options={(kategori.data?.data ?? [])
+                .filter((row) => row.status !== 'INACTIVE' || row.id === value)
+                .map((row) => ({ label: row.nama, value: row.id }))}
+              onSelect={onChange}
+              error={errors.kategori_material_id?.message}
             />
           )}
         />

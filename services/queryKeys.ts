@@ -19,6 +19,7 @@ export const materialKeys = {
   list: (filters?: ApiListParams) => [...materialKeys.lists(), filters ?? {}] as const,
   details: () => [...materialKeys.all, 'detail'] as const,
   detail: (id: string) => [...materialKeys.details(), id] as const,
+  kategori: () => [...materialKeys.all, 'kategori'] as const,
 };
 
 export const bkmCheckerKeys = {

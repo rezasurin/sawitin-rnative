@@ -1,6 +1,6 @@
 import { apiClient } from './api';
 import { PaginatedResponse, ApiListParams } from '@/types/common';
-import { Material, CreateMaterialPayload, UpdateMaterialPayload } from '@/types/master-data';
+import { Material, KategoriMaterial, CreateMaterialPayload, UpdateMaterialPayload } from '@/types/master-data';
 
 export const materialApi = {
   getAll: async (params?: ApiListParams): Promise<PaginatedResponse<Material>> => {
@@ -21,5 +21,12 @@ export const materialApi = {
   },
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/material/${id}`);
+  },
+  /** Categories are managed on the web; the form only picks one. */
+  getKategori: async (): Promise<PaginatedResponse<KategoriMaterial>> => {
+    const response = await apiClient.get<PaginatedResponse<KategoriMaterial>>('/kategoriMaterial', {
+      params: { limit: 100, sort: 'nama:asc' },
+    });
+    return response.data;
   },
 };

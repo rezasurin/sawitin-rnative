@@ -11,6 +11,13 @@ export function useMaterialList(params?: ApiListParams) {
   });
 }
 
+export function useKategoriMaterialList() {
+  return useQuery({
+    queryKey: materialKeys.kategori(),
+    queryFn: () => materialApi.getKategori(),
+  });
+}
+
 export function useMaterialDetail(id: string) {
   return useQuery({
     queryKey: materialKeys.detail(id),

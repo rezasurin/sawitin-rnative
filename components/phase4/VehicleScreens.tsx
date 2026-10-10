@@ -139,7 +139,7 @@ export function VehicleUsageForm() {
       <FormField label="Meter akhir" value={meterEnd} onChangeText={setMeterEnd} keyboardType="decimal-pad" />
       {jump && <Text style={styles.warn}>Kenaikan meter terlihat besar. Periksa kembali sebelum menyimpan.</Text>}
       <Text style={styles.title}>BBM (opsional)</Text>
-      <FormSelect label="Material BBM" value={fuelId} options={[{ label: 'Tanpa BBM', value: '' }, ...(materials.data?.materials ?? []).map((row) => ({ label: `${row.nama} · ${row.satuan}`, value: row.id }))]} onSelect={(v) => { setFuelId(v); if (!v) setFuelAmount(''); }} searchable />
+      <FormSelect label="Material BBM" value={fuelId} options={[{ label: 'Tanpa BBM', value: '' }, ...(materials.data?.materials ?? []).filter((row) => row.kategori_material?.is_bbm || row.id === fuelId).map((row) => ({ label: `${row.nama} · ${row.satuan}`, value: row.id }))]} onSelect={(v) => { setFuelId(v); if (!v) setFuelAmount(''); }} searchable />
       {!!fuelId && <FormField label="Jumlah BBM" value={fuelAmount} onChangeText={setFuelAmount} keyboardType="decimal-pad" />}
       <FormField label="Keterangan" value={note} onChangeText={setNote} multiline />
       <Button title="Simpan draft" loading={saving} disabled={saving || !vehicleId || (editing && !online)} onPress={() => void save(false)} />
