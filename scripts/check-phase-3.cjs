@@ -161,11 +161,11 @@ test('Rawat agronomy and dose fields survive a local draft without changing mate
   await ui.fill('Jumlah pokok dirawat', '120');
   await ui.fill('Metode', 'Tabur manual');
   await ui.fill('Kondisi lapangan', 'Cerah');
-  await ui.choose('Pilih material', 'mat-1');
-  await ui.fill('Jumlah material', '120');
+  await ui.choose('Pilih barang', 'mat-1');
+  await ui.fill('Jumlah barang', '120');
   await ui.fill('Dosis (opsional)', '1');
   await ui.fill('Satuan dosis', 'kg/pokok');
-  await ui.press('Tambahkan material');
+  await ui.press('Tambahkan barang');
   await ui.press('Simpan pekerjaan');
   const saved = ui.calls.changedQueue[0].payload.details[0];
   assert.equal(saved.luas_ha, 2.5);

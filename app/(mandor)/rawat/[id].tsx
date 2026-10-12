@@ -270,7 +270,7 @@ export default function RawatDetailScreen() {
     const quantity = decimal(materialQty);
     const dose = materialDose.trim() ? decimal(materialDose) : undefined;
     if (!materialId || !Number.isFinite(quantity) || quantity <= 0 || (dose !== undefined && (!Number.isFinite(dose) || dose <= 0)) || materialDoseUnit.trim().length > 50) {
-      Alert.alert('Material belum lengkap', 'Pilih material, isi jumlah lebih dari nol, dan periksa dosis serta satuannya.');
+      Alert.alert('Barang belum lengkap', 'Pilih barang, isi jumlah lebih dari nol, dan periksa dosis serta satuannya.');
       return;
     }
     setMaterialRows((rows) => [...rows.filter((m) => m.material_id !== materialId), { material_id: materialId, jumlah: quantity, dosis: dose, satuan_dosis: materialDoseUnit.trim() || undefined }]);
@@ -331,10 +331,10 @@ export default function RawatDetailScreen() {
             {detail.metode && <Text style={styles.meta}>Metode: {detail.metode}</Text>}
             {detail.kondisi && <Text style={styles.meta}>Kondisi: {detail.kondisi}</Text>}
             {detail.keterangan && <Text style={styles.meta}>{detail.keterangan}</Text>}
-            {(detail.materials ?? []).map((material) => <Text key={material.id} style={styles.meta}>Material: {material.material?.nama ?? materialNames.get(material.material_id) ?? material.material_id} · {material.jumlah}{material.dosis != null ? ` · dosis ${material.dosis} ${material.satuan_dosis ?? ''}` : ''}</Text>)}
+            {(detail.materials ?? []).map((material) => <Text key={material.id} style={styles.meta}>Barang: {material.material?.nama ?? materialNames.get(material.material_id) ?? material.material_id} · {material.jumlah}{material.dosis != null ? ` · dosis ${material.dosis} ${material.satuan_dosis ?? ''}` : ''}</Text>)}
             {(canEdit || canDeleteDetail) && <View style={styles.row}>
               {canEdit && <Button title="Ubah" variant="secondary" size="sm" onPress={() => openForm(detail)} />}
-              {canDeleteDetail && <Button title="Hapus" variant="danger" size="sm" onPress={() => confirmAction('Hapus pekerjaan?', 'Detail dan materialnya akan dihapus.', () => deleteDetail(detail))} />}
+              {canDeleteDetail && <Button title="Hapus" variant="danger" size="sm" onPress={() => confirmAction('Hapus pekerjaan?', 'Detail dan barangnya akan dihapus.', () => deleteDetail(detail))} />}
             </View>}
           </View>
         ))}
@@ -362,14 +362,14 @@ export default function RawatDetailScreen() {
           <FormField label="Jumlah pokok dirawat" value={trees} onChangeText={setTrees} keyboardType="number-pad" />
           <FormField label="Metode" value={method} onChangeText={setMethod} />
           <FormField label="Kondisi lapangan" value={condition} onChangeText={setCondition} />
-          <Text style={styles.section}>Material</Text>
+          <Text style={styles.section}>Barang dipakai</Text>
           {materialRows.map((row) => <TouchableOpacity key={row.material_id} onPress={() => setMaterialRows((rows) => rows.filter((m) => m.material_id !== row.material_id))}><Text style={styles.meta}>{materialNames.get(row.material_id) ?? row.material_id} · {row.jumlah}{row.dosis != null ? ` · dosis ${row.dosis} ${row.satuan_dosis ?? ''}` : ''}  ×</Text></TouchableOpacity>)}
-          <FormSelect label="Pilih material" value={materialId} options={(lookups.data?.materials ?? []).map((material) => ({ label: material.nama, value: material.id }))} onSelect={setMaterialId} searchable />
+          <FormSelect label="Pilih barang" value={materialId} options={(lookups.data?.materials ?? []).map((material) => ({ label: material.nama, value: material.id }))} onSelect={setMaterialId} searchable />
           {materialId && (selectedProduct?.bahan_aktif || selectedProduct?.konsentrasi) && <Text style={styles.meta}>Bahan aktif: {selectedProduct.bahan_aktif ?? '—'} · Konsentrasi: {selectedProduct.konsentrasi ?? '—'}</Text>}
-          <FormField label="Jumlah material" value={materialQty} onChangeText={setMaterialQty} keyboardType="decimal-pad" />
+          <FormField label="Jumlah barang" value={materialQty} onChangeText={setMaterialQty} keyboardType="decimal-pad" />
           <FormField label="Dosis (opsional)" value={materialDose} onChangeText={setMaterialDose} keyboardType="decimal-pad" />
           <FormField label="Satuan dosis" value={materialDoseUnit} onChangeText={setMaterialDoseUnit} />
-          <Button title="Tambahkan material" variant="secondary" onPress={addMaterial} />
+          <Button title="Tambahkan barang" variant="secondary" onPress={addMaterial} />
           <View style={styles.row}><Button title="Batal" variant="ghost" onPress={() => setFormOpen(false)} /><Button title="Simpan pekerjaan" loading={actions.addDetail.isPending || actions.updateDetail.isPending} onPress={saveDetail} /></View>
         </View>}
 

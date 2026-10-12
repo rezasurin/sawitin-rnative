@@ -93,7 +93,7 @@ export function VehicleUsageForm() {
       (end !== undefined && (!Number.isFinite(end) || end < 0)) ||
       (start !== undefined && end !== undefined && end < start) || Boolean(fuelId) !== (fuel !== undefined) ||
       (fuel !== undefined && (!Number.isFinite(fuel) || fuel <= 0)) || note.length > 2000) {
-      Alert.alert('Data belum valid', 'Pilih kendaraan dan tanggal; periksa meter serta pasangan material/BBM.'); return;
+      Alert.alert('Data belum valid', 'Pilih kendaraan dan tanggal; periksa meter serta pasangan barang/BBM.'); return;
     }
     const data: CreatePemakaianKendaraanPayload = {
       client_request_id: key.current, kendaraan_id: vehicleId, tanggal: new Date(date).toISOString(),
@@ -139,7 +139,7 @@ export function VehicleUsageForm() {
       <FormField label="Meter akhir" value={meterEnd} onChangeText={setMeterEnd} keyboardType="decimal-pad" />
       {jump && <Text style={styles.warn}>Kenaikan meter terlihat besar. Periksa kembali sebelum menyimpan.</Text>}
       <Text style={styles.title}>BBM (opsional)</Text>
-      <FormSelect label="Material BBM" value={fuelId} options={[{ label: 'Tanpa BBM', value: '' }, ...(materials.data?.materials ?? []).filter((row) => row.kategori_material?.is_bbm || row.id === fuelId).map((row) => ({ label: `${row.nama} · ${row.satuan}`, value: row.id }))]} onSelect={(v) => { setFuelId(v); if (!v) setFuelAmount(''); }} searchable />
+      <FormSelect label="Barang BBM" value={fuelId} options={[{ label: 'Tanpa BBM', value: '' }, ...(materials.data?.materials ?? []).filter((row) => row.kategori_material?.is_bbm || row.id === fuelId).map((row) => ({ label: `${row.nama} · ${row.satuan}`, value: row.id }))]} onSelect={(v) => { setFuelId(v); if (!v) setFuelAmount(''); }} searchable />
       {!!fuelId && <FormField label="Jumlah BBM" value={fuelAmount} onChangeText={setFuelAmount} keyboardType="decimal-pad" />}
       <FormField label="Keterangan" value={note} onChangeText={setNote} multiline />
       <Button title="Simpan draft" loading={saving} disabled={saving || !vehicleId || (editing && !online)} onPress={() => void save(false)} />

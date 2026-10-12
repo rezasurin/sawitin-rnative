@@ -70,14 +70,14 @@ function MaterialFormScreen() {
       } else await createMutation.mutateAsync(normalized);
       router.back();
     } catch {
-      Alert.alert('Gagal', 'Tidak dapat menyimpan material. Silakan coba lagi.');
+      Alert.alert('Gagal', 'Tidak dapat menyimpan barang. Silakan coba lagi.');
     }
   };
 
   return (
     <View style={styles.container}>
       <PageHeader
-        title={editing ? 'Ubah Material' : 'Tambah Material'}
+        title={editing ? 'Ubah Barang' : 'Tambah Barang'}
         showBackButton
         onBack={() => router.back()}
       />
@@ -92,7 +92,7 @@ function MaterialFormScreen() {
           render={({ field: { onChange, onBlur, value } }) => (
             <FormField
               label="Kode"
-              placeholder="Masukkan kode material"
+              placeholder="Masukkan kode barang"
               value={value}
               onChangeText={onChange}
               onBlur={onBlur}
@@ -107,7 +107,7 @@ function MaterialFormScreen() {
           render={({ field: { onChange, onBlur, value } }) => (
             <FormField
               label="Nama"
-              placeholder="Masukkan nama material"
+              placeholder="Masukkan nama barang"
               value={value}
               onChangeText={onChange}
               onBlur={onBlur}
