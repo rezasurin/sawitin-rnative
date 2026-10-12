@@ -53,7 +53,7 @@ It becomes a Prometheus label, and labels live for the life of the process. The 
 `POST /stockOpname/:id/approve` now returns `403` when the approver is the creator:
 
 ```json
-{ "error": "A stock count must be approved by someone other than the person who created it" }
+{ "error": "Stock opname harus disetujui oleh orang lain, bukan pembuatnya" }
 ```
 
 Approving writes the counted figure straight into the stock balance, so one person could previously both declare what was on the shelf and ratify it.
@@ -66,8 +66,8 @@ Two more endpoints return `403` on the same condition:
 
 | Endpoint                               | Error                                                                             |
 | -------------------------------------- | --------------------------------------------------------------------------------- |
-| `POST /pemakaianKendaraan/:id/approve` | `Vehicle usage must be approved by someone other than the person who recorded it` |
-| `POST /bkmRawat/:id/approve`           | `BKM Rawat must be approved by someone other than the person who filed it`        |
+| `POST /pemakaianKendaraan/:id/approve` | `Pemakaian kendaraan harus disetujui oleh orang lain, bukan pencatatnya` |
+| `POST /bkmRawat/:id/approve`           | `BKM Rawat harus disetujui oleh orang lain, bukan pengajunya`        |
 
 All three deduct from real stock when approved, so the rule is the same in each: whoever declares what was consumed must not be the one who ratifies it.
 
