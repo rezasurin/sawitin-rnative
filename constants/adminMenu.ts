@@ -5,7 +5,7 @@ export const ADMIN_MODULES = [
   { route: 'rawat', title: 'BKM Rawat', description: 'Dokumen perawatan kebun', icon: 'leaf', permission: 'mod_bkm_rawat' },
   { route: 'observasi', title: 'Observasi Lapangan', description: 'Catatan kondisi kebun', icon: 'eye', permission: 'mod_bkm_rawat' },
   { route: 'pemakaian-kendaraan', title: 'Pemakaian Kendaraan', description: 'Catatan operasi dan BBM', icon: 'truck', permission: 'mod_bkm_rawat' },
-  { route: 'material', title: 'Material', description: 'Daftar dan tambah material', icon: 'cube', permission: 'mod_material' },
+  { route: 'material', title: 'Stok Barang', description: 'Daftar dan tambah barang', icon: 'cube', permission: 'mod_material' },
   { route: 'stock-opname', title: 'Stok Opname', description: 'Lihat hasil hitung fisik', icon: 'list-alt', permission: 'mod_material' },
 ] as const;
 

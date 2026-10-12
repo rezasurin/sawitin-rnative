@@ -20,7 +20,7 @@ export function StockCountList() {
       {list.isError && <Button title="Muat ulang" onPress={() => void list.refetch()} />}
       {(list.data?.data ?? []).map((item) => <Pressable key={item.id} style={styles.card} onPress={() => router.push(`/${group}/stock-opname/${item.id}` as never)}>
         <Text style={styles.title}>{new Date(item.tanggal).toLocaleDateString('id-ID')}</Text>
-        <Text>{item.status} · {item.details?.length ?? 0} material</Text>
+        <Text>{item.status} · {item.details?.length ?? 0} barang</Text>
       </Pressable>)}
       {!list.isLoading && !list.data?.data.length && <Text>Belum ada stok opname.</Text>}
     </ScrollView>

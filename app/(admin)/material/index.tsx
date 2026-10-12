@@ -95,7 +95,7 @@ export default function MaterialScreen() {
   const handleDelete = React.useCallback(
     (item: Material) => {
       Alert.alert(
-        'Hapus Material',
+        'Hapus Barang',
         `Yakin ingin menghapus "${item.nama}"?`,
         [
           { text: 'Batal', style: 'cancel' },
@@ -114,7 +114,7 @@ export default function MaterialScreen() {
 
   return (
     <View style={styles.container}>
-      <PageHeader title="Material" />
+      <PageHeader title="Barang" />
       <FlatList
         data={materialList}
         keyExtractor={(item) => item.id}
@@ -134,8 +134,8 @@ export default function MaterialScreen() {
             isEmpty={!isLoading && !isError}
             onRetry={() => refetch()}
             emptyIcon="cube-outline"
-            emptyText="Belum ada data material"
-            emptySubtext="Tambahkan material baru dengan menekan tombol +"
+            emptyText="Belum ada data barang"
+            emptySubtext="Tambahkan barang baru dengan menekan tombol +"
           />
         }
         refreshControl={
