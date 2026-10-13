@@ -92,3 +92,9 @@ export const tutupHarianKeys = {
   detail: (id: string) => [...tutupHarianKeys.all, 'detail', id] as const,
   pending: () => [...tutupHarianKeys.all, 'pending'] as const,
 };
+
+export const pemakaianKendaraanKeys = {
+  all: ['pemakaianKendaraan'] as const,
+  meterTerakhir: (kendaraanId: string, satuanMeter: string) =>
+    [...pemakaianKendaraanKeys.all, 'meterTerakhir', kendaraanId, satuanMeter] as const,
+};

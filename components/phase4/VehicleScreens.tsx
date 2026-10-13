@@ -12,9 +12,11 @@ import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { usePekerjaList } from '@/hooks/usePekerja';
 import { useBkmRawatList, useBkmRawatLookups } from '@/hooks/useBkmRawat';
+import { useMeterTerakhir } from '@/hooks/useVehicleUsage';
 import { kendaraanApi, supirApi, pemakaianKendaraanApi as usageApi } from '@/services/vehicle-usage.service';
 import type { CreatePemakaianKendaraanPayload, PemakaianKendaraan } from '@/types/vehicle-usage';
 import { estateDate } from '@/utils/estateDate';
+import { meterHint, nextMeterStart } from '@/utils/meter-prefill';
 
 const listKey = ['pemakaianKendaraan', 'list'];
 const errText = (error: unknown) => error instanceof Error ? error.message : 'Coba lagi.';
@@ -68,7 +70,9 @@ export function VehicleUsageForm() {
   const [meterUnit, setMeterUnit] = useState('km'); const [fuelId, setFuelId] = useState('');
   const [fuelAmount, setFuelAmount] = useState(''); const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
-  const recent = useQuery({ queryKey: ['lastVehicleMeter', vehicleId], queryFn: () => usageApi.getAll({ limit: 50, filters: JSON.stringify({ kendaraan_id: vehicleId, status: 'APPROVED' }), sort: 'tanggal:desc' }), enabled: !!vehicleId && online });
+  // Last approved closing meter (backend inventory-konsumsi-bbm.md); offline, the handset's last copy.
+  const lastMeter = useMeterTerakhir(vehicleId, meterUnit);
+  const prefilled = useRef<string | null>(null);
 
   useEffect(() => {
     if (!record.data) return; const row = record.data;
@@ -79,11 +83,13 @@ export function VehicleUsageForm() {
     setMeterUnit(row.satuan_meter ?? 'km'); setFuelId(row.material_id ?? '');
     setFuelAmount(row.jumlah_bbm == null ? '' : String(row.jumlah_bbm)); setNote(row.keterangan ?? '');
   }, [record.data]);
+  // Prefill a new record only; meterStart is read, not a dependency, so typing never re-runs it.
   useEffect(() => {
-    if (editing || meterStart || !recent.data?.data?.length) return;
-    const last = recent.data.data.find((row) => row.meter_akhir != null);
-    if (last?.meter_akhir != null) setMeterStart(String(last.meter_akhir));
-  }, [recent.data, editing, meterStart]);
+    if (editing || !vehicleId || lastMeter.isFetching) return;
+    const next = nextMeterStart(meterStart, prefilled.current, lastMeter.data);
+    prefilled.current = lastMeter.data?.meter_akhir ?? null;
+    if (next !== meterStart) setMeterStart(next);
+  }, [lastMeter.data, lastMeter.isFetching, editing, vehicleId]);
 
   const save = async (submit: boolean) => {
     const start = meterStart.trim() ? Number(meterStart) : undefined;
@@ -124,18 +130,20 @@ export function VehicleUsageForm() {
     finally { setSaving(false); }
   };
 
-  const last = recent.data?.data.find((row) => row.meter_akhir != null)?.meter_akhir;
+  const last = lastMeter.data?.meter_akhir;
+  const hint = meterHint(lastMeter.data, meterStart);
   const jump = last != null && meterEnd && Number(meterEnd) - Number(last) > (meterUnit === 'jam' ? 24 : 500);
   return <View style={styles.root}><PageHeader title={editing ? 'Ubah Pemakaian' : 'Catat Pemakaian'} showBackButton onBack={() => router.back()} />
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {!vehicleRows.length && <Text style={styles.warn}>Daftar kendaraan tidak tersedia. Hubungkan perangkat saat pertama kali mengisi cache.</Text>}
-      <FormSelect label="Kendaraan / alat" value={vehicleId} options={vehicleRows.filter((row) => row.status === 'ACTIVE').map((row) => ({ label: `${row.nomor_kendaraan} · ${row.jenis_kendaraan}`, value: row.id }))} onSelect={(v) => { setVehicleId(v); const row = vehicleRows.find((item) => item.id === v); setMeterUnit(/traktor|sprayer|alat/i.test(row?.jenis_kendaraan ?? '') ? 'jam' : 'km'); setMeterStart(''); }} searchable />
+      <FormSelect label="Kendaraan / alat" value={vehicleId} options={vehicleRows.filter((row) => row.status === 'ACTIVE').map((row) => ({ label: `${row.nomor_kendaraan} · ${row.jenis_kendaraan}`, value: row.id }))} onSelect={(v) => { setVehicleId(v); const row = vehicleRows.find((item) => item.id === v); setMeterUnit(/traktor|sprayer|alat/i.test(row?.jenis_kendaraan ?? '') ? 'jam' : 'km'); }} searchable />
       <FormSelect label="Supir (opsional)" value={driverId} options={[{ label: 'Tanpa supir terdaftar', value: '' }, ...driverRows.filter((row) => row.status === 'ACTIVE').map((row) => ({ label: row.nama, value: row.id }))]} onSelect={(v) => { setDriverId(v); if (v) setWorkerId(''); }} searchable />
       <FormSelect label="Operator pekerja (opsional)" value={workerId} options={[{ label: 'Tanpa operator terdaftar', value: '' }, ...(workers.data?.data ?? []).map((row) => ({ label: row.member?.nama ?? row.id, value: row.id }))]} onSelect={(v) => { setWorkerId(v); if (v) setDriverId(''); }} searchable />
       <FormDateField label="Tanggal" value={date} onChange={setDate} />
       <FormSelect label="BKM Rawat (opsional)" value={rawatId} options={[{ label: 'Tanpa BKM Rawat', value: '' }, ...(rawat.data?.data ?? []).filter((row) => row.tanggal.slice(0, 10) === date).map((row) => ({ label: `${row.blok?.nama ?? row.blok_id} · ${row.kelompok_lahan?.nama ?? ''}`, value: row.id }))]} onSelect={setRawatId} searchable />
       <FormSelect label="Satuan meter" value={meterUnit} options={[{ label: 'km', value: 'km' }, { label: 'jam', value: 'jam' }]} onSelect={setMeterUnit} />
       <FormField label="Meter awal" value={meterStart} onChangeText={setMeterStart} keyboardType="decimal-pad" />
+      {hint && <Text style={hint.warn ? styles.warn : styles.muted}>{hint.text}</Text>}
       <FormField label="Meter akhir" value={meterEnd} onChangeText={setMeterEnd} keyboardType="decimal-pad" />
       {jump && <Text style={styles.warn}>Kenaikan meter terlihat besar. Periksa kembali sebelum menyimpan.</Text>}
       <Text style={styles.title}>BBM (opsional)</Text>
