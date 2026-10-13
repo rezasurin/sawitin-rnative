@@ -10,6 +10,8 @@ export const approvalLabel = (document: string): string => ({
   TUTUP_HARIAN: 'Tutup Harian', BKM_PANEN: 'BKM Panen', BKM_CHECKER: 'BKM Checker', BKM_RAWAT: 'BKM Rawat',
   KRANI_TIMBANG: 'Krani Timbang', PEMAKAIAN_KENDARAAN: 'Pemakaian Kendaraan',
   STOCK_OPNAME: 'Stok Opname', PENJUALAN: 'Penjualan',
+  // Approved on web only, so approvalTarget gives it no link.
+  PENERIMAAN_MATERIAL: 'Penerimaan Barang',
 } as Record<string, string>)[document] ?? document.replace(/_/g, ' ');
 
 export function approvalTarget(document: string, group: string, canRead: (module: string) => boolean): string | null {

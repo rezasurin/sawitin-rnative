@@ -22,3 +22,12 @@ export interface PemakaianKendaraan extends TimestampFields {
 export type CreatePemakaianKendaraanPayload = Pick<PemakaianKendaraan, 'kendaraan_id' | 'tanggal'> &
   Partial<Pick<PemakaianKendaraan, 'supir_id' | 'pekerja_id' | 'bkm_rawat_id' | 'meter_awal' | 'meter_akhir' | 'satuan_meter' | 'material_id' | 'jumlah_bbm' | 'keterangan'>> &
   { client_request_id: string };
+/** `GET /pemakaianKendaraan/meter-terakhir`: every field but `kendaraan_id` null when no reading yet. */
+export interface MeterTerakhir {
+  kendaraan_id: string;
+  /** Decimal string, like every decimal on usage records. */
+  meter_akhir: string | null; satuan_meter: string | null;
+  tanggal: string | null; pemakaian_kendaraan_id: string | null;
+  /** Set by the client: the server was unreachable and this is the last answer stored on the handset. */
+  cached: boolean;
+}

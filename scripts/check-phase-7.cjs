@@ -26,6 +26,13 @@ test('R11 display keeps missing measures distinct and links only usable approval
   assert.equal(display.approvalTarget('BKM_PANEN', '(mandor)', () => false), null);
 });
 
+test('R11 names a goods receipt as barang and links it nowhere: it is approved on web', () => {
+  assert.equal(display.approvalLabel('PENERIMAAN_MATERIAL'), 'Penerimaan Barang');
+  for (const group of ['(mandor)', '(asisten)', '(admin)']) {
+    assert.equal(display.approvalTarget('PENERIMAAN_MATERIAL', group, () => true), null);
+  }
+});
+
 test('brondol entry only accepts safe whole kilograms, including zero', () => {
   for (const valid of ['0', '18', '205']) assert.equal(display.isWholeKg(valid), true);
   for (const invalid of ['', '-1', '1.5', '1,5', '3kg', '9007199254740992']) {
