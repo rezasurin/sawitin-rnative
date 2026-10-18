@@ -116,7 +116,7 @@ test('Panen picker excludes block-less sources and allow sparse parcels', () => 
   }
 });
 
-test('Rawat submits a sparse parcel online and queues it offline with the same hierarchy', async () => {
+test('Rawat submits a sparse parcel online and queues it offline with the same hierarchy and pengawas', async () => {
   const React = require('react');
   const { act, create } = require('react-test-renderer');
   global.IS_REACT_ACT_ENVIRONMENT = true;
@@ -139,6 +139,7 @@ test('Rawat submits a sparse parcel online and queues it offline with the same h
       },
       '@/stores/useNetworkStore': { useNetworkStore: (selector) => selector({ isOnline: online }) },
       '@/stores/useSyncQueueStore': { useSyncQueueStore: (selector) => selector({ addToQueue: async (p) => { queued.push(p); return { id: 'q' }; } }) },
+      '@/stores/useAuthStore': { useAuthStore: (selector) => selector({ user: { id: 'me', username: 'me', member: { id: 'm', nama: 'Mandor Saya' } } }) },
     });
     let tree;
     await act(async () => { tree = create(React.createElement(BKMRawatForm, { onSuccess() {} })); });
@@ -147,13 +148,23 @@ test('Rawat submits a sparse parcel online and queues it offline with the same h
     await act(async () => select('Blok').props.onSelect('b'));
     assert.deepEqual(Array.from(select('Lahan (Opsional)').props.options, (o) => o.value), ['', 'valid']);
     await act(async () => select('Lahan (Opsional)').props.onSelect('valid'));
-    await act(async () => tree.root.findByType('FormField').props.onChangeText('Supervisor'));
+    // Lookups cached before the pengawas list existed still default to the signed-in mandor.
+    assert.deepEqual(Array.from(select('Pengawas').props.options, (o) => o.value), ['me', 'luar']);
+    assert.equal(select('Pengawas').props.value, 'me');
+    // Offline, a supervisor outside the app is typed instead.
+    if (!online) {
+      await act(async () => select('Pengawas').props.onSelect('luar'));
+      assert.equal(tree.root.findByType('Button').props.disabled, true);
+      await act(async () => tree.root.findByType('FormField').props.onChangeText('Ketua Kelompok'));
+    }
     assert.equal(tree.root.findByType('Button').props.disabled, false);
     await act(async () => tree.root.findByType('Button').props.onPress());
     const payload = online ? sent[0] : queued[0].payload.header;
     assert.equal(payload.lahan_id, 'valid');
     assert.equal(payload.blok_id, 'b');
     assert.equal(payload.kelompok_lahan_id, 'estate');
+    if (online) assert.deepEqual([payload.pengawas_id, payload.nama_pengawas], ['me', 'Mandor Saya']);
+    else assert.deepEqual(['pengawas_id' in payload, payload.nama_pengawas], [false, 'Ketua Kelompok']);
     assert.equal('user_pic_id' in payload, false);
     assert.equal('geometry' in payload, false, 'untouched geometry must not be added to online or queued headers');
     if (!online) assert.equal(JSON.stringify(queued[0]).includes('"geometry"'), false);

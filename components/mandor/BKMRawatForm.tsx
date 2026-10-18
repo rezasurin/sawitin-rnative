@@ -19,6 +19,7 @@ import { useCreateBkmRawat } from '@/hooks/useBkmRawat';
 import { useBkmRawatLookups } from '@/hooks/useBkmRawat';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { agronomyLabel, operationalLands } from '@/utils/plantation';
 import { estateDate } from '@/utils/estateDate';
 
@@ -26,11 +27,15 @@ interface Props {
   onSuccess: (id: string) => void;
 }
 
+/** A supervisor outside the app (contractor, ketua kelompok): sent as a typed name only. */
+const PENGAWAS_LUAR = 'luar';
+
 interface FormErrors {
   kelompok_lahan_id?: string;
   blok_id?: string;
   lahan_id?: string;
   tanggal?: string;
+  pengawas_id?: string;
   nama_pengawas?: string;
 }
 
@@ -40,12 +45,15 @@ export function BKMRawatForm({ onSuccess }: Props) {
   const isOnline = useNetworkStore((state) => state.isOnline);
   const addToQueue = useSyncQueueStore((state) => state.addToQueue);
   const { data: rawatLookups } = useBkmRawatLookups();
+  const user = useAuthStore((state) => state.user);
 
   const [kelompokLahanId, setKelompokLahanId] = useState('');
   const [lahanId, setLahanId] = useState('');
   const [blokId, setBlokId] = useState('');
   // Estate day (WIB): the UTC date is still yesterday before 07:00.
   const [tanggal, setTanggal] = useState(estateDate());
+  /** null until picked: a mandor usually files their own BKM, so it then defaults to them. */
+  const [pickedPengawas, setPickedPengawas] = useState<string | null>(null);
   const [namaPengawas, setNamaPengawas] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -89,6 +97,19 @@ export function BKMRawatForm({ onSuccess }: Props) {
     [lahanList, rawatLookups, blokId],
   );
 
+  const pengawasOptions = useMemo(() => {
+    // Lookups cached before the list was sent offer the signed-in user only.
+    const users = rawatLookups?.pengawas
+      ?? (user ? [{ id: user.id, nama: user.member?.nama ?? user.username }] : []);
+    return [
+      ...users.map((u) => ({ label: u.nama, value: u.id })),
+      { label: 'Lainnya (di luar sistem)', value: PENGAWAS_LUAR },
+    ];
+  }, [rawatLookups, user]);
+  const pengawasId = pickedPengawas
+    ?? (pengawasOptions.some((o) => o.value === user?.id) ? user!.id : '');
+  const isLuar = pengawasId === PENGAWAS_LUAR;
+
   const validate = useCallback((): boolean => {
     const nextErrors: FormErrors = {};
 
@@ -104,7 +125,10 @@ export function BKMRawatForm({ onSuccess }: Props) {
     if (!tanggal) {
       nextErrors.tanggal = 'Tanggal pelaksanaan wajib diisi';
     }
-    if (!namaPengawas.trim()) {
+    if (!pengawasId) {
+      nextErrors.pengawas_id = 'Pengawas wajib dipilih';
+    }
+    if (isLuar && !namaPengawas.trim()) {
       nextErrors.nama_pengawas = 'Nama pengawas wajib diisi';
     }
 
@@ -113,10 +137,11 @@ export function BKMRawatForm({ onSuccess }: Props) {
       kelompok_lahan_id: true,
       blok_id: true,
       tanggal: true,
+      pengawas_id: true,
       nama_pengawas: true,
     });
     return Object.keys(nextErrors).length === 0;
-  }, [kelompokLahanId, blokId, lahanId, lahanOptions, tanggal, namaPengawas]);
+  }, [kelompokLahanId, blokId, lahanId, lahanOptions, tanggal, pengawasId, isLuar, namaPengawas]);
 
   const handleKelompokChange = useCallback((value: string) => {
     setKelompokLahanId(value);
@@ -158,7 +183,13 @@ export function BKMRawatForm({ onSuccess }: Props) {
       blok_id: blokId,
       lahan_id: lahanId || undefined,
       tanggal: new Date(tanggal).toISOString(),
-      nama_pengawas: namaPengawas.trim(),
+      // The name travels with a picked user too, so the queued item reads right offline.
+      ...(isLuar
+        ? { nama_pengawas: namaPengawas.trim() }
+        : {
+            pengawas_id: pengawasId,
+            nama_pengawas: pengawasOptions.find((o) => o.value === pengawasId)?.label ?? '',
+          }),
     };
 
     if (!isOnline) {
@@ -206,6 +237,9 @@ export function BKMRawatForm({ onSuccess }: Props) {
     lahanId,
     blokId,
     tanggal,
+    pengawasId,
+    isLuar,
+    pengawasOptions,
     namaPengawas,
     createMutation,
     isOnline,
@@ -217,7 +251,7 @@ export function BKMRawatForm({ onSuccess }: Props) {
   ]);
 
   const isValid =
-    !!kelompokLahanId && !!blokId && !!tanggal && !!namaPengawas.trim()
+    !!kelompokLahanId && !!blokId && !!tanggal && !!pengawasId && (!isLuar || !!namaPengawas.trim())
     && (!lahanId || lahanOptions.some((l) => l.value === lahanId));
 
   return (
@@ -286,17 +320,32 @@ export function BKMRawatForm({ onSuccess }: Props) {
           error={touched.tanggal ? errors.tanggal : undefined}
         />
 
-        <FormField
-          label="Nama Pengawas"
-          placeholder="Masukkan nama pengawas lapangan"
-          value={namaPengawas}
-          onChangeText={(text) => {
-            setNamaPengawas(text);
-            setErrors((prev) => ({ ...prev, nama_pengawas: undefined }));
-            setTouched((prev) => ({ ...prev, nama_pengawas: true }));
+        <FormSelect
+          label="Pengawas"
+          placeholder="Pilih pengawas"
+          value={pengawasId}
+          options={pengawasOptions}
+          onSelect={(value) => {
+            setPickedPengawas(value);
+            setErrors((prev) => ({ ...prev, pengawas_id: undefined, nama_pengawas: undefined }));
           }}
-          error={touched.nama_pengawas ? errors.nama_pengawas : undefined}
+          error={touched.pengawas_id ? errors.pengawas_id : undefined}
+          searchable
         />
+
+        {isLuar && (
+          <FormField
+            label="Nama Pengawas"
+            placeholder="Mis. mandor kontraktor atau ketua kelompok"
+            value={namaPengawas}
+            onChangeText={(text) => {
+              setNamaPengawas(text);
+              setErrors((prev) => ({ ...prev, nama_pengawas: undefined }));
+              setTouched((prev) => ({ ...prev, nama_pengawas: true }));
+            }}
+            error={touched.nama_pengawas ? errors.nama_pengawas : undefined}
+          />
+        )}
 
         <Button
           title="Simpan BKM Rawat"

@@ -9,6 +9,8 @@ export interface BkmRawat extends TimestampFields {
   lahan_id: string | null;
   blok_id: string;
   tanggal: string;
+  /** Null for a supervisor outside the app; `nama_pengawas` always holds the name. */
+  pengawas_id?: string | null;
   nama_pengawas: string;
   status: DocumentStatus;
   approved_by: string | null;
@@ -29,6 +31,8 @@ export interface CreateBkmRawatPayload {
   lahan_id?: string;
   blok_id: string;
   tanggal: string;
+  /** A user from `lookups.pengawas`; the server then stores their name. */
+  pengawas_id?: string;
   nama_pengawas: string;
   details?: Omit<CreateDetailBkmRawatPayload, 'bkm_rawat_id'>[];
 }
@@ -90,6 +94,8 @@ export interface BkmRawatLookups {
   groups: { id: string; nama: string }[];
   blocks: { id: string; nama: string; kelompok_lahan_id: string }[];
   lands: { id: string; nama: string; blok_id: string | null }[];
+  /** Users who can file a BKM. Absent from lookups cached before it was sent. */
+  pengawas?: { id: string; nama: string }[];
 }
 
 export interface QueuedBkmRawatPayload {
