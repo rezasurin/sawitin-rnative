@@ -1,5 +1,6 @@
 import type { TimestampFields } from './common';
 import type { PlantationGeometry } from './geometry';
+import type { FotoItem } from '@/utils/foto';
 
 export type JenisObservasi = 'HAMA' | 'PENYAKIT' | 'SENSUS_POKOK' | 'SENSUS_BJR' | 'CURAH_HUJAN' | 'INFRASTRUKTUR' | 'LAINNYA';
 export type TingkatObservasi = 'RINGAN' | 'SEDANG' | 'BERAT';
@@ -21,9 +22,10 @@ export interface Observasi extends TimestampFields {
   tingkat: TingkatObservasi | null;
   nama_pengamat: string;
   catatan: string | null;
-  foto_url: string | null;
-  foto_hash: string | null;
-  foto_bytes: number | null;
+  /** Up to five photos, in display order. */
+  foto: FotoItem[];
+  /** @deprecated Photo 0, kept by the server for older builds. Read `foto`. */
+  foto_url?: string | null;
   gps_accuracy: number | null;
   captured_at: string | null;
   geometry: PlantationGeometry | null;
@@ -34,7 +36,7 @@ export interface Observasi extends TimestampFields {
 }
 
 export type CreateObservasiPayload = Pick<Observasi, 'jenis' | 'kelompok_lahan_id' | 'tanggal' | 'nama_pengamat'> &
-  Partial<Pick<Observasi, 'blok_id' | 'lahan_id' | 'tph_id' | 'nilai' | 'satuan' | 'jumlah_sampel' | 'tingkat' | 'catatan' | 'foto_url' | 'foto_hash' | 'foto_bytes' | 'gps_accuracy' | 'captured_at' | 'geometry'>> &
+  Partial<Pick<Observasi, 'blok_id' | 'lahan_id' | 'tph_id' | 'nilai' | 'satuan' | 'jumlah_sampel' | 'tingkat' | 'catatan' | 'foto' | 'gps_accuracy' | 'captured_at' | 'geometry'>> &
   { client_request_id: string };
 
 export type UpdateObservasiPayload = Partial<Omit<CreateObservasiPayload, 'client_request_id'>>;

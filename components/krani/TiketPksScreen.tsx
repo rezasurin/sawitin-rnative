@@ -1,18 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
-import * as FileSystem from 'expo-file-system/legacy';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/core/Button';
-import { AuthenticatedImage } from '@/components/core/AuthenticatedImage';
-import { FormField } from '@/components/form';
+import { FormField, FormPhotoField } from '@/components/form';
 import { PageHeader } from '@/components/home';
-import { useImageCapture } from '@/hooks/useImageCapture';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { tiketPksApi } from '@/services/tiket-pks.service';
-import { uploadApi } from '@/services/upload.service';
+import { keepFotosOffline, uploadFotos } from '@/services/foto.service';
+import { fotoUrls, localFotoUris, type FotoItem } from '@/utils/foto';
 import { ticketWeightsValid, sameFiledTicket } from '@/utils/tiket-pks';
 import type { CreateTiketPksPayload } from '@/types/tiket-pks';
 import { BrandColors } from '@/constants/Colors';
@@ -29,7 +27,6 @@ export default function TiketPksScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const router = useRouter();
   const client = useQueryClient();
-  const photo = useImageCapture();
   const online = useNetworkStore((state) => state.isOnline);
   const canWrite = useAuthStore((state) => state.hasPermission('mod_krani_timbang', 'write'));
   const canUpdate = useAuthStore((state) => state.hasPermission('mod_krani_timbang', 'update'));
@@ -46,7 +43,8 @@ export default function TiketPksScreen() {
   const [net, setNet] = useState('');
   const [receiver, setReceiver] = useState('');
   const [note, setNote] = useState('');
-  const [removePhoto, setRemovePhoto] = useState(false);
+  const [fotos, setFotos] = useState<FotoItem[]>([]);
+  const uploaded = useRef(new Map<string, FotoItem>());
   const ticket = useQuery({ queryKey: ['tiketPks', 'trip', tripId],
     queryFn: () => tiketPksApi.byTrip(tripId), enabled: !!tripId && online });
   const history = useQuery({ queryKey: ['tiketPks', 'history', ticket.data?.id],
@@ -62,6 +60,7 @@ export default function TiketPksScreen() {
     setTare(row.tara_pabrik == null ? '' : String(row.tara_pabrik));
     setNet(row.netto_pabrik == null ? '' : String(row.netto_pabrik));
     setReceiver(row.diterima_oleh ?? ''); setNote(row.keterangan ?? '');
+    setFotos(row.foto ?? fotoUrls(row).map((url) => ({ url })));
   }, [queued?.id, ticket.data]);
 
   useEffect(() => {
@@ -71,7 +70,7 @@ export default function TiketPksScreen() {
     setGross(row.bruto_pabrik == null ? '' : String(row.bruto_pabrik));
     setTare(row.tara_pabrik == null ? '' : String(row.tara_pabrik));
     setNet(String(row.netto_pabrik)); setReceiver(row.diterima_oleh ?? '');
-    setNote(row.keterangan ?? ''); setRemovePhoto(false);
+    setNote(row.keterangan ?? ''); setFotos(row.foto ?? []);
   }, [ticket.data]);
 
   const save = async () => {
@@ -96,14 +95,8 @@ export default function TiketPksScreen() {
     }
     savingRef.current = true; setSaving(true);
     try {
-      const source = photo.image?.uri;
-      if (source && !online) {
-        if (!FileSystem.documentDirectory) throw new Error('Penyimpanan foto offline tidak tersedia.');
-        const path = `${FileSystem.documentDirectory}${key.current}.jpg`;
-        if (!(await FileSystem.getInfoAsync(path)).exists) await FileSystem.copyAsync({ from: source, to: path });
-        input.foto_url = path;
-      } else if (source) input.foto_url = (await uploadApi.uploadImage(source, 'tiket-pks')).url;
-      else input.foto_url = removePhoto ? null : ticket.data?.foto_url ?? null;
+      // Online every photo goes up now; offline they are copied beside the queue for the sync pass.
+      input.foto = online ? await uploadFotos(fotos, 'tiket-pks', uploaded.current) : await keepFotosOffline(fotos, key.current);
 
       if (ticket.data) {
         if (!online) throw new Error('Perbaikan tiket membutuhkan koneksi internet.');
@@ -111,7 +104,7 @@ export default function TiketPksScreen() {
         await tiketPksApi.update(ticket.data.id, update);
       } else if (!online) {
         await addToQueue({ module: 'tiket_pks', action: 'CREATE', endpoint: '/tiketPks',
-          payload: { ...input, ...(input.foto_url?.startsWith('file://') ? { local_photo_uri: input.foto_url } : {}) } });
+          payload: { ...input, local_photo_uris: localFotoUris(input.foto) } });
       } else {
         try { await tiketPksApi.create(input); }
         catch (error) {
@@ -132,15 +125,10 @@ export default function TiketPksScreen() {
       const status = (error as { status?: number }).status;
       if (!ticket.data && status === undefined) {
         try {
-          const source = photo.image?.uri;
-          if (source) {
-            if (!FileSystem.documentDirectory) throw new Error('Penyimpanan foto offline tidak tersedia.');
-            const path = `${FileSystem.documentDirectory}${key.current}.jpg`;
-            if (!(await FileSystem.getInfoAsync(path)).exists) await FileSystem.copyAsync({ from: source, to: path });
-            input.foto_url = path;
-          }
+          // Photos that went up before the connection dropped keep their URL; the rest wait on the device.
+          input.foto = await keepFotosOffline(input.foto ?? fotos, key.current);
           await addToQueue({ module: 'tiket_pks', action: 'CREATE', endpoint: '/tiketPks',
-            payload: { ...input, ...(input.foto_url?.startsWith('file://') ? { local_photo_uri: input.foto_url } : {}) } });
+            payload: { ...input, local_photo_uris: localFotoUris(input.foto) } });
           router.back();
           return;
         } catch (queueError) {
@@ -172,15 +160,7 @@ export default function TiketPksScreen() {
       {ticket.isLoading && online && <ActivityIndicator />}
       {ticket.isError && online && <Button title="Muat ulang tiket" variant="secondary" onPress={() => void ticket.refetch()} />}
       {!online && <Text style={{ color: BrandColors.textSecondary }}>Offline. Tiket baru akan dikirim saat tersambung.</Text>}
-      <Button title={photo.image || ticket.data?.foto_url ? 'Ganti foto tiket' : 'Foto tiket PKS'}
-        variant="secondary" onPress={() => void photo.captureFromCamera()} />
-      <Button title="Pilih dari galeri" variant="secondary" onPress={() => void photo.pickFromGallery()} />
-      {!!photo.image?.uri && <AuthenticatedImage uri={photo.image.uri} style={{ width: 180, height: 180 }} />}
-      {!photo.image?.uri && !!ticket.data?.foto_url && !removePhoto &&
-        <AuthenticatedImage uri={ticket.data.foto_url} style={{ width: 180, height: 180 }} />}
-      {!photo.image?.uri && !ticket.data?.foto_url && typeof queued?.payload?.foto_url === 'string' &&
-        <AuthenticatedImage uri={queued.payload.foto_url} style={{ width: 180, height: 180 }} />}
-      {!!ticket.data?.foto_url && <Button title="Hapus foto pada perbaikan" variant="secondary" onPress={() => setRemovePhoto(true)} />}
+      <FormPhotoField label="Foto tiket PKS" value={fotos} onChange={setFotos} disabled={saving || !!queued} />
       <FormField label="Nomor tiket" value={number} onChangeText={setNumber} />
       <FormField label="Waktu di PKS (YYYY-MM-DD HH:mm)" value={stamp} onChangeText={setStamp} />
       <FormField label="Bruto pabrik (kg, opsional)" value={gross} onChangeText={setGross} keyboardType="decimal-pad" />

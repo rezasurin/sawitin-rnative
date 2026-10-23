@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import * as FileSystem from 'expo-file-system/legacy';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/core/Button';
-import { FormDateField, FormField, FormSelect } from '@/components/form';
+import { FormDateField, FormField, FormPhotoField, FormSelect } from '@/components/form';
+import { AuthenticatedImage } from '@/components/core/AuthenticatedImage';
 import { PageHeader } from '@/components/home';
 import { AuditTrail } from './AuditTrail';
 import { BrandColors } from '@/constants/Colors';
@@ -12,15 +12,15 @@ import { useKelompokLahanList } from '@/hooks/useKelompokLahan';
 import { useBlokList } from '@/hooks/useBlok';
 import { useLahanList } from '@/hooks/useLahan';
 import { useTphList } from '@/hooks/useTph';
-import { useImageCapture } from '@/hooks/useImageCapture';
 import { useLocation } from '@/hooks/useLocation';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
-import { uploadApi } from '@/services/upload.service';
+import { keepFotosOffline, uploadFotos } from '@/services/foto.service';
 import { observasiApi } from '@/services/observasi.service';
 import type { CreateObservasiPayload, JenisObservasi, Observasi, TingkatObservasi } from '@/types/observasi';
 import { estateDate } from '@/utils/estateDate';
+import { fotoUrls, localFotoUris, type FotoItem } from '@/utils/foto';
 import { parseSampleCount, sampleBjr, SENSUS_BJR_UNIT, sensusBjrError } from '@/utils/observasi';
 
 const TYPES: { value: JenisObservasi; label: string; measure: string; unit: string }[] = [
@@ -85,7 +85,6 @@ export function ObservationForm() {
   const online = useNetworkStore((state) => state.isOnline);
   const addToQueue = useSyncQueueStore((state) => state.addToQueue);
   const userName = useAuthStore((state) => state.user?.member?.nama ?? state.user?.username ?? '');
-  const photo = useImageCapture();
   const gps = useLocation();
   const key = useRef(`observasi_${Date.now()}_${Math.random().toString(36).slice(2)}`);
   const [kind, setKind] = useState<JenisObservasi>('CURAH_HUJAN');
@@ -100,8 +99,8 @@ export function ObservationForm() {
   const [severity, setSeverity] = useState<TingkatObservasi | ''>('');
   const [observer, setObserver] = useState(userName);
   const [note, setNote] = useState('');
-  const [existingPhoto, setExistingPhoto] = useState('');
-  const uploadedPhoto = useRef<{ source: string; url: string; hash: string; bytes: number } | null>(null);
+  const [fotos, setFotos] = useState<FotoItem[]>([]);
+  const uploaded = useRef(new Map<string, FotoItem>());
   const [saving, setSaving] = useState(false);
   const groups = useKelompokLahanList({ limit: 200 });
   const blocks = useBlokList({ limit: 200 });
@@ -118,7 +117,7 @@ export function ObservationForm() {
     setValue(row.nilai == null ? '' : String(row.nilai)); setUnit(row.satuan ?? '');
     setSampleCount(row.jumlah_sampel == null ? '' : String(row.jumlah_sampel));
     setSeverity(row.tingkat ?? ''); setObserver(row.nama_pengamat); setNote(row.catatan ?? '');
-    setExistingPhoto(row.foto_url ?? '');
+    setFotos(row.foto ?? []);
   }, [remote.data]);
 
   const changeKind = (next: string) => {
@@ -151,31 +150,18 @@ export function ObservationForm() {
     };
     setSaving(true);
     try {
-      const source = photo.image?.uri;
-      if (!online && source) {
-        if (!FileSystem.documentDirectory) throw new Error('Penyimpanan foto offline tidak tersedia.');
-        const saved = `${FileSystem.documentDirectory}${key.current}.jpg`;
-        const stored = await FileSystem.getInfoAsync(saved);
-        if (!stored.exists) await FileSystem.copyAsync({ from: source, to: saved });
-        input.foto_url = saved;
-      } else if (online && source) {
-        const uploaded = uploadedPhoto.current?.source === source ? uploadedPhoto.current : await uploadApi.uploadImage(source, 'observasi');
-        uploadedPhoto.current = { source, url: uploaded.url, hash: uploaded.hash, bytes: uploaded.bytes };
-        input.foto_url = uploaded.url; input.foto_hash = uploaded.hash; input.foto_bytes = uploaded.bytes;
-        setExistingPhoto(uploaded.url);
-      } else if (existingPhoto) input.foto_url = existingPhoto;
+      // Online every photo goes up now; offline they are copied beside the queue for the sync pass.
+      input.foto = online ? await uploadFotos(fotos, 'observasi', uploaded.current) : await keepFotosOffline(fotos, key.current);
       if (editing) {
         if (!online) throw new Error('Perubahan observasi membutuhkan koneksi internet.');
         const { client_request_id: _replayKey, ...update } = input;
         await observasiApi.update(id!, { ...update,
           blok_id: blockId || null, lahan_id: landId || null, tph_id: tphId || null,
           nilai: numeric ?? null, satuan: unit.trim() || null, jumlah_sampel: census ? parseSampleCount(sampleCount) : null, catatan: note.trim() || null,
-          foto_url: input.foto_url ?? null,
-          foto_hash: input.foto_url ? input.foto_hash : null,
-          foto_bytes: input.foto_url ? input.foto_bytes : null,
           tingkat: severityKinds.includes(kind) ? severity || null : null });
       } else if (online) await observasiApi.create(input);
-      else await addToQueue({ module: 'observasi', action: 'CREATE', endpoint: '/observasi', payload: input as unknown as Record<string, unknown> });
+      else await addToQueue({ module: 'observasi', action: 'CREATE', endpoint: '/observasi',
+        payload: { ...input, local_photo_uris: localFotoUris(input.foto) } as unknown as Record<string, unknown> });
       await queryClient.invalidateQueries({ queryKey: listKey });
       router.replace(`/${group}/observasi` as never);
     } catch (error) { Alert.alert('Gagal menyimpan', errorText(error)); }
@@ -204,9 +190,7 @@ export function ObservationForm() {
       <FormField label="Nama pengamat" value={observer} onChangeText={setObserver} />
       <FormField label="Catatan" value={note} onChangeText={setNote} multiline />
       <Text style={styles.muted}>{gps.location ? 'GPS tercatat' : 'GPS tidak tersedia; observasi tetap dapat disimpan.'}</Text>
-      <Button title={photo.image || existingPhoto ? 'Ganti foto' : 'Ambil foto'} variant="secondary" onPress={() => void photo.captureFromCamera()} />
-      {!!(photo.image?.uri || existingPhoto) && <Image source={{ uri: photo.image?.uri ?? existingPhoto }} style={{ width: 120, height: 120 }} />}
-      {!!(photo.image?.uri || existingPhoto) && <Button title="Hapus foto" variant="secondary" onPress={() => { photo.clearImage(); setExistingPhoto(''); uploadedPhoto.current = null; }} />}
+      <FormPhotoField label="Foto" value={fotos} onChange={setFotos} disabled={saving} />
       <Button title="Simpan observasi" loading={saving} disabled={saving || (editing && !online)} onPress={() => void save()} />
     </ScrollView>
   </View>;
@@ -244,7 +228,7 @@ export function ObservationDetail() {
       {row.jumlah_sampel != null && <Text>Jumlah sampel: {row.jumlah_sampel} janjang</Text>}
       {!!row.tingkat && <Text>Tingkat: {row.tingkat}</Text>}
       {!!row.catatan && <Text>{row.catatan}</Text>}
-      {!!row.foto_url && <Image source={{ uri: row.foto_url }} style={{ width: 180, height: 180 }} />}
+      {fotoUrls(row).map((url) => <AuthenticatedImage key={url} uri={url} style={{ width: 180, height: 180 }} />)}
       {!!row.geometry && <Text>GPS: {row.geometry.type === 'Point' ? row.geometry.coordinates.join(', ') : 'Tersimpan'}</Text>}
       {localId(id) && <Text style={styles.muted}>Menunggu sinkronisasi</Text>}
       {!localId(id) && canWrite && <Button title="Ubah" onPress={() => router.push(`/${group}/observasi/add?id=${id}` as never)} />}

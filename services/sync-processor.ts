@@ -110,6 +110,37 @@ export async function uploadAndCheckpoint<
 }
 
 /**
+ * The same checkpointing for a payload's `foto` set (observasi, tiket PKS):
+ * each `file://` photo is uploaded once and its URL written back into the
+ * queued payload before the next, so a retry skips what already went up.
+ */
+export async function uploadFotoSet<T extends { foto?: { url: string; hash?: string | null; bytes?: number | null }[] }>(
+  itemId: string,
+  payload: T,
+  folder: UploadFolder,
+  dependencies: Pick<ProcessorDependencies, 'upload' | 'updateQueuePayload'> = defaultDependencies,
+): Promise<T> {
+  if (!payload.foto?.some((item) => item.url.startsWith('file://'))) return payload;
+  const rows = await uploadAndCheckpoint(
+    itemId,
+    payload.foto.map((item) => ({ foto_url: item.url, foto_hash: item.hash ?? null, foto_bytes: item.bytes ?? null })),
+    (next) => ({ ...payload, foto: next.map(asFoto) }) as unknown as Record<string, unknown>,
+    dependencies,
+    folder,
+  );
+  return { ...payload, foto: rows.map(asFoto) };
+}
+
+const asFoto = (row: { foto_url?: string | null; foto_hash?: string | null; foto_bytes?: number | null }) =>
+  ({ url: row.foto_url ?? '', hash: row.foto_hash ?? null, bytes: row.foto_bytes ?? null });
+
+/** Deletes the device copies of photos the server now holds. */
+const deleteLocalPhotos = (uris: (string | undefined)[]) => Promise.all(
+  uris.filter((uri): uri is string => !!uri?.startsWith('file://'))
+    .map((uri) => FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined)),
+);
+
+/**
  * A taken ticket number, a second ticket or weighing for one SPB, or a retired
  * V3 QR is for the Krani to resolve, not to retry. Keep why on the payload so
  * the queue screen can offer the fix, then fail the item as a conflict.
@@ -160,13 +191,13 @@ async function runItem(
   const { panenApi, checkerApi, rawatApi } = dependencies;
 
   if (item.module === 'tiket_pks' && item.action === 'CREATE') {
-    const [draft] = await uploadAndCheckpoint(item.id, [item.payload as unknown as CreateTiketPksPayload | CreateTiketPksBySpbPayload],
+    // A ticket queued by an older build carries one `foto_url`; a current one carries `foto`.
+    const [legacy] = await uploadAndCheckpoint(item.id, [item.payload as unknown as CreateTiketPksPayload | CreateTiketPksBySpbPayload],
       (rows) => rows[0] as unknown as Record<string, unknown>, dependencies, 'tiket-pks');
-    const { local_photo_uri: localPhoto, foto_hash: _photoHash, foto_bytes: _photoBytes, conflict: _conflict, ...sent } =
-      draft as (CreateTiketPksPayload | CreateTiketPksBySpbPayload) & { local_photo_uri?: string; foto_hash?: string; foto_bytes?: number; conflict?: unknown };
-    const cleanup = async () => {
-      if (localPhoto?.startsWith('file://')) await FileSystem.deleteAsync(localPhoto, { idempotent: true }).catch(() => undefined);
-    };
+    const draft = await uploadFotoSet(item.id, legacy, 'tiket-pks', dependencies);
+    const { local_photo_uri: localPhoto, local_photo_uris: localPhotos, foto_hash: _photoHash, foto_bytes: _photoBytes, conflict: _conflict, ...sent } =
+      draft as (CreateTiketPksPayload | CreateTiketPksBySpbPayload) & { local_photo_uri?: string; local_photo_uris?: string[]; foto_hash?: string; foto_bytes?: number; conflict?: unknown };
+    const cleanup = () => deleteLocalPhotos([localPhoto, ...(localPhotos ?? [])]);
     if ('nomor_spb' in sent) {
       // By SPB number: a `202` means the server holds the ticket until its trip is dispatched. That is success.
       try {
@@ -204,12 +235,18 @@ async function runItem(
   }
 
   if (item.module === 'observasi' && item.action === 'CREATE') {
-    const [data] = await uploadAndCheckpoint(item.id, [item.payload as unknown as CreateObservasiPayload],
+    // An observation queued by an older build carries one `foto_url`; a current one carries `foto`.
+    type QueuedObservasi = CreateObservasiPayload & { foto_url?: string | null; foto_hash?: string | null; foto_bytes?: number | null; local_photo_uris?: string[] };
+    const [legacy] = await uploadAndCheckpoint(item.id, [item.payload as unknown as QueuedObservasi],
       (rows) => rows[0] as unknown as Record<string, unknown>, dependencies, 'observasi');
+    const { local_photo_uris: localPhotos, ...data } =
+      await uploadFotoSet(item.id, legacy, 'observasi', dependencies);
     const created = await dependencies.observasiApi.create({ ...data, client_request_id: data.client_request_id ?? item.id });
+    // An older build kept its one offline photo at `<client_request_id>.jpg`.
     if (data.client_request_id?.startsWith('observasi_') && /^[\w-]+$/.test(data.client_request_id) && FileSystem.documentDirectory) {
       await FileSystem.deleteAsync(`${FileSystem.documentDirectory}${data.client_request_id}.jpg`, { idempotent: true }).catch(() => undefined);
     }
+    await deleteLocalPhotos(localPhotos ?? []);
     return created;
   }
 

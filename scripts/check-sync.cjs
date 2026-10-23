@@ -14,11 +14,11 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync('utils/trip.ts', 'utf8'), 
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, { exports: tripExports });
 
-function loadSyncProcessor(api = {}) {
+function loadSyncProcessor(api = {}, fileSystem = { documentDirectory: null, deleteAsync: async () => {} }) {
   const exports = {};
   const mocks = {
     axios: { isAxiosError: () => false },
-    'expo-file-system/legacy': { documentDirectory: null, deleteAsync: async () => {} },
+    'expo-file-system/legacy': fileSystem,
     './api': { apiClient: api },
     './krani-timbang.service': { kraniTimbangApi: {} },
     './bkm-panen.service': { bkmPanenApi: {} },
@@ -123,6 +123,33 @@ test('observation replay checkpoints the uploaded photo and keeps its request ke
   assert.equal(uploads, 1);
   assert.deepEqual(folders, ['observasi']);
   assert.deepEqual(keys, ['stable-key', 'stable-key']);
+});
+
+test('observation with several offline photos resumes uploads after a failure and deletes the copies once filed', async () => {
+  const deleted = [];
+  const { processItem } = loadSyncProcessor({}, { documentDirectory: 'file:///docs/', deleteAsync: async (uri) => { deleted.push(uri); } });
+  let persisted; const uploaded = []; let sent; let failed = false;
+  const local = ['file:///docs/k_a.jpg', 'file:///docs/k_b.jpg'];
+  const deps = dependencies({
+    upload: { uploadImage: async (uri) => {
+      if (uri === local[1] && !failed) { failed = true; throw new Error('offline'); }
+      uploaded.push(uri); return { url: `https://cdn.example/${uploaded.length}.jpg`, hash: `h${uploaded.length}`, bytes: 10 };
+    } },
+    updateQueuePayload: async (_id, payload) => { persisted = payload; },
+    observasiApi: { create: async (payload) => { sent = payload; return { id: 'obs' }; } },
+  });
+  const item = { id: 'q-obs-multi', module: 'observasi', action: 'CREATE', payload: {
+    client_request_id: 'observasi_k', jenis: 'HAMA', kelompok_lahan_id: 'k1', tanggal: '2026-09-24', nama_pengamat: 'A',
+    foto: local.map((url) => ({ url })), local_photo_uris: local,
+  } };
+  await assert.rejects(processItem(item, deps), /offline/);
+  assert.equal(persisted.foto[0].url, 'https://cdn.example/1.jpg', 'the first photo is checkpointed before the second fails');
+  assert.equal(persisted.foto[1].url, local[1]);
+  await processItem({ ...item, payload: persisted }, deps);
+  assert.deepEqual(uploaded, local, 'each photo uploaded exactly once');
+  assert.deepEqual(sent.foto.map((item) => item.url), ['https://cdn.example/1.jpg', 'https://cdn.example/2.jpg']);
+  assert.equal(sent.local_photo_uris, undefined);
+  assert.ok(local.every((uri) => deleted.includes(uri)), 'device copies are deleted after the create');
 });
 
 test('vehicle create retry submits once after an interrupted response', async () => {

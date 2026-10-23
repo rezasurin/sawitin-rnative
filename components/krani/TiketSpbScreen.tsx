@@ -1,18 +1,17 @@
 import React, { useRef, useState } from 'react';
 import { Alert, ScrollView, Text, View } from 'react-native';
-import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/core/Button';
 import { BarcodeScanner } from '@/components/core/BarcodeScanner';
-import { FormField } from '@/components/form';
+import { FormField, FormPhotoField } from '@/components/form';
 import { PageHeader } from '@/components/home';
-import { useImageCapture } from '@/hooks/useImageCapture';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { tiketPksApi } from '@/services/tiket-pks.service';
-import { uploadApi } from '@/services/upload.service';
+import { keepFotosOffline, uploadFotos } from '@/services/foto.service';
+import { localFotoUris, type FotoItem } from '@/utils/foto';
 import { estateStamp, parseEstateStamp, ticketWeightsValid } from '@/utils/tiket-pks';
 import { isMenungguSpb, isV3Qr, spbConflictOf, spbConflictText } from '@/utils/trip';
 import type { CreateTiketPksBySpbPayload } from '@/types/tiket-pks';
@@ -28,7 +27,6 @@ const parseNumber = (text: string) => Number(text.trim().replace(/\./g, '').repl
 export default function TiketSpbScreen() {
   const router = useRouter();
   const client = useQueryClient();
-  const photo = useImageCapture();
   const online = useNetworkStore((state) => state.isOnline);
   const canWrite = useAuthStore((state) => state.hasPermission('mod_krani_timbang', 'write'));
   const addToQueue = useSyncQueueStore((state) => state.addToQueue);
@@ -42,6 +40,8 @@ export default function TiketSpbScreen() {
   const [gross, setGross] = useState('');
   const [tare, setTare] = useState('');
   const [net, setNet] = useState('');
+  const [fotos, setFotos] = useState<FotoItem[]>([]);
+  const uploaded = useRef(new Map<string, FotoItem>());
 
   const done = (title: string, message: string) => {
     void client.invalidateQueries({ queryKey: ['tiketPks'] });
@@ -68,23 +68,18 @@ export default function TiketSpbScreen() {
       return;
     }
     savingRef.current = true; setSaving(true);
-    // Offline the photo is copied beside the queue; the sync pass uploads it.
+    // Offline the photos are copied beside the queue; the sync pass uploads them.
+    // Any that went up before the connection dropped keep their URL.
     const queueIt = async () => {
-      const source = photo.image?.uri;
-      let local: string | undefined;
-      if (source) {
-        if (!FileSystem.documentDirectory) throw new Error('Penyimpanan foto offline tidak tersedia.');
-        local = `${FileSystem.documentDirectory}${key.current}.jpg`;
-        if (!(await FileSystem.getInfoAsync(local)).exists) await FileSystem.copyAsync({ from: source, to: local });
-      }
+      input.foto = await keepFotosOffline(input.foto ?? fotos, key.current);
       await addToQueue({ module: 'tiket_pks', action: 'CREATE', endpoint: '/tiketPks',
-        payload: { ...input, ...(local ? { foto_url: local, local_photo_uri: local } : {}) } });
+        payload: { ...input, local_photo_uris: localFotoUris(input.foto) } });
       done('Tersimpan di perangkat', 'Tiket dikirim otomatis saat online. Jika ditolak server, periksa di menu Akun.');
     };
     try {
       if (!online) { await queueIt(); return; }
       try {
-        if (photo.image?.uri) input.foto_url = (await uploadApi.uploadImage(photo.image.uri, 'tiket-pks')).url;
+        input.foto = await uploadFotos(fotos, 'tiket-pks', uploaded.current);
         const body = await tiketPksApi.createBySpb(input);
         if (isMenungguSpb(body)) done('Menunggu SPB', `SPB ${body.nomor_spb} belum dikirim Mandor. Tiket sudah diterima server dan dilekatkan otomatis saat SPB dikirim.`);
         else done('Tiket tersimpan', 'Tiket PKS tersimpan dan menjadi berat acuan SPB ini.');
@@ -114,8 +109,7 @@ export default function TiketSpbScreen() {
       <FormField label="Bruto pabrik (kg, opsional)" value={gross} onChangeText={setGross} keyboardType="decimal-pad" />
       <FormField label="Tara pabrik (kg, opsional)" value={tare} onChangeText={setTare} keyboardType="decimal-pad" />
       <FormField label="Netto pabrik (kg)" value={net} onChangeText={setNet} keyboardType="decimal-pad" />
-      <Button title={photo.image ? 'Ganti foto tiket' : 'Foto tiket PKS'} variant="secondary" onPress={() => void photo.captureFromCamera()} />
-      <Button title="Pilih dari galeri" variant="secondary" onPress={() => void photo.pickFromGallery()} />
+      <FormPhotoField label="Foto tiket PKS" value={fotos} onChange={setFotos} disabled={saving} />
       {canWrite && <Button title="Simpan tiket" loading={saving} disabled={saving} onPress={() => void save()} />}
     </ScrollView>
     <BarcodeScanner visible={scanning} onClose={() => setScanning(false)}

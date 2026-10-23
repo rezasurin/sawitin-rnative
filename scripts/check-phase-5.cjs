@@ -11,7 +11,8 @@ function load(path, mocks = {}) {
   }).outputText, { exports, require: (name) => mocks[name] ?? require(name), console, Error, Date });
   return exports;
 }
-const ticketRules = load('utils/tiket-pks.ts');
+const fotoRules = load('utils/foto.ts');
+const ticketRules = load('utils/tiket-pks.ts', { '@/utils/foto': fotoRules });
 const { checkerLoadConflict } = load('utils/transport.ts');
 const support = load('utils/sync-support.ts');
 const tripRules = load('utils/trip.ts');
@@ -178,6 +179,34 @@ test('a lost response on an SPB-number ticket resolves to the ticket already fil
   await processItem({ id: 'q-r', module: 'tiket_pks', action: 'CREATE', payload: draft }, deps(filed));
   await assert.rejects(processItem({ id: 'q-r', module: 'tiket_pks', action: 'CREATE', payload: draft },
     deps({ ...filed, netto_pabrik: '2900' })), (error) => error.code === 'SPB_TICKET_EXISTS');
+});
+
+test('a lost response matches the filed ticket only on the same photo set, old single-photo drafts included', () => {
+  const draft = { nomor_tiket: 'T-1', tanggal_tiket: '2026-09-30T03:00:00.000Z', netto_pabrik: 3000, bruto_pabrik: null, tara_pabrik: null };
+  const server = { ...draft, krani_timbang_id: 'w1', netto_pabrik: '3000', foto: [{ url: 'https://x/a.jpg' }, { url: 'https://x/b.jpg' }], foto_url: 'https://x/a.jpg' };
+  assert.equal(ticketRules.sameFiledTicket(server, { ...draft, foto: [{ url: 'https://x/a.jpg' }, { url: 'https://x/b.jpg' }] }), true);
+  assert.equal(ticketRules.sameFiledTicket(server, { ...draft, foto: [{ url: 'https://x/b.jpg' }, { url: 'https://x/a.jpg' }] }), false, 'order is part of the set');
+  assert.equal(ticketRules.sameFiledTicket(server, { ...draft, foto: [{ url: 'https://x/a.jpg' }] }), false);
+  assert.equal(ticketRules.sameFiledTicket({ ...server, foto: [{ url: 'https://x/a.jpg' }] }, { ...draft, foto_url: 'https://x/a.jpg' }), true, 'a draft queued by an older build');
+  assert.equal(ticketRules.sameFiledTicket({ ...server, foto: [] }, draft), true);
+});
+
+test('an SPB-number ticket with several offline photos uploads each, posts foto, and drops the device copies', async () => {
+  const processItem = processor();
+  let posted; const saved = []; let n = 0;
+  const local = ['file:///docs/k_1.jpg', 'file:///docs/k_2.jpg'];
+  const payload = { ...spbTicket(), foto_url: undefined, local_photo_uri: undefined,
+    foto: [{ url: local[0] }, { url: 'https://example.test/already.jpg', hash: 'h0', bytes: 5 }, { url: local[1] }], local_photo_uris: local };
+  await processItem({ id: 'q-multi', module: 'tiket_pks', action: 'CREATE', payload }, spbDeps({
+    upload: { uploadImage: async () => { n++; return { url: `https://example.test/u${n}.jpg`, hash: `h${n}`, bytes: n }; } },
+    updateQueuePayload: async (_id, value) => { saved.push(value); },
+    ticketApi: { createBySpb: async (data) => { posted = data; return { id: 't1' }; } },
+  }));
+  assert.equal(n, 2, 'the remote photo is not uploaded again');
+  assert.deepEqual(posted.foto.map((item) => item.url), ['https://example.test/u1.jpg', 'https://example.test/already.jpg', 'https://example.test/u2.jpg']);
+  assert.equal(JSON.stringify(posted.foto[0]), JSON.stringify({ url: 'https://example.test/u1.jpg', hash: 'h1', bytes: 1 }));
+  assert.equal(posted.local_photo_uris, undefined);
+  assert.equal(saved.at(-1).foto[2].url, 'https://example.test/u2.jpg', 'each upload is checkpointed into the queue');
 });
 
 test('resolving a ticket conflict needs a new ticket number or a new SPB number, and clears the conflict', () => {
