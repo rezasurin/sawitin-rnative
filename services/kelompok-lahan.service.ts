@@ -1,6 +1,6 @@
 import { apiClient } from './api';
 import { lookupCacheDb } from './database';
-import { readThroughCache } from './master-cache';
+import { everyPage, readThroughCache } from './master-cache';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { PaginatedResponse, ApiListParams } from '@/types/common';
 import { KelompokLahan, CreateKelompokLahanPayload, UpdateKelompokLahanPayload } from '@/types/master-data';
@@ -9,10 +9,7 @@ export const kelompokLahanApi = {
   getAll: async (params?: ApiListParams): Promise<PaginatedResponse<KelompokLahan>> => readThroughCache({
     getUserId: () => useAuthStore.getState().user?.id,
     save: lookupCacheDb.save, read: lookupCacheDb.get,
-  }, 'kelompokLahan', params, async () => {
-    const response = await apiClient.get<PaginatedResponse<KelompokLahan>>('/kelompokLahan', { params });
-    return response.data;
-  }),
+  }, 'kelompokLahan', params, () => everyPage(params, async (query) => (await apiClient.get<PaginatedResponse<KelompokLahan>>('/kelompokLahan', { params: query })).data)),
   getById: async (id: string): Promise<KelompokLahan> => {
     const response = await apiClient.get<KelompokLahan>(`/kelompokLahan/${id}`);
     return response.data;

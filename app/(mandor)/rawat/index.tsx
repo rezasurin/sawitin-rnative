@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/home';
 import { View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
 import { useBkmRawatList, useDeleteBkmRawat } from '@/hooks/useBkmRawat';
-import { DocStatusBadge } from '@/components/bkm/DocStatusBadge';
+import { DocStatusBadge, statusLabel } from '@/components/bkm/DocStatusBadge';
 import React from 'react';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
@@ -21,6 +21,7 @@ import {
   Text,
   TouchableOpacity,
 } from 'react-native';
+import { formatEstateDate } from '@/utils/estateDate';
 
 export default function RawatScreen() {
   const router = useRouter();
@@ -59,7 +60,7 @@ export default function RawatScreen() {
     } as BkmRawat];
   });
   const rawatData = [...localRawat, ...(rawatList?.data ?? []).filter((item) => !queuedDeletes.has(item.id))];
-  const totalItems = Math.max(0, (rawatList?.pagination?.total ?? 0) + localRawat.length - queuedDeletes.size);
+  const totalItems = Math.max(0, (rawatList?.meta?.total ?? 0) + localRawat.length - queuedDeletes.size);
   const hasDraft = rawatData.some((item) => item.status === 'DRAFT');
 
   const handleDelete = (id: string) => {
@@ -118,11 +119,7 @@ export default function RawatScreen() {
         data={rawatData}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
-          const itemDate = new Date(item.tanggal).toLocaleDateString('id-ID', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-          });
+          const itemDate = formatEstateDate(item.tanggal);
           return (
             <Card>
               <TouchableOpacity
@@ -131,7 +128,7 @@ export default function RawatScreen() {
                   canDelete && item.status === 'DRAFT' && handleDelete(item.id)
                 }
                 accessibilityRole="button"
-                accessibilityLabel={`BKM Rawat ${item.nama_pengawas}, ${item.status}`}
+                accessibilityLabel={`BKM Rawat ${item.nama_pengawas}, ${statusLabel(item.status)}`}
                 accessibilityHint="Buka detail dokumen"
                 delayLongPress={600}
                 activeOpacity={0.7}

@@ -12,9 +12,8 @@ import { stagingApi } from '@/services/staging.service';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { isMenungguSpb, spbConflictOf, spbConflictText } from '@/utils/trip';
+import { parseDecimal, UNREADABLE_NUMBER } from '@/utils/field-summary';
 import type { StagingSpbPayload } from '@/types/staging';
-
-const parseWeight = (text: string) => Number(text.trim().replace(/\./g, '').replace(',', '.'));
 
 /**
  * Weighbridge weighing by SPB number: only the two weights are entered. Truck,
@@ -31,8 +30,8 @@ export default function TimbanganSpbScreen({ nomorSpb }: { nomorSpb: string }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
-  const isi = parseWeight(gross);
-  const kosong = parseWeight(tare);
+  const isi = parseDecimal(gross);
+  const kosong = parseDecimal(tare);
   const entered = gross.trim() !== '' && tare.trim() !== '' && Number.isFinite(isi) && Number.isFinite(kosong);
   const invalid = entered && isi <= kosong;
   const back = () => router.dismissTo(`/${group}/timbangan`);
@@ -84,8 +83,9 @@ export default function TimbanganSpbScreen({ nomorSpb }: { nomorSpb: string }) {
       <Text style={{ fontSize: 16, fontWeight: '700', color: BrandColors.textPrimary }}>SPB {nomorSpb}</Text>
       <Text style={{ color: BrandColors.textSecondary }}>Truk, sopir, dan tujuan diambil dari SPB di server.</Text>
       <FormField label="Timbang Isi (Gross) - kg" value={gross} onChangeText={setGross} keyboardType="numeric"
-        error={invalid ? 'Timbang isi harus lebih besar daripada timbang kosong' : undefined} />
-      <FormField label="Timbang Kosong (Tare) - kg" value={tare} onChangeText={setTare} keyboardType="numeric" />
+        error={gross.trim() && Number.isNaN(isi) ? UNREADABLE_NUMBER : invalid ? 'Timbang isi harus lebih besar daripada timbang kosong' : undefined} />
+      <FormField label="Timbang Kosong (Tare) - kg" value={tare} onChangeText={setTare} keyboardType="numeric"
+        error={tare.trim() && Number.isNaN(kosong) ? UNREADABLE_NUMBER : undefined} />
       <View style={{ alignItems: 'center', padding: 12, borderRadius: 12, backgroundColor: '#F1F8E9' }}>
         <Text style={{ color: '#558B2F', fontWeight: '600' }}>Berat Bersih (Netto)</Text>
         <Text style={{ fontSize: 28, fontWeight: '900', color: '#33691E' }}>{entered && !invalid ? (isi - kosong).toLocaleString('id-ID') : 0} kg</Text>

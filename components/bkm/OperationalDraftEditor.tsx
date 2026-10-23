@@ -9,7 +9,7 @@ import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { apiClient } from '@/services/api';
 import { withPrecondition } from '@/services/precondition';
-import { isWholeKg } from '@/utils/field-summary';
+import { isWholeKg, parseDecimal } from '@/utils/field-summary';
 import type { DocumentStatus } from '@/types/common';
 
 type Field = { key: string; label: string; numeric?: boolean };
@@ -62,7 +62,7 @@ export function OperationalDraftEditor({ module, document }: {
       for (const field of editing.fields) {
         const value = values[field.key]?.trim() ?? '';
         if (field.numeric) {
-          const number = Number(value);
+          const number = parseDecimal(value);
           if (!value || !Number.isFinite(number) || number < 0) throw new Error(`${field.label} harus berupa angka positif atau nol.`);
           if (field.key === 'jumlah_brondol' && !isWholeKg(value)) throw new Error('Brondol harus berupa kilogram bulat.');
           data[field.key] = number;

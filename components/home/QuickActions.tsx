@@ -26,18 +26,8 @@ export const ROLE_ACTIONS: Record<string, QuickAction[]> = {
     { id: "usage-list", label: "Pemakaian Kendaraan", icon: "truck", route: "/(admin)/pemakaian-kendaraan" as Href, permission: "mod_bkm_rawat", permissionAction: "read" },
   ],
   "(mandor)": [
-    {
-      id: "bkm-add",
-      label: "Buat BKM Panen",
-      icon: "money",
-      route: "/(mandor)/bkm/add",
-    },
-    {
-      id: "checker-add",
-      label: "Input Checker",
-      icon: "check-square-o",
-      route: "/(mandor)/checker/add",
-    },
+    { id: "bkm-add", label: "Buat BKM Panen", icon: "money", route: "/(mandor)/bkm/add", permission: "mod_bkm_panen", permissionAction: "write" },
+    { id: "checker-add", label: "Input Checker", icon: "check-square-o", route: "/(mandor)/checker/add", permission: "mod_bkm_checker", permissionAction: "write" },
     { id: "tutup-harian", label: "Tutup Harian", icon: "lock", route: "/(mandor)/tutup-harian" as Href, permission: "mod_bkm_checker", permissionAction: "write" },
     { id: "rawat-add", label: "Buat BKM Rawat", icon: "leaf", route: "/(mandor)/rawat/add" as Href, permission: "mod_bkm_rawat", permissionAction: "write" },
     { id: "rawat-list", label: "BKM Rawat", icon: "list-ul", route: "/(mandor)/rawat" as Href, permission: "mod_bkm_rawat", permissionAction: "read" },

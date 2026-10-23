@@ -10,6 +10,7 @@ import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { queuedPanenAt, restanAgeDays } from '@/utils/dispatch';
 import { estateDate } from '@/utils/estateDate';
 import { isWholeKg } from '@/utils/field-summary';
+import { GRADING_FIELDS } from '@/utils/grading';
 import { agronomyLabel, operationalTphs } from '@/utils/plantation';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -25,15 +26,6 @@ interface Props {
 const SOURCE_OPTIONS = [
   { label: 'Langsung (Panen hari ini)', value: 'LANGSUNG' },
   { label: 'Titip (restan hari sebelumnya)', value: 'TITIP' },
-];
-
-const GRADING_FIELDS = [
-  { key: 'janjang_normal' as const, label: 'Normal' },
-  { key: 'buah_mentah' as const, label: 'Buah Mentah' },
-  { key: 'over_ripe' as const, label: 'Over Ripe' },
-  { key: 'tangkai_panjang' as const, label: 'Tangkai Panjang' },
-  { key: 'buah_abnormal' as const, label: 'Buah Abnormal' },
-  { key: 'janjang_kosong' as const, label: 'Janjang Kosong' },
 ];
 
 const emptyGrading = {

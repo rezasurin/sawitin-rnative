@@ -99,7 +99,8 @@ export interface BkmRawatLookups {
 }
 
 export interface QueuedBkmRawatPayload {
-  header: Omit<CreateBkmRawatPayload, 'client_request_id' | 'details'>;
+  /** `client_request_id` is set when an online save fell back here, so its replay cannot duplicate it. */
+  header: Omit<CreateBkmRawatPayload, 'details'>;
   details: Omit<CreateDetailBkmRawatPayload, 'bkm_rawat_id'>[];
   submit: boolean;
   display?: {

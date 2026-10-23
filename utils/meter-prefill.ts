@@ -1,12 +1,6 @@
 import type { MeterTerakhir } from '@/types/vehicle-usage';
-import { estateDate } from '@/utils/estateDate';
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-/** "8 Okt 2026" on the estate (WIB) calendar, whatever the device zone. */
-const estateDay = (iso: string) => {
-  const [year, month, day] = estateDate(new Date(iso)).split('-');
-  return `${Number(day)} ${MONTHS[Number(month) - 1]} ${year}`;
-};
+import { formatEstateDate } from '@/utils/estateDate';
+import { parseDecimal } from '@/utils/field-summary';
 
 /**
  * Meter awal once a vehicle's last reading has settled. Only an empty field or the form's own
@@ -22,9 +16,9 @@ export function nextMeterStart(current: string, prefilled: string | null, last: 
 export function meterHint(last: MeterTerakhir | undefined, current: string): { text: string; warn: boolean } | null {
   if (last?.meter_akhir == null || !last.tanggal) return null;
   const reading = `${Number(last.meter_akhir).toLocaleString('id-ID')} ${last.satuan_meter ?? ''}`.trim();
-  const day = estateDay(last.tanggal);
+  const day = formatEstateDate(last.tanggal);
   const source = last.cached ? ', dari data terakhir di perangkat' : '';
-  if (current.trim() && Number(current) !== Number(last.meter_akhir)) {
+  if (current.trim() && parseDecimal(current) !== Number(last.meter_akhir)) {
     return { warn: true, text: `Meter awal berbeda dari meter akhir terakhir yang disetujui (${reading}, ${day}${source}). Selisih akan tercatat di laporan konsumsi BBM.` };
   }
   return { warn: false, text: `Meter terakhir yang disetujui: ${reading} (${day}${source}).` };

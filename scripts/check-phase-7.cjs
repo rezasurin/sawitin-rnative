@@ -44,6 +44,16 @@ test('brondol entry only accepts safe whole kilograms, including zero', () => {
   assert.notEqual(Number(truckInput), 25);
 });
 
+test('typed numbers read the Indonesian and the English way, and nothing unclear is guessed', () => {
+  const cases = { '6355': 6355, '6.355': 6355, '12.345.678': 12345678, '6355.5': 6355.5, '6.355,5': 6355.5,
+    '12,5': 12.5, '12.5': 12.5, '0,25': 0.25, '0.250': 0.25, ' 100 ': 100, '0': 0 };
+  for (const [text, value] of Object.entries(cases)) assert.equal(display.parseDecimal(text), value, text);
+  // "6.355.5" used to become 63555: a truck ten times its weight.
+  for (const unclear of ['', '6.355.5', '1,000,5', '-5', '1e3', '3kg', '12.34,5']) {
+    assert.ok(Number.isNaN(display.parseDecimal(unclear)), unclear);
+  }
+});
+
 const sample = {
   definition: { id: 'R11', version: 1 }, generated_at: '2026-09-24T00:42:10.512Z',
   tanggal: '2026-09-24', timezone: 'Asia/Jakarta', bjr_used: 15, kelompok_lahan_id: null,
@@ -172,6 +182,7 @@ test('QR weighing submits the krani-entered truck brondol instead of Checker bro
   const checker = { id: 'checker-1', details: [{ jumlah_janjang: 10, jumlah_brondol: 25,
     nomor_truk: 'BK 1', nama_sopir: 'Sopir', tujuan_kirim: 'PKS' }], blok: { nama: 'B1' }, tph: { nama: 'TPH 1' } };
   const { default: TimbanganScreen } = load('components/krani/TimbanganScreen.tsx', {
+    '@/utils/estateDate': load('utils/estateDate.ts'),
     react: React,
     'react-native': {
       ActivityIndicator: 'ActivityIndicator', KeyboardAvoidingView: 'KeyboardAvoidingView',
@@ -197,6 +208,7 @@ test('QR weighing submits the krani-entered truck brondol instead of Checker bro
     '@/stores/useSyncQueueStore': { useSyncQueueStore: { getState: () => ({ queue: [] }) } },
     '@/utils/qr': { parseQrPayload: () => ({ qty: 10 }) },
     '@/services/staging.service': { stagingApi: { submitPayload: async () => {} } },
+    '@/services/sync-errors': { isRetryable: () => false },
     '@/utils/field-summary': display,
     '@/utils/trip': tripRules,
     '@/types': {},
@@ -232,6 +244,7 @@ test('offline weighing of an uncached Checker queues the SPB with hand-entered t
   const checker = { id: 'checker-1', details: [{ jumlah_janjang: 10, jumlah_brondol: 25,
     nomor_truk: 'BK 1', nama_sopir: 'Sopir', tujuan_kirim: 'PKS' }], blok: { nama: 'B1' }, tph: { nama: 'TPH 1' } };
   const { default: TimbanganScreen } = load('components/krani/TimbanganScreen.tsx', {
+    '@/utils/estateDate': load('utils/estateDate.ts'),
     react: React,
     'react-native': {
       ActivityIndicator: 'ActivityIndicator', KeyboardAvoidingView: 'KeyboardAvoidingView',
@@ -257,6 +270,7 @@ test('offline weighing of an uncached Checker queues the SPB with hand-entered t
     '@/stores/useSyncQueueStore': { useSyncQueueStore: { getState: () => ({ queue: [], addToQueue: async (item) => { queued.push(item); } }) } },
     '@/utils/qr': { parseQrPayload: () => ({ qty: 10 }) },
     '@/services/staging.service': { stagingApi: { submitPayload: async () => {} } },
+    '@/services/sync-errors': { isRetryable: () => false },
     '@/utils/field-summary': display,
     '@/utils/trip': tripRules,
     '@/types': {},
@@ -324,7 +338,7 @@ test('field summary renders approved, submitted, missing kilograms, and empty ap
     react: React,
     'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable',
       ActivityIndicator: 'ActivityIndicator', StyleSheet: { create: (value) => value } },
-    '@/utils/estateDate': { estateDate: () => '2026-09-24' },
+    '@/utils/estateDate': { ...load('utils/estateDate.ts'), estateDate: () => '2026-09-24' },
     '@/utils/field-summary': display,
     '@/utils/trip': tripRules,
     '@/constants/Colors': { BrandColors: { primary: '#654', textPrimary: '#333', textSecondary: '#666',
@@ -352,4 +366,23 @@ test('field summary renders approved, submitted, missing kilograms, and empty ap
   assert.match(output, /Tidak ada keputusan yang menunggu Anda/);
   assert.match(output, /R11 v1/);
   await act(async () => { tree.unmount(); });
+});
+
+test('document dates read as estate days and statuses use the web words, never raw API values', () => {
+  const dates = load('utils/estateDate.ts');
+  // tanggal_laporan arrives as a timestamp; the estate day is WIB whatever the phone's zone.
+  assert.equal(dates.formatEstateDate('2026-10-23T00:00:00.000Z'), '23 Okt 2026');
+  assert.equal(dates.formatEstateDate('2026-10-22T17:00:00.000Z'), '23 Okt 2026', 'WIB midnight is already the next day');
+  assert.equal(dates.formatEstateDate('2026-01-05'), '5 Jan 2026');
+  assert.equal(dates.formatEstateDateTime('2026-10-23T07:05:00.000Z'), '23 Okt 2026, 14.05 WIB');
+  for (const missing of [null, undefined, '']) assert.equal(dates.formatEstateDate(missing), '-');
+  assert.equal(dates.formatEstateDate('bukan tanggal'), 'bukan tanggal');
+
+  const { statusLabel } = load('components/bkm/DocStatusBadge.tsx', {
+    react: require('react'), '@/components/core/Badge': { Badge: 'Badge' }, '@/constants/Colors': { BrandColors: {} },
+  });
+  assert.deepEqual(['DRAFT', 'SUBMITTED', 'APPROVED', 'REVISION_REQUESTED', 'CANCELLED'].map(statusLabel),
+    ['Draft', 'Diajukan', 'Disetujui', 'Perlu Revisi', 'Dibatalkan']);
+  assert.equal(statusLabel('ARCHIVED'), 'ARCHIVED', 'an unknown status is shown as sent, not as Draft');
+  assert.equal(statusLabel(null), '-');
 });

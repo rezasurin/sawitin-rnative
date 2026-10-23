@@ -6,7 +6,21 @@ export const isWholeKg = (value: string): boolean => {
   return /^(0|[1-9]\d*)$/.test(text) && Number.isSafeInteger(Number(text));
 };
 
-export const approvalLabel = (document: string): string => ({
+/**
+ * A number typed the Indonesian or the English way: "6.355" and "6355" are 6355,
+ * "12,5" and "12.5" are 12.5. A dot before groups of exactly three digits is a
+ * thousands separator; anything else unclear is NaN, never a silent guess.
+ */
+export const parseDecimal = (value: string): number => {
+  const text = value.trim();
+  if (/^(0|[1-9]\d{0,2}(\.\d{3})*)(,\d+)?$/.test(text)) return Number(text.replace(/\./g, '').replace(',', '.'));
+  if (/^\d+([.,]\d+)?$/.test(text)) return Number(text.replace(',', '.'));
+  return NaN;
+};
+
+export const UNREADABLE_NUMBER = 'Angka tidak terbaca. Contoh: 6355, 6.355, atau 12,5.';
+
+export const approvalLabel =(document: string): string => ({
   TUTUP_HARIAN: 'Tutup Harian', BKM_PANEN: 'BKM Panen', BKM_CHECKER: 'BKM Checker', BKM_RAWAT: 'BKM Rawat',
   KRANI_TIMBANG: 'Krani Timbang', PEMAKAIAN_KENDARAAN: 'Pemakaian Kendaraan',
   STOCK_OPNAME: 'Stok Opname', PENJUALAN: 'Penjualan',

@@ -3,6 +3,7 @@ import { useHargaTbsLatest } from "@/hooks";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import React from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { formatEstateDate } from "@/utils/estateDate";
 
 const formatRupiah = (value: number) =>
   `Rp ${value.toLocaleString("id-ID")}`;
@@ -32,7 +33,7 @@ export function HargaTbsCard() {
       ) : (
         <>
           <Text style={styles.price}>{formatRupiah(data.harga)}</Text>
-          <Text style={styles.date}>{data.tanggal}</Text>
+          <Text style={styles.date}>{formatEstateDate(data.tanggal)}</Text>
           {data.keterangan ? (
             <Text style={styles.keterangan}>{data.keterangan}</Text>
           ) : null}

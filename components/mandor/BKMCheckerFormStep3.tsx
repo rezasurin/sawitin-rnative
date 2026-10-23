@@ -1,4 +1,5 @@
 import { Button } from '@/components/core/Button';
+import { Row } from '@/components/bkm/Row';
 import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
 import { Text, View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
@@ -7,6 +8,7 @@ import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { buildTripPayload, tripProblems } from '@/utils/dispatch';
 import React, { useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { formatEstateDate } from '@/utils/estateDate';
 
 interface Props {
   onBack: () => void;
@@ -62,7 +64,7 @@ export function BKMCheckerFormStep3({ onBack, onSuccess, onSavingChange }: Props
         <Text style={styles.sectionTitle}>Ringkasan SPB</Text>
         <View style={styles.card}>
           <Row label="Nomor SPB" value={header.nomor_spb || '-'} />
-          <Row label="Tanggal berangkat" value={header.tanggal} />
+          <Row label="Tanggal berangkat" value={formatEstateDate(header.tanggal)} />
           <Row label="Truk" value={header.nomor_truk || '-'} />
           <Row label="Sopir" value={header.nama_sopir || '-'} />
           <Row label="Tujuan" value={header.tujuan_kirim || '-'} />
@@ -117,21 +119,6 @@ export function BKMCheckerFormStep3({ onBack, onSuccess, onSavingChange }: Props
     </View>
   );
 }
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={rowStyles.row}>
-      <Text style={rowStyles.label}>{label}</Text>
-      <Text style={rowStyles.value}>{value}</Text>
-    </View>
-  );
-}
-
-const rowStyles = StyleSheet.create({
-  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, backgroundColor: 'transparent' },
-  label: { fontSize: 14, color: BrandColors.textSecondary },
-  value: { fontSize: 14, fontWeight: '500', color: BrandColors.textPrimary, maxWidth: '60%', textAlign: 'right' },
-});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'transparent' },

@@ -61,11 +61,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handleForgotPassword = () => {
-    // TODO: Implement when backend is ready
-    Alert.alert('Info', 'Fitur lupa kata sandi akan segera hadir');
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -111,23 +106,13 @@ export default function LoginScreen() {
               error={errors.password}
             />
 
-            {/* Forgot Password Link */}
-            <View style={styles.forgotPasswordContainer}>
-              <AuthButton
-                title="Lupa kata sandi ?"
-                onPress={handleForgotPassword}
-                variant="text"
-                style={styles.forgotPasswordButton}
-                textStyle={styles.forgotPasswordText}
-              />
-            </View>
-
             {/* Login Button */}
             <AuthButton
               title="Masuk"
               onPress={handleLogin}
               loading={isSubmitting}
               disabled={isLoading}
+              style={styles.submit}
             />
           </View>
         </ScrollView>
@@ -159,16 +144,7 @@ const styles = StyleSheet.create({
   form: {
     width: '100%',
   },
-  forgotPasswordContainer: {
-    alignItems: 'flex-end',
-    marginBottom: 24,
-    marginTop: -8,
-  },
-  forgotPasswordButton: {
-    paddingVertical: 4,
-  },
-  forgotPasswordText: {
-    color: BrandColors.primary,
-    fontSize: 13,
+  submit: {
+    marginTop: 16,
   },
 });

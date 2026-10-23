@@ -1,12 +1,11 @@
 import { apiClient } from './api';
+import { everyPage } from './master-cache';
 import { PaginatedResponse, ApiListParams } from '@/types/common';
 import { GrupPekerja, CreateGrupPekerjaPayload, UpdateGrupPekerjaPayload } from '@/types/master-data';
 
 export const grupPekerjaApi = {
-  getAll: async (params?: ApiListParams): Promise<PaginatedResponse<GrupPekerja>> => {
-    const response = await apiClient.get<PaginatedResponse<GrupPekerja>>('/grupPekerja', { params });
-    return response.data;
-  },
+  getAll: async (params?: ApiListParams): Promise<PaginatedResponse<GrupPekerja>> =>
+    everyPage(params, async (query) => (await apiClient.get<PaginatedResponse<GrupPekerja>>('/grupPekerja', { params: query })).data),
   getById: async (id: string): Promise<GrupPekerja> => {
     const response = await apiClient.get<GrupPekerja>(`/grupPekerja/${id}`);
     return response.data;

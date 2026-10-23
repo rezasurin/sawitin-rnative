@@ -5,7 +5,8 @@ import type { BkmPanen } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity } from "react-native";
-import { DocStatusBadge } from "./DocStatusBadge";
+import { DocStatusBadge, statusLabel } from "./DocStatusBadge";
+import { formatEstateDate } from "@/utils/estateDate";
 
 export function PanenCard({
   item,
@@ -19,7 +20,7 @@ export function PanenCard({
   return (
     <Card>
       <TouchableOpacity accessibilityRole="button"
-        accessibilityLabel={`BKM Panen, ${item.blok?.nama ?? item.blok_id}, ${item.tanggal_laporan}, ${item.status}`}
+        accessibilityLabel={`BKM Panen, ${item.blok?.nama ?? item.blok_id}, ${formatEstateDate(item.tanggal_laporan)}, ${statusLabel(item.status)}`}
         accessibilityHint={onLongPress ? 'Ketuk untuk detail. Tekan lama untuk pilihan dokumen.' : 'Ketuk untuk membuka detail dokumen.'}
         accessibilityActions={onLongPress ? [{ name: 'activate' }, { name: 'longpress', label: 'Pilihan dokumen' }] : [{ name: 'activate' }]}
         onAccessibilityAction={({ nativeEvent }) => {
@@ -35,7 +36,7 @@ export function PanenCard({
           <DocStatusBadge status={item.status} />
         </View>
         <View style={styles.body}>
-          <Text style={styles.date}>{item.tanggal_laporan}</Text>
+          <Text style={styles.date}>{formatEstateDate(item.tanggal_laporan)}</Text>
           {item.lahan?.nama && <Text style={styles.meta}>Lahan: {item.lahan.nama}</Text>}
           {item.keterangan ? <Text style={styles.meta} numberOfLines={2}>{item.keterangan}</Text> : null}
           <Text style={styles.detailCount}>{item.details?.length ?? 0} detail</Text>

@@ -1,6 +1,6 @@
 import { apiClient } from './api';
 import { lookupCacheDb } from './database';
-import { readThroughCache } from './master-cache';
+import { everyPage, readThroughCache } from './master-cache';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { PaginatedResponse, ApiListParams } from '@/types/common';
 import { Tph, CreateTphPayload, UpdateTphPayload } from '@/types/master-data';
@@ -15,10 +15,7 @@ const masterCacheDeps = {
 
 export const tphApi = {
   getAll: async (params?: ApiListParams): Promise<PaginatedResponse<Tph>> =>
-    readThroughCache(masterCacheDeps, 'tph', params, async () => {
-      const response = await apiClient.get<PaginatedResponse<Tph>>('/tph', { params });
-      return response.data;
-    }),
+    readThroughCache(masterCacheDeps, 'tph', params, () => everyPage(params, async (query) => (await apiClient.get<PaginatedResponse<Tph>>('/tph', { params: query })).data)),
   getById: async (id: string): Promise<Tph> => {
     const response = await apiClient.get<Tph>(`/tph/${id}`);
     return response.data;

@@ -1,3 +1,5 @@
+import type { ApiListParams, PaginatedResponse } from '@/types/common';
+
 /**
  * Read-through cache for master data used by the field forms.
  *
@@ -56,6 +58,34 @@ export async function readThroughCache<T>(
     throw error;
   }
 }
+
+/**
+ * Every page of a master list when no page is asked for, so a picker never stops
+ * silently at the first page: an estate easily has more TPH or workers than one
+ * page holds. A request that names a page gets only that page.
+ *
+ * ponytail: at most 50 pages, a guard against a broken `totalPages`. Raise it if a
+ * list ever outgrows 50 pages of the requested size.
+ */
+export async function everyPage<T>(
+  params: ApiListParams | undefined,
+  fetchPage: (params?: ApiListParams) => Promise<PaginatedResponse<T>>
+): Promise<PaginatedResponse<T>> {
+  if (params?.page) return fetchPage(params);
+  const first = await fetchPage(params);
+  const data = [...first.data];
+  let last = first;
+  for (let fetched = 1, page = nextPage(last); page && fetched < 50; fetched++, page = nextPage(last)) {
+    last = await fetchPage({ ...params, page });
+    data.push(...last.data);
+  }
+  return { ...first, data };
+}
+
+/** The page after this one, or undefined at the end. `has_more` holds even when the count was skipped. */
+export const nextPage = ({ meta }: PaginatedResponse<unknown>): number | undefined =>
+  !meta ? undefined
+    : (meta.has_more ?? (meta.pages != null && meta.page < meta.pages)) ? meta.page + 1 : undefined;
 
 /** Delta model name -> the resource key the read-through cache stores under. */
 const DELTA_RESOURCE_KEYS: Record<string, string[]> = {

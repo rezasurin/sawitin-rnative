@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { BrandColors } from '@/constants/Colors';
 import { useUserGreeting } from '@/hooks';
-import { useNetworkStatus } from '@/hooks';
+import { useNetworkStore } from '@/stores/useNetworkStore';
 import { StatusBadge } from './StatusBadge';
 
 /**
@@ -11,7 +11,7 @@ import { StatusBadge } from './StatusBadge';
  */
 export function UserGreeting() {
   const { greeting } = useUserGreeting();
-  const { isOnline } = useNetworkStatus();
+  const isOnline = useNetworkStore((state) => state.isOnline);
 
   return (
     <View style={styles.container}>

@@ -10,6 +10,8 @@ import { useNetworkStore } from '@/stores/useNetworkStore';
 import { kraniTimbangApi } from '@/services/krani-timbang.service';
 import type { HarvestTrace, TraceGrade } from '@/types/harvest-trace';
 import { nettoSumberLabel, traceLineRows } from '@/utils/harvest-trace';
+import { Row } from '@/components/bkm/Row';
+import { GRADING_FIELDS } from '@/utils/grading';
 
 const labels: Record<string, string> = {
   checker_grading_breakdown_mismatch: 'Grading Checker tidak cocok',
@@ -21,11 +23,6 @@ const labels: Record<string, string> = {
   no_internal_weighing: 'Tidak ditimbang di jembatan timbang sendiri',
 };
 
-function Row({ label, value }: { label: string; value: string | number | null | undefined }) {
-  return <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 4 }}>
-    <Text style={{ flex: 1 }}>{label}</Text><Text style={{ fontWeight: '600', textAlign: 'right' }}>{value ?? '—'}</Text>
-  </View>;
-}
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return <View style={{ padding: 16, borderRadius: 10, backgroundColor: BrandColors.cardBg, gap: 6 }}>
     <Text style={{ fontSize: 16, fontWeight: '700', color: BrandColors.textPrimary }}>{title}</Text>{children}
@@ -37,8 +34,7 @@ function Grade({ title, grade }: { title: string; grade: TraceGrade }) {
     <Row label="Jumlah kolom grading" value={grade.breakdown_total} />
     <Text style={{ color: grade.reconciles ? BrandColors.success : BrandColors.error }}>
       {grade.reconciles ? 'Grading cocok' : 'Periksa rincian grading'}</Text>
-    {(['janjang_normal', 'buah_mentah', 'over_ripe', 'tangkai_panjang', 'buah_abnormal', 'janjang_kosong'] as const)
-      .map((key) => <Row key={key} label={key.replaceAll('_', ' ')} value={grade[key]} />)}
+    {GRADING_FIELDS.map((field) => <Row key={field.key} label={field.label} value={grade[field.key]} />)}
   </View>;
 }
 

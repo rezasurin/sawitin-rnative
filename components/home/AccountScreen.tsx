@@ -6,7 +6,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { PageHeader } from '@/components/core/PageHeader';
 import { BrandColors } from '@/constants/Colors';
-import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSync } from '@/hooks/useSync';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
@@ -67,7 +67,8 @@ const describeModule = (module: string) => MODULE_LABELS[module] ?? module;
 
 export function AccountScreen() {
   const { user, roles, logout } = useAuthStore();
-  const { isOnline, connectionLabel } = useNetworkStatus();
+  const isOnline = useNetworkStore((state) => state.isOnline);
+  const connectionLabel = useNetworkStore((state) => state.connectionLabel);
   const { triggerSync, syncPhase, syncDetail, pendingCount } = useSync();
   const isProcessing = useSyncQueueStore((state) => state.isProcessing);
   const retryItem = useSyncQueueStore((state) => state.retryItem);
@@ -115,7 +116,7 @@ export function AccountScreen() {
     } catch (error) { Alert.alert('Belum dapat dikirim', (error as Error).message); }
   };
 
-  const handleLogout = async () => {
+  const signOut = async () => {
     setIsLoggingOut(true);
     try {
       await logout();
@@ -124,6 +125,21 @@ export function AccountScreen() {
     } finally {
       setIsLoggingOut(false);
     }
+  };
+
+  // Queued work belongs to this user on this phone: signing out does not delete it,
+  // but nothing is sent until the same person signs in here again.
+  const unsent = useSyncQueueStore((state) => state.queue.length);
+  const handleLogout = () => {
+    if (unsent === 0) { void signOut(); return; }
+    Alert.alert(
+      'Keluar dengan data belum terkirim?',
+      `${unsent} perubahan belum terkirim. Data tetap tersimpan di ponsel ini, tetapi baru dikirim setelah Anda masuk lagi dengan akun ini di ponsel ini.${isOnline ? ' Sinkronkan dulu selagi ada sinyal.' : ''}`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        { text: 'Tetap keluar', style: 'destructive', onPress: () => { void signOut(); } },
+      ],
+    );
   };
 
   return (

@@ -4,6 +4,7 @@ import { BrandColors } from '@/constants/Colors';
 import { pekerjaApi, tphApi, uploadApi } from '@/services';
 import { memberLabel } from '@/utils/plantation';
 import { isWholeKg } from '@/utils/field-summary';
+import { GRADING_FIELDS, gradingTotal } from '@/utils/grading';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,22 +17,6 @@ import { FlatList, StyleSheet, TextInput, TouchableOpacity } from 'react-native'
 interface Props {
   onNext: () => void;
   onBack: () => void;
-}
-
-const GRADING_FIELDS = [
-  { key: 'janjang_normal' as const, label: 'Normal' },
-  { key: 'buah_mentah' as const, label: 'Buah Mentah' },
-  { key: 'over_ripe' as const, label: 'Over Ripe' },
-  { key: 'tangkai_panjang' as const, label: 'Tangkai Panjang' },
-  { key: 'buah_abnormal' as const, label: 'Buah Abnormal' },
-  { key: 'janjang_kosong' as const, label: 'Janjang Kosong' },
-];
-
-function calcTotal(detail: Record<string, unknown>) {
-  return GRADING_FIELDS.reduce(
-    (sum, f) => sum + (Number(detail[f.key]) || 0),
-    0,
-  );
 }
 
 interface GradingRowProps {
@@ -53,7 +38,7 @@ function GradingRow({ detail, onUpdate, onPhotoCapture, photoLoading, uploading,
     [detail, onUpdate],
   );
 
-  const total = calcTotal(detail as unknown as Record<string, unknown>);
+  const total = gradingTotal(detail);
 
   return (
     <View style={styles.card}>

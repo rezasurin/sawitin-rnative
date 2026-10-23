@@ -14,6 +14,7 @@ import { tutupHarianKeys } from '@/services/queryKeys';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { CLOSE_OFFLINE_TEXT, approvalBlock, closeFailure, isOwnClose, pastDeadline } from '@/utils/close';
+import { formatEstateDate } from '@/utils/estateDate';
 
 /** Asisten: closes waiting for approval, newest day first. Late ones are flagged. */
 export function CloseListScreen() {
@@ -36,7 +37,7 @@ export function CloseListScreen() {
           <Text style={styles.bold}>{item.kelompok_lahan.nama}</Text>
           {pastDeadline(item.tanggal, jam, timezone) && <Badge label="Terlambat" color={BrandColors.error} bg="#FFEBEE" />}
         </View>
-        <Text>{item.tanggal}</Text>
+        <Text>{formatEstateDate(item.tanggal)}</Text>
         <Text style={styles.muted}>Diajukan oleh {item.submitted_by ?? '—'}</Text>
       </TouchableOpacity>} />}
   </View>;
@@ -81,7 +82,7 @@ export function CloseDetailScreen() {
       {online && detail.isError && <View style={styles.stack}><Text style={styles.error}>{closeFailure(detail.error).text}</Text>
         <Button title="Coba lagi" variant="secondary" onPress={() => void detail.refetch()} /></View>}
       {preview && <>
-        <Text style={styles.bold}>{preview.tanggal}</Text>
+        <Text style={styles.bold}>{formatEstateDate(preview.tanggal)}</Text>
         <ClosePreview preview={preview} />
         {preview.tutup_harian?.status === 'SUBMITTED' && <Section title="Keputusan">
           {own && <Text style={styles.muted}>Anda yang mengajukan tutup harian ini, jadi tidak dapat menyetujuinya.</Text>}

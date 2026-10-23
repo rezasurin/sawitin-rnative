@@ -16,7 +16,6 @@ export {
   useAddBkmPanenDetail,
   useUpdateBkmPanenDetail,
   useDeleteBkmPanenDetail,
-  useSubmitBkmPanen,
 } from './useBkmPanen';
 export {
   useBkmCheckerList,

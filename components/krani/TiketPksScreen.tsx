@@ -12,10 +12,9 @@ import { tiketPksApi } from '@/services/tiket-pks.service';
 import { keepFotosOffline, uploadFotos } from '@/services/foto.service';
 import { fotoUrls, localFotoUris, type FotoItem } from '@/utils/foto';
 import { ticketWeightsValid, sameFiledTicket } from '@/utils/tiket-pks';
+import { parseDecimal } from '@/utils/field-summary';
 import type { CreateTiketPksPayload } from '@/types/tiket-pks';
 import { BrandColors } from '@/constants/Colors';
-
-const parseNumber = (text: string) => Number(text.trim().replace(/\./g, '').replace(',', '.'));
 const localStamp = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -83,9 +82,9 @@ export default function TiketPksScreen() {
     const input: CreateTiketPksPayload = {
       krani_timbang_id: tripId, nomor_tiket: number.trim(),
       tanggal_tiket: parsedStamp.toISOString(),
-      bruto_pabrik: gross.trim() ? parseNumber(gross) : null,
-      tara_pabrik: tare.trim() ? parseNumber(tare) : null,
-      netto_pabrik: parseNumber(net),
+      bruto_pabrik: gross.trim() ? parseDecimal(gross) : null,
+      tara_pabrik: tare.trim() ? parseDecimal(tare) : null,
+      netto_pabrik: parseDecimal(net),
       diterima_oleh: receiver.trim() || null, keterangan: note.trim() || null,
     };
     if (!input.nomor_tiket || input.nomor_tiket.length > 100 ||

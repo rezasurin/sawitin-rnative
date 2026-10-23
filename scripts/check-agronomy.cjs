@@ -14,7 +14,7 @@ function load(file, mocks = {}) {
 
 const maturity = load('utils/maturity.ts');
 const plantation = load('utils/plantation.ts');
-const observasi = load('utils/observasi.ts');
+const observasi = load('utils/observasi.ts', { '@/utils/field-summary': load('utils/field-summary.ts') });
 
 test('TM date: TBM the day before, TM on the day and after, whatever the planting year says', () => {
   const stand = { tahun_tanam: 2022, tanggal_tm: '2026-10-15' }; // planting year alone would say TM
@@ -99,7 +99,7 @@ test('Panen step 1 asks for a reason on TBM land and will not continue without i
 });
 
 for (const online of [false, true]) {
-  test(`Panen on TBM land cannot be ${online ? 'submitted' : 'queued'} without a reason, and carries it once given`, async () => {
+  test(`Panen on TBM land cannot be queued ${online ? 'online' : 'offline'} without a reason, and carries it once given`, async () => {
     const React = require('react');
     const { act, create } = require('react-test-renderer');
     global.IS_REACT_ACT_ENVIRONMENT = true;
@@ -107,19 +107,21 @@ for (const online of [false, true]) {
     const detail = {
       _tempId: 't1', pekerja_id: 'p', tph_id: 'tph', jenis_pekerjaan: 'PANEN', janjang_normal: 10, buah_mentah: 0, over_ripe: 0,
       tangkai_panjang: 0, buah_abnormal: 0, janjang_kosong: 0, jumlah_janjang: 10, jumlah_brondol: 5,
+      lat: -1.5, lng: 102.1, gps_accuracy: 8, captured_at: '2026-10-14T01:00:00.000Z',
     };
     const queued = [];
-    const mutated = [];
     const alerts = [];
     const bloks = [{ id: 'b', nama: 'B', tahun_tanam: 2015, tanggal_tm: '2026-10-15' }];
     const { BKMPanenFormStep4 } = load('components/mandor/BKMPanenFormStep4.tsx', {
+      '@/components/bkm/MetricCard': { MetricCard: 'MetricCard' }, '@/components/bkm/Row': { Row: 'Row' },
+      '@/utils/grading': load('utils/grading.ts'),
+      '@/utils/estateDate': load('utils/estateDate.ts'),
       react: React,
       'react-native': { ...native, View: 'View', Alert: { alert: (...args) => alerts.push(args) }, TouchableOpacity: 'TouchableOpacity' },
       '@/components/Themed': { Text: 'Text', View: 'View' },
       '@/components/core/Button': { Button: 'Button' },
       '@/constants/Colors': { BrandColors: new Proxy({}, { get: () => '#000' }) },
       '@/hooks/useOperationalPolicy': { useOperationalPolicy: () => ({ create: true, edit: true, submit: true }) },
-      '@/hooks/useBkmPanen': { useSubmitBkmPanen: () => ({ mutate: (...args) => mutated.push(args), isPending: false }) },
       '@/hooks/useOrgConfig': { useOrgConfig: () => ({ data: { bjr: 15 } }) },
       '@/services': {},
       '@/utils/plantation': plantation,
@@ -138,32 +140,31 @@ for (const online of [false, true]) {
     assert.equal(submit().props.disabled, false);
 
     await act(async () => submit().props.onPress());
-    assert.equal(queued.length + mutated.length, 0, 'nothing queued or sent without a reason');
+    assert.equal(queued.length, 0, 'nothing queued without a reason');
     assert.match(alerts.at(-1)[0], /Alasan panen TBM/);
 
     header.alasan_tbm = '  Panen sanitasi  ';
     await act(async () => submit().props.onPress());
-    if (online) {
-      assert.equal(mutated.length, 1);
-    } else {
-      assert.equal(queued.length, 1);
-      assert.equal(queued[0].payload.header.alasan_tbm, 'Panen sanitasi');
-      assert.equal(queued[0].payload.header.tanggal_laporan, '2026-10-14');
-    }
+    // Online too: the queue replays each step by its client id, so a signal lost mid-save never duplicates the Panen.
+    assert.equal(queued.length, 1);
+    assert.equal(queued[0].payload.header.alasan_tbm, 'Panen sanitasi');
+    assert.equal(queued[0].payload.header.tanggal_laporan, '2026-10-14');
+    assert.deepEqual([queued[0].payload.details[0].gps_accuracy, queued[0].payload.details[0].captured_at], [8, '2026-10-14T01:00:00.000Z']);
+    // A second tap while the first save is still writing queues nothing more.
+    await act(async () => { void submit().props.onPress(); void submit().props.onPress(); });
+    assert.equal(queued.length, 2, 'only one of two rapid taps is queued');
     await act(async () => tree.unmount());
   });
 }
 
-test('the online submit sends the reason in the header, and an edited draft keeps it', () => {
-  const hook = fs.readFileSync('hooks/useBkmPanen.ts', 'utf8');
-  assert.match(hook, /alasan_tbm: header\.alasan_tbm\?\.trim\(\) \|\| undefined/);
+test('an edited draft keeps the TBM reason', () => {
   assert.match(fs.readFileSync('app/(mandor)/bkm/edit.tsx', 'utf8'), /alasan_tbm: panen\.alasan_tbm \?\? undefined/);
 });
 
 test('SENSUS_BJR needs a block, a whole sample count above 0 and a total in kg', () => {
   const ok = { blockId: 'b', sampleCount: '15', totalKg: '240' };
   assert.equal(observasi.sensusBjrError(ok), null);
-  assert.equal(observasi.sensusBjrError({ ...ok, totalKg: '240,5' }) !== null, true, 'a decimal comma is not a number');
+  assert.equal(observasi.sensusBjrError({ ...ok, totalKg: '240,5' }), null, 'the Indonesian decimal comma is read');
   assert.equal(observasi.sensusBjrError({ ...ok, totalKg: '240.5' }), null);
   for (const bad of [{ blockId: '' }, { sampleCount: '' }, { sampleCount: '0' }, { sampleCount: '-2' }, { sampleCount: '2.5' }, { sampleCount: 'abc' }, { totalKg: '' }, { totalKg: '0' }, { totalKg: '-1' }]) {
     assert.notEqual(observasi.sensusBjrError({ ...ok, ...bad }), null, JSON.stringify(bad));
@@ -180,4 +181,56 @@ test('the observation form offers SENSUS_BJR and sends the sample count with kg'
   assert.match(source, /value: 'SENSUS_BJR', label: 'Sensus BJR'[^}]*unit: SENSUS_BJR_UNIT/);
   assert.match(source, /sensusBjrError\(\{ blockId, sampleCount, totalKg: value \}\)/);
   assert.match(source, /census \? \{ jumlah_sampel: parseSampleCount\(sampleCount\) \}/);
+});
+
+test('editing an observation keeps the GPS point it was recorded at, and waits for the record before saving', async () => {
+  const React = require('react');
+  const { act, create } = require('react-test-renderer');
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  const updates = [];
+  let captures = 0;
+  let remoteData;
+  const row = { id: 'o1', jenis: 'CURAH_HUJAN', kelompok_lahan_id: 'k', blok_id: null, lahan_id: null, tph_id: null,
+    tanggal: '2026-10-20T00:00:00.000Z', nilai: 12, satuan: 'mm', jumlah_sampel: null, tingkat: null, nama_pengamat: 'Andi', catatan: null, foto: [] };
+  const list = () => ({ data: { data: [] } });
+  const { ObservationForm } = load('components/phase4/ObservationScreens.tsx', {
+    react: React,
+    'react-native': { ...native, ActivityIndicator: 'ActivityIndicator', Alert: { alert() {} }, Pressable: 'Pressable', View: 'View' },
+    'expo-router': { useLocalSearchParams: () => ({ id: 'o1' }), useRouter: () => ({ replace() {}, back() {} }), useSegments: () => ['(mandor)'] },
+    '@tanstack/react-query': { useQuery: () => ({ data: remoteData }), useQueryClient: () => ({ invalidateQueries: async () => {} }) },
+    '@/components/core/Button': { Button: 'Button' }, '@/components/form': { ...controls, FormPhotoField: 'FormPhotoField' },
+    '@/components/core/AuthenticatedImage': { AuthenticatedImage: 'AuthenticatedImage' }, '@/components/home': { PageHeader: 'PageHeader' },
+    './AuditTrail': { AuditTrail: 'AuditTrail' }, '@/constants/Colors': { BrandColors: {} },
+    '@/hooks/useKelompokLahan': { useKelompokLahanList: list }, '@/hooks/useBlok': { useBlokList: list },
+    '@/hooks/useLahan': { useLahanList: list }, '@/hooks/useTph': { useTphList: list },
+    // A fix is available, as it would be in the office: the edit must still not send it.
+    '@/hooks/useLocation': { useLocation: () => ({ location: { latitude: -6.2, longitude: 106.8, accuracy: 5, capturedAt: '2026-10-23T03:00:00.000Z' },
+      captureLocation: async () => { captures += 1; } }) },
+    '@/stores/useAuthStore': { useAuthStore: (select) => select({ user: { username: 'u' }, hasPermission: () => true }) },
+    '@/stores/useNetworkStore': { useNetworkStore: (select) => select({ isOnline: true }) },
+    '@/stores/useSyncQueueStore': { useSyncQueueStore: (select) => select({ queue: [], addToQueue: async () => {}, removeFromQueue: async () => {} }) },
+    '@/services/foto.service': { uploadFotos: async (foto) => foto, keepFotosOffline: async (foto) => foto },
+    '@/services/observasi.service': { observasiApi: { update: async (_id, body) => { updates.push(body); return {}; } } },
+    '@/services/master-cache': load('services/master-cache.ts'),
+    '@/hooks/useModuleGroup': { useModuleGroup: () => '(mandor)' },
+    '@/services/sync-errors': { isRetryable: () => false },
+    '@/utils/estateDate': load('utils/estateDate.ts'), '@/utils/foto': load('utils/foto.ts'), '@/utils/observasi': observasi,
+    '@/utils/field-summary': load('utils/field-summary.ts'),
+  });
+  let tree;
+  await act(async () => { tree = create(React.createElement(ObservationForm)); });
+  const save = () => tree.root.findByType('Button');
+  assert.equal(save().props.disabled, true, 'no save before the record has loaded');
+  await act(async () => save().props.onPress());
+  assert.equal(updates.length, 0);
+
+  remoteData = row;
+  await act(async () => tree.update(React.createElement(ObservationForm)));
+  assert.equal(save().props.disabled, false);
+  await act(async () => save().props.onPress());
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].nama_pengamat, 'Andi', 'the loaded record, not form defaults');
+  for (const field of ['geometry', 'gps_accuracy', 'captured_at']) assert.equal(field in updates[0], false, field);
+  assert.equal(captures, 0, 'an edit never asks for a new fix');
+  await act(async () => tree.unmount());
 });

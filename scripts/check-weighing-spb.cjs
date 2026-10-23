@@ -195,7 +195,7 @@ async function weighingForm({ online = true, submit }) {
     '@/services/staging.service': { stagingApi: { submitPayload: submit ?? (async () => ({})) } },
     '@/stores/useNetworkStore': { useNetworkStore: { getState: () => ({ isOnline: online }) } },
     '@/stores/useSyncQueueStore': { useSyncQueueStore: { getState: () => ({ queue: [], addToQueue: async (item) => { queued.push(item); } }) } },
-    '@/utils/trip': trip,
+    '@/utils/trip': trip, '@/utils/field-summary': load('utils/field-summary.ts'),
   }).default;
   let tree;
   await act(async () => { tree = create(React.createElement(Screen, { nomorSpb: '0012345' })); });

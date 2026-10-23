@@ -1,6 +1,6 @@
 import { apiClient } from './api';
 import { lookupCacheDb } from './database';
-import { readThroughCache } from './master-cache';
+import { everyPage, readThroughCache } from './master-cache';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { requireOnline } from './operational.service';
 import type { ApiListParams, DocumentStatus, PaginatedResponse } from '@/types/common';
@@ -9,11 +9,11 @@ import type { Kendaraan, Supir, PemakaianKendaraan, CreatePemakaianKendaraanPayl
 const cache = { getUserId: () => useAuthStore.getState().user?.id, save: lookupCacheDb.save, read: lookupCacheDb.get };
 export const kendaraanApi = {
   getAll: async (params?: ApiListParams) => readThroughCache(cache, 'kendaraan', params, async () =>
-    (await apiClient.get<PaginatedResponse<Kendaraan>>('/kendaraan', { params })).data),
+    everyPage(params, async (query) => (await apiClient.get<PaginatedResponse<Kendaraan>>('/kendaraan', { params: query })).data)),
 };
 export const supirApi = {
   getAll: async (params?: ApiListParams) => readThroughCache(cache, 'supir', params, async () =>
-    (await apiClient.get<PaginatedResponse<Supir>>('/supir', { params })).data),
+    everyPage(params, async (query) => (await apiClient.get<PaginatedResponse<Supir>>('/supir', { params: query })).data)),
 };
 export const pemakaianKendaraanApi = {
   getAll: async (params?: ApiListParams) => (await apiClient.get<PaginatedResponse<PemakaianKendaraan>>('/pemakaianKendaraan', { params })).data,

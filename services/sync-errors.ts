@@ -64,3 +64,10 @@ export function backoffUntil(retryCount: number, now = Date.now()) {
 
 /** An auth failure stops the whole pass: every other item would fail the same way. */
 export const isBlocking = (errorClass: SyncErrorClass) => errorClass === 'AUTH';
+
+/**
+ * A save that failed this way can go to the queue instead: no answer reached the
+ * phone (or the server erred), so the queue's retry is what the user needs. A
+ * 4xx is the data itself and is shown to the user right away.
+ */
+export const isRetryable = (error: unknown) => classify(error, 0, Infinity).errorClass === 'RETRYABLE';

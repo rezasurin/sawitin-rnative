@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -22,6 +22,7 @@ import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { agronomyLabel, operationalLands } from '@/utils/plantation';
 import { estateDate } from '@/utils/estateDate';
+import { isRetryable } from '@/services/sync-errors';
 
 interface Props {
   onSuccess: (id: string) => void;
@@ -57,6 +58,9 @@ export function BKMRawatForm({ onSuccess }: Props) {
   const [namaPengawas, setNamaPengawas] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const requestKey = useRef(`rawat_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
 
   const { data: kelompokLahanList } = useKelompokLahanList({ limit: 200 });
   const { data: blokList, isFetching: isFetchingBlok } = useBlokList({
@@ -176,9 +180,12 @@ export function BKMRawatForm({ onSuccess }: Props) {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!validate()) return;
+    if (savingRef.current || !validate()) return;
 
     const payload = {
+      // Sent online too: if the answer is lost and the save falls back to the
+      // queue, the replay carries the same key and the server keeps one document.
+      client_request_id: requestKey.current,
       kelompok_lahan_id: kelompokLahanId,
       blok_id: blokId,
       lahan_id: lahanId || undefined,
@@ -192,45 +199,50 @@ export function BKMRawatForm({ onSuccess }: Props) {
           }),
     };
 
-    if (!isOnline) {
-      try {
-        const queued = await addToQueue({
-          module: 'bkm_rawat',
-          action: 'CREATE',
-          endpoint: '/bkmRawat',
-          payload: {
-            header: payload,
-            details: [],
-            submit: false,
-            display: {
-              kelompok_lahan_nama: kelompokLahanOptions.find((option) => option.value === kelompokLahanId)?.label,
-              blok_nama: blokOptions.find((option) => option.value === blokId)?.label,
-              lahan_nama: lahanOptions.find((option) => option.value === lahanId)?.label,
-            },
+    const queueIt = async () => {
+      const queued = await addToQueue({
+        module: 'bkm_rawat',
+        action: 'CREATE',
+        endpoint: '/bkmRawat',
+        payload: {
+          header: payload,
+          details: [],
+          submit: false,
+          display: {
+            kelompok_lahan_nama: kelompokLahanOptions.find((option) => option.value === kelompokLahanId)?.label,
+            blok_nama: blokOptions.find((option) => option.value === blokId)?.label,
+            lahan_nama: lahanOptions.find((option) => option.value === lahanId)?.label,
           },
-        });
-        Alert.alert('Tersimpan offline', 'Tambahkan pekerjaan lalu kirim dokumen. Data akan disinkronkan saat online.');
-        onSuccess(`local:${queued.id}`);
-      } catch (error) {
-        Alert.alert('Gagal Menyimpan', error instanceof Error ? error.message : 'Antrian offline gagal disimpan.');
-      }
-      return;
-    }
+        },
+      });
+      Alert.alert('Tersimpan offline', 'Tambahkan pekerjaan lalu kirim dokumen. Data akan disinkronkan saat online.');
+      onSuccess(`local:${queued.id}`);
+    };
 
-    createMutation.mutate(payload, {
-      onSuccess: (created) => {
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      if (!isOnline) {
+        await queueIt();
+        return;
+      }
+      try {
+        const created = await createMutation.mutateAsync(payload);
         Alert.alert('Berhasil', 'Dokumen BKM Rawat berhasil dibuat.');
         onSuccess(created.id);
-      },
-      onError: (err) => {
-        Alert.alert(
-          'Gagal',
-          err instanceof Error
-            ? err.message
-            : 'Terjadi kesalahan saat menyimpan BKM Rawat.',
-        );
-      },
-    });
+      } catch (err) {
+        if (isRetryable(err)) {
+          await queueIt();
+          return;
+        }
+        Alert.alert('Gagal', err instanceof Error ? err.message : 'Terjadi kesalahan saat menyimpan BKM Rawat.');
+      }
+    } catch (error) {
+      Alert.alert('Gagal Menyimpan', error instanceof Error ? error.message : 'Antrian offline gagal disimpan.');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }, [
     validate,
     kelompokLahanId,
@@ -350,8 +362,8 @@ export function BKMRawatForm({ onSuccess }: Props) {
         <Button
           title="Simpan BKM Rawat"
           onPress={handleSubmit}
-          loading={createMutation.isPending}
-          disabled={!isValid}
+          loading={saving}
+          disabled={!isValid || saving}
           variant="primary"
           style={styles.submitBtn}
         />
