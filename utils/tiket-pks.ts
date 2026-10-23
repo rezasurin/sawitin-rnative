@@ -1,4 +1,5 @@
 import type { TiketPksFields, TiketPks } from '@/types/tiket-pks';
+import { fotoUrls } from '@/utils/foto';
 
 export function ticketWeightsValid(value: Pick<TiketPksFields, 'bruto_pabrik' | 'tara_pabrik' | 'netto_pabrik'>) {
   const { bruto_pabrik: gross, tara_pabrik: tare, netto_pabrik: net } = value;
@@ -17,7 +18,7 @@ export function sameFiledTicket(server: TiketPks | null, draft: TiketPksFields &
     Number(server.netto_pabrik) === draft.netto_pabrik &&
     (server.bruto_pabrik == null ? null : Number(server.bruto_pabrik)) === (draft.bruto_pabrik ?? null) &&
     (server.tara_pabrik == null ? null : Number(server.tara_pabrik)) === (draft.tara_pabrik ?? null) &&
-    (server.foto_url ?? null) === (draft.foto_url ?? null);
+    fotoUrls(server).join('\n') === fotoUrls(draft).join('\n');
 }
 
 const WIB_MS = 7 * 60 * 60 * 1000;

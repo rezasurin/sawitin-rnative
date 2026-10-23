@@ -16,7 +16,7 @@ function load(path, mocks = {}) {
   return exports;
 }
 const trip = load('utils/trip.ts');
-const ticketRules = load('utils/tiket-pks.ts');
+const ticketRules = load('utils/tiket-pks.ts', { '@/utils/foto': load('utils/foto.ts') });
 const support = load('utils/sync-support.ts');
 
 function processor() {
