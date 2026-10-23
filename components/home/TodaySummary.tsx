@@ -1,4 +1,4 @@
-import { estateDate } from '@/utils/estateDate';
+import { estateDate, formatEstateDate } from '@/utils/estateDate';
 import { approvalLabel, approvalTarget, displayMeasure, generatedLocalTime } from '@/utils/field-summary';
 import { BrandColors } from '@/constants/Colors';
 import { useKraniTimbangList } from '@/hooks/useKraniTimbang';
@@ -65,7 +65,7 @@ function FieldSummaryCard({ group, summary }: { group: string; summary: FieldSum
     summary.offline ? `Data per ${time}, offline` :
     summary.error ? `Data per ${time}, belum diperbarui` : `Data per ${time}, memuat pembaruan`;
   return <SectionCard title="Ringkasan Lapangan" icon="bar-chart">
-    <Text style={styles.date}>{data.tanggal} · {staleText}{summary.refreshing ? ' · memperbarui…' : ''}</Text>
+    <Text style={styles.date}>{formatEstateDate(data.tanggal)} · {staleText}{summary.refreshing ? ' · memperbarui…' : ''}</Text>
     <View style={styles.tile}>
       <Text style={styles.tileTitle}>Panen hari ini</Text>
       <Text style={styles.big}>{displayMeasure(data.produksi.approved.janjang)} janjang disetujui</Text>

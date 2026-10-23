@@ -71,6 +71,13 @@ test('backoff grows and is capped at an hour', () => {
   assert.equal(backoffUntil(30, now) - now, 60 * 60 * 1000, 'a device must still catch up today');
 });
 
+test('a save falls back to the queue only when retrying could help', () => {
+  const { isRetryable } = loadErrors();
+  // apiClient turns a request with no answer into an ApiError with status 500.
+  for (const error of [new Error('Network Error'), { status: 500 }, httpError(503)]) assert.equal(isRetryable(error), true);
+  for (const status of [400, 401, 403, 404, 409, 410, 422]) assert.equal(isRetryable(httpError(status)), false, String(status));
+});
+
 test('only an auth failure stops the whole pass', () => {
   const { isBlocking } = loadErrors();
   assert.equal(isBlocking('AUTH'), true);
@@ -128,6 +135,39 @@ test('paging follows has_more and passes the cursor back each time', async () =>
   assert.deepEqual(state.calls, [undefined, 'c1'], 'the second page resumes from the first cursor');
   assert.deepEqual(state.invalidated.sort(), ['pekerja', 'tph']);
   assert.equal(state.cursor, 'c2');
+});
+
+test('a master list arrives whole, so a picker never stops at the first page', async () => {
+  const { everyPage } = loadMasterCache();
+  // 450 TPH at 200 per page: the forms used to see only the first 200.
+  const rows = Array.from({ length: 450 }, (_, i) => ({ id: `tph-${i}` }));
+  const asked = [];
+  const fetchPage = async (params) => {
+    asked.push(params);
+    const page = params.page ?? 1;
+    // The backend's own envelope: `meta`, with `has_more` even when the count is skipped.
+    return { data: rows.slice((page - 1) * params.limit, page * params.limit), meta: { page, limit: params.limit, total: 450, pages: 3, has_more: page < 3 } };
+  };
+  const all = await everyPage({ limit: 200 }, fetchPage);
+  assert.equal(all.data.length, 450);
+  assert.equal(all.data[449].id, 'tph-449');
+  assert.deepEqual(asked.map((params) => params.page), [undefined, 2, 3]);
+  // A screen that pages for itself gets exactly the page it named.
+  assert.equal((await everyPage({ limit: 200, page: 2 }, fetchPage)).data[0].id, 'tph-200');
+  // A broken totalPages cannot loop forever.
+  let calls = 0;
+  await everyPage({ limit: 1 }, async (params) => { calls++; return { data: [{}], meta: { page: params.page ?? 1, limit: 1, total: null, pages: null, has_more: true } }; });
+  assert.equal(calls, 50);
+});
+
+test('infinite lists find the next page in the meta the backend sends', () => {
+  const { nextPage } = loadMasterCache();
+  assert.equal(nextPage({ data: [], meta: { page: 1, limit: 20, total: 45, pages: 3, has_more: true } }), 2);
+  assert.equal(nextPage({ data: [], meta: { page: 3, limit: 20, total: 45, pages: 3, has_more: false } }), undefined);
+  // Without the count, has_more alone decides; without has_more, the page count does.
+  assert.equal(nextPage({ data: [], meta: { page: 1, limit: 20, total: null, pages: null, has_more: true } }), 2);
+  assert.equal(nextPage({ data: [], meta: { page: 2, limit: 20, total: 45, pages: 3 } }), 3);
+  assert.equal(nextPage({ data: [] }), undefined, 'a response without meta ends the list');
 });
 
 test('a server that never clears has_more cannot spin forever', async () => {

@@ -1,17 +1,19 @@
 import { Text, View } from '@/components/Themed';
 import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
 import { Button } from '@/components/core/Button';
+import { MetricCard } from '@/components/bkm/MetricCard';
+import { Row } from '@/components/bkm/Row';
 import { BrandColors } from '@/constants/Colors';
-import { useSubmitBkmPanen } from '@/hooks/useBkmPanen';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { blokApi, lahanApi, grupPekerjaApi, pekerjaApi, tphApi } from '@/services';
 import { memberLabel } from '@/utils/plantation';
 import { tbmReasonMissing } from '@/utils/maturity';
+import { gradingTotal } from '@/utils/grading';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { useQuery } from '@tanstack/react-query';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Alert,
@@ -19,6 +21,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
+import { formatEstateDate } from '@/utils/estateDate';
 
 interface Props {
   onBack: () => void;
@@ -28,11 +31,12 @@ interface Props {
 export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
   const { header, details, isEditing, editingId, editingModifiedAt, deletedDetailIds, reset } = useBkmPanenStore();
   const policy = useOperationalPolicy('bkmPanen', 'DRAFT', details.length);
-  const submitMutation = useSubmitBkmPanen();
   const insets = useSafeAreaInsets();
   const isOnline = useNetworkStore((s) => s.isOnline);
   const addToQueue = useSyncQueueStore((s) => s.addToQueue);
   const [confirmed, setConfirmed] = useState(false);
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
 
   // Fetch name lookups
   const { data: blokData } = useQuery({ queryKey: ['blok', 'all'], queryFn: () => blokApi.getAll({ limit: 200 }) });
@@ -57,17 +61,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
     return map;
   }, [tphData]);
 
-  const totalJanjang = details.reduce(
-    (sum, d) =>
-      sum +
-      (Number(d.janjang_normal) || 0) +
-      (Number(d.buah_mentah) || 0) +
-      (Number(d.over_ripe) || 0) +
-      (Number(d.tangkai_panjang) || 0) +
-      (Number(d.buah_abnormal) || 0) +
-      (Number(d.janjang_kosong) || 0),
-    0,
-  );
+  const totalJanjang = details.reduce((sum, d) => sum + gradingTotal(d), 0);
 
   const totalBrondol = details.reduce(
     (sum, d) => sum + (Number(d.jumlah_brondol) || 0),
@@ -78,7 +72,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
   const estimatedTons = (totalJanjang * bjr) / 1000;
 
   const handleSubmit = async () => {
-    if (!confirmed || (isEditing ? !policy.edit : !policy.create)) return;
+    if (!confirmed || savingRef.current || (isEditing ? !policy.edit : !policy.create)) return;
 
     // The server answers 400 for this, so a queued item would only dead-letter:
     // stop it here, online or not.
@@ -121,31 +115,13 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
       note: d.note ?? undefined,
     }));
 
-    // Offline: queue for later sync
-    if (!isOnline) {
-      try {
+    // Online or not, the Panen goes through the queue, like the Checker: it creates
+    // the header, adds every line and submits, each step replayable by its client id,
+    // so a signal lost mid-save neither drops the work nor duplicates the document.
+    savingRef.current = true;
+    setSaving(true);
+    try {
       if (isEditing && editingId) {
-        const detailPayloadsWithServerId = details.map((d) => ({
-          pekerja_id: d.pekerja_id,
-          tph_id: d.tph_id,
-          jenis_pekerjaan: d.jenis_pekerjaan,
-          janjang_normal: d.janjang_normal,
-          buah_mentah: d.buah_mentah,
-          over_ripe: d.over_ripe,
-          tangkai_panjang: d.tangkai_panjang,
-          buah_abnormal: d.buah_abnormal,
-          janjang_kosong: d.janjang_kosong,
-          jumlah_janjang: d.jumlah_janjang,
-          jumlah_brondol: d.jumlah_brondol,
-          foto_url: d.foto_url ?? undefined,
-          lat: d.lat ?? undefined,
-          lng: d.lng ?? undefined,
-          gps_accuracy: d.gps_accuracy ?? undefined,
-          captured_at: d.captured_at ?? undefined,
-          note: d.note ?? undefined,
-          serverId: d.serverId,
-        }));
-
         await addToQueue({
           module: 'bkm_panen',
           action: 'UPDATE',
@@ -155,7 +131,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
             documentId: editingId,
             expectedStatus: 'DRAFT',
             header: headerPayload,
-            details: detailPayloadsWithServerId,
+            details: detailPayloads.map((payload, index) => ({ ...payload, serverId: details[index].serverId })),
             deletedDetailIds,
           },
           // What this edit was based on. Days may pass before it is sent, and
@@ -172,29 +148,18 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
       }
       reset();
       Alert.alert(
-        'Antrian Offline',
-        'Data tersimpan dan akan dikirim saat online.',
+        isOnline ? 'Tersimpan' : 'Antrian Offline',
+        isOnline
+          ? 'Data sedang dikirim ke server. Jika ditolak, periksa di menu Akun.'
+          : 'Data tersimpan dan akan dikirim saat online.',
         [{ text: 'OK', onPress: onSuccess }],
       );
-      } catch (error) {
-        Alert.alert('Gagal Menyimpan', error instanceof Error ? error.message : 'Antrian offline gagal disimpan.');
-      }
-      return;
+    } catch (error) {
+      Alert.alert('Gagal Menyimpan', error instanceof Error ? error.message : 'Antrian offline gagal disimpan.');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
-
-    // Online: submit directly (hook reads payload from store)
-    submitMutation.mutate(undefined, {
-      onSuccess: () => {
-        reset();
-        onSuccess();
-      },
-      onError: (err) => {
-        Alert.alert(
-          'Gagal Menyimpan',
-          err instanceof Error ? err.message : 'Terjadi kesalahan',
-        );
-      },
-    });
   };
 
   return (
@@ -209,7 +174,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
           {header.lahan_id ? (
             <Row label="Lahan" value={lahanName ?? ''} />
           ) : null}
-          <Row label="Tanggal" value={header.tanggal_laporan} />
+          <Row label="Tanggal" value={formatEstateDate(header.tanggal_laporan)} />
           {header.grup_pekerja_id ? (
             <Row label="Grup" value={grupName ?? ''} />
           ) : null}
@@ -299,73 +264,14 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
           title={policy.submit ? 'Submit BKM' : 'Simpan draft'}
           onPress={handleSubmit}
           variant="primary"
-          disabled={!confirmed}
-          loading={submitMutation.isPending}
+          disabled={!confirmed || saving}
+          loading={saving}
           style={{ flex: 2 }}
         />
       </View>
     </View>
   );
 }
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={rowStyles.row}>
-      <Text style={rowStyles.label}>{label}</Text>
-      <Text style={rowStyles.value}>{value}</Text>
-    </View>
-  );
-}
-
-const rowStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    backgroundColor: 'transparent',
-  },
-  label: {
-    fontSize: 14,
-    color: BrandColors.textSecondary,
-  },
-  value: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: BrandColors.textPrimary,
-    maxWidth: '60%',
-    textAlign: 'right',
-  },
-});
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={metricStyles.card}>
-      <Text style={metricStyles.value}>{value}</Text>
-      <Text style={metricStyles.label}>{label}</Text>
-    </View>
-  );
-}
-
-const metricStyles = StyleSheet.create({
-  card: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: BrandColors.cardBg,
-    borderRadius: 4,
-    padding: 12,
-    alignItems: 'center',
-  },
-  value: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: BrandColors.primary,
-  },
-  label: {
-    fontSize: 12,
-    color: BrandColors.textSecondary,
-    marginTop: 4,
-  },
-});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'transparent' },

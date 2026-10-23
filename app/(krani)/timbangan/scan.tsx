@@ -1,8 +1,7 @@
 import { useModuleGroup } from '@/hooks/useModuleGroup';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Platform, Alert, Dimensions, ActivityIndicator, Linking, AppState, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert, Dimensions, ActivityIndicator, Linking, AppState, TextInput } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as Brightness from 'expo-brightness';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -33,42 +32,6 @@ function ScanQrScreen() {
 
   // Prevent duplicate alert prompts
   const isAlerting = useRef(false);
-
-  // Auto-Brightness logic using useFocusEffect
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-
-      const enableMaxBrightness = async () => {
-        try {
-          if (Platform.OS === 'android') {
-            const { status } = await Brightness.requestPermissionsAsync();
-            if (status !== 'granted') {
-              console.log('Permission to adjust brightness denied');
-              return;
-            }
-          }
-          await Brightness.setBrightnessAsync(1.0);
-        } catch (err) {
-          console.warn('Failed to set brightness:', err);
-        }
-      };
-
-      enableMaxBrightness();
-
-      return () => {
-        active = false;
-        const restoreBrightness = async () => {
-          try {
-            await Brightness.restoreSystemBrightnessAsync();
-          } catch (err) {
-            console.warn('Failed to restore brightness:', err);
-          }
-        };
-        restoreBrightness();
-      };
-    }, [])
-  );
 
   // Reset scan state on focus
   useFocusEffect(

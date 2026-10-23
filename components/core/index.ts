@@ -1,7 +1,6 @@
 export { Badge } from "./Badge";
 export { Button } from "./Button";
 export { Card } from "./Card";
-export { ConfirmModal } from "./ConfirmModal";
 export { FAB } from "./FAB";
 export { ListEmptyState } from "./ListEmptyState";
 export { PageHeader } from "./PageHeader";

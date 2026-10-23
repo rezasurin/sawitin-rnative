@@ -1,6 +1,6 @@
 import { apiClient } from './api';
 import { lookupCacheDb } from './database';
-import { readThroughCache } from './master-cache';
+import { everyPage, readThroughCache } from './master-cache';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { PaginatedResponse, ApiListParams } from '@/types/common';
 import { Pekerja, CreatePekerjaPayload, UpdatePekerjaPayload } from '@/types/master-data';
@@ -13,10 +13,7 @@ const masterCacheDeps = {
 
 export const pekerjaApi = {
   getAll: async (params?: ApiListParams): Promise<PaginatedResponse<Pekerja>> =>
-    readThroughCache(masterCacheDeps, 'pekerja', params, async () => {
-      const response = await apiClient.get<PaginatedResponse<Pekerja>>('/pekerja', { params });
-      return response.data;
-    }),
+    readThroughCache(masterCacheDeps, 'pekerja', params, () => everyPage(params, async (query) => (await apiClient.get<PaginatedResponse<Pekerja>>('/pekerja', { params: query })).data)),
   getById: async (id: string): Promise<Pekerja> => {
     const response = await apiClient.get<Pekerja>(`/pekerja/${id}`);
     return response.data;

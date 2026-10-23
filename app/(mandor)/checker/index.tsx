@@ -62,7 +62,7 @@ export default function CheckerListScreen() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const checkerList = data?.pages.flatMap((page) => page.data) ?? [];
-  const totalItems = data?.pages[0]?.pagination?.total ?? 0;
+  const totalItems = data?.pages[0]?.meta?.total ?? 0;
 
   return (
     <View style={styles.container}>

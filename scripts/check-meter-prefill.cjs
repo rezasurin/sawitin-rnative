@@ -14,7 +14,7 @@ function load(path, mocks = {}) {
 }
 
 const masterCache = load('services/master-cache.ts');
-const prefill = load('utils/meter-prefill.ts', { '@/utils/estateDate': load('utils/estateDate.ts') });
+const prefill = load('utils/meter-prefill.ts', { '@/utils/estateDate': load('utils/estateDate.ts'), '@/utils/field-summary': load('utils/field-summary.ts') });
 
 const reading = { kendaraan_id: 'truk-1', meter_akhir: '1480', satuan_meter: 'km',
   tanggal: '2026-10-07T17:00:00.000Z', pemakaian_kendaraan_id: 'usage-1' };

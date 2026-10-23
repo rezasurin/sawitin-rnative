@@ -14,10 +14,9 @@ import { keepFotosOffline, uploadFotos } from '@/services/foto.service';
 import { localFotoUris, type FotoItem } from '@/utils/foto';
 import { estateStamp, parseEstateStamp, ticketWeightsValid } from '@/utils/tiket-pks';
 import { isMenungguSpb, isV3Qr, spbConflictOf, spbConflictText } from '@/utils/trip';
+import { parseDecimal } from '@/utils/field-summary';
 import type { CreateTiketPksBySpbPayload } from '@/types/tiket-pks';
 import { BrandColors } from '@/constants/Colors';
-
-const parseNumber = (text: string) => Number(text.trim().replace(/\./g, '').replace(',', '.'));
 
 /**
  * The mill ticket by SPB number: the pilot's only weighing source, so it is
@@ -55,9 +54,9 @@ export default function TiketSpbScreen() {
     if (!at) { Alert.alert('Waktu tidak valid', 'Gunakan format YYYY-MM-DD HH:mm (WIB) sesuai tiket PKS.'); return; }
     const input: CreateTiketPksBySpbPayload = {
       nomor_spb: spb.trim(), nomor_tiket: number.trim(), tanggal_tiket: at.toISOString(),
-      bruto_pabrik: gross.trim() ? parseNumber(gross) : null,
-      tara_pabrik: tare.trim() ? parseNumber(tare) : null,
-      netto_pabrik: parseNumber(net),
+      bruto_pabrik: gross.trim() ? parseDecimal(gross) : null,
+      tara_pabrik: tare.trim() ? parseDecimal(tare) : null,
+      netto_pabrik: parseDecimal(net),
     };
     if (!input.nomor_spb || input.nomor_spb.length > 100 || !input.nomor_tiket || input.nomor_tiket.length > 100 || !ticketWeightsValid(input)) {
       Alert.alert('Tiket belum valid', 'Isi nomor SPB, nomor tiket, dan berat. Bruto dikurangi tara harus sama dengan netto (toleransi 1 kg).');

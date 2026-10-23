@@ -3,6 +3,7 @@ import { bkmCheckerApi } from '@/services/bkm-checker.service';
 import { bkmPanenApi } from '@/services/bkm-panen.service';
 import { estateDate } from '@/utils/estateDate';
 import { bkmCheckerKeys } from '@/services/queryKeys';
+import { nextPage } from '@/services/master-cache';
 import type { ApiListParams } from '@/types/common';
 import type {
   CreateBkmCheckerPayload,
@@ -28,13 +29,7 @@ export function useBkmCheckerInfinite(params?: ApiListParams) {
         page: pageParam,
         limit: params?.limit ?? 20,
       }),
-    getNextPageParam: (lastPage) => {
-      if (!lastPage?.pagination) return undefined;
-      if (lastPage.pagination.page < lastPage.pagination.totalPages) {
-        return lastPage.pagination.page + 1;
-      }
-      return undefined;
-    },
+    getNextPageParam: nextPage,
     initialPageParam: 1,
   });
 }

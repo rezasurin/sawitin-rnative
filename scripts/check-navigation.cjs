@@ -16,14 +16,25 @@ const routes = getRoutes(requireContext(path.join(root, 'app')), {
 });
 let segments = [];
 let authorized = true;
+// Read grants per module when set; otherwise every module follows `authorized`.
+let grants = null;
+let permissions = [];
 const Tabs = Object.assign(() => null, { Screen: () => null });
+const routeGroup = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(root, 'utils/route-group.ts'), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS },
+}).outputText, { exports: routeGroup });
 const mocks = {
   'react-native': { StyleSheet: { create: (value) => value }, Text: 'Text', View: 'View' },
-  'expo-router': { Tabs, useSegments: () => segments },
+  'expo-router': { Tabs, router: { replace() {} }, useSegments: () => segments },
   'expo-router/react-navigation': { CommonActions: { navigate: (payload) => ({ type: 'NAVIGATE', payload }) } },
   '@/constants/Colors': { BrandColors: {} },
   '@/constants/navigation': { FLOATING_TAB_BAR_STYLE: {}, TAB_BAR_LABEL_STYLE: {}, TAB_BAR_ITEM_STYLE: {} },
-  '@/stores/useAuthStore': { useAuthStore: (selector) => selector({ hasPermission: () => authorized }) },
+  '@/stores/useAuthStore': { useAuthStore: (selector) => selector({
+    hasPermission: (id) => grants ? grants.includes(id) : authorized, permissions,
+  }) },
+  '@/utils/route-group': routeGroup,
+  './Button': { Button: 'Button' },
   './TabBarIcon': { TabBarIcon: () => null },
 };
 const source = fs.readFileSync(path.join(root, 'components/core/RoleTabs.tsx'), 'utf8');
@@ -107,23 +118,40 @@ test('Panen and Checker detail screens for Mandor, Asisten and Administrator sha
   // Administrator re-exports the Mandor screens, so removing approve there removes it for both.
   assert.match(read('app/(admin)/bkm/[id].tsx'), /\(mandor\)\/bkm\/\[id\]/);
   assert.match(read('app/(admin)/checker/[id].tsx'), /\(mandor\)\/checker\/\[id\]/);
-  for (const file of ['app/(mandor)/bkm/[id].tsx', 'app/(asisten)/bkm/[id].tsx']) {
-    assert.match(read(file), /<OperationalActions module="bkmPanen"/, file);
-  }
+  // Asisten re-exports it too, without the Edit button.
+  assert.match(read('app/(asisten)/bkm/[id].tsx'), /\(mandor\)\/bkm\/\[id\]/);
+  assert.match(read('app/(mandor)/bkm/[id].tsx'), /policy\.edit && group !== '\(asisten\)'/);
+  assert.match(read('app/(mandor)/bkm/[id].tsx'), /<OperationalActions module="bkmPanen"/);
   assert.match(read('app/(mandor)/checker/[id].tsx'), /<OperationalActions module="bkmChecker"/);
-  assert.doesNotMatch(read('app/(mandor)/checker/[id].tsx') + read('app/(asisten)/bkm/[id].tsx') + read('app/(mandor)/bkm/[id].tsx'), /useApprove|\/approve/);
+  assert.doesNotMatch(read('app/(mandor)/checker/[id].tsx') + read('app/(mandor)/bkm/[id].tsx'), /useApprove|\/approve/);
   // The shared bar drops approve through the close rule; check-close-policy renders it.
   assert.match(read('components/bkm/OperationalActions.tsx'), /approvesViaClose\(module, document\)/);
   assert.equal(fs.existsSync(path.join(root, 'hooks/useBkmPanen.ts')) && /useApproveBkmPanen/.test(read('hooks/useBkmPanen.ts')), false);
 });
 
-test('Permission guard remains active', () => {
+test('Permission guard blocks other groups but never the one the user was routed to', () => {
   authorized = false;
+  permissions = []; // No write anywhere: routed to (pemanen).
   for (const group of Object.keys(expected)) {
     segments = [group];
-    assert.notEqual(moduleExports.RoleTabs({ group }).type, Tabs);
+    const element = moduleExports.RoleTabs({ group });
+    if (group === '(pemanen)') assert.equal(element.type, Tabs, 'Beranda and Akun stay reachable to sign out');
+    else assert.notEqual(element.type, Tabs, group);
   }
   authorized = true;
+});
+
+test('a Mandor with only BKM Rawat opens the Mandor tabs without the Panen and Checker tabs', () => {
+  permissions = [{ id: 'mod_bkm_rawat', write: true, approve: false }];
+  grants = ['mod_bkm_rawat'];
+  segments = ['(mandor)'];
+  const element = moduleExports.RoleTabs({ group: '(mandor)' });
+  assert.equal(element.type, Tabs);
+  const screens = React.Children.toArray(element.props.children);
+  assert.deepEqual(screens.filter((screen) => screen.props.options.href !== null).map((screen) => screen.props.options.title), ['Beranda', 'Akun']);
+  assert.ok(['bkm', 'checker'].every((name) => screens.some((screen) => screen.props.name === name && screen.props.options.href === null)));
+  grants = null;
+  permissions = [];
 });
 
 test('Retained hidden root routes keep a visible way back to the main tabs', () => {
@@ -239,6 +267,10 @@ test('Shared module links stay in Administrator and preserve original role route
     segments = [fallback];
     assert.equal(exports.useModuleGroup(fallback), fallback);
   }
+  // Asisten keeps its own links only for the modules it re-exports.
+  segments = ['(asisten)', 'observasi'];
+  assert.equal(exports.useModuleGroup('(mandor)', '(asisten)'), '(asisten)');
+  assert.equal(exports.useModuleGroup('(krani)'), '(krani)');
 });
 
 test('Home screens follow permissions, so a renamed role lands where its grants say', () => {

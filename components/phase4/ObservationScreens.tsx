@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useModuleGroup } from '@/hooks/useModuleGroup';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/core/Button';
 import { FormDateField, FormField, FormPhotoField, FormSelect } from '@/components/form';
@@ -18,10 +19,13 @@ import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { keepFotosOffline, uploadFotos } from '@/services/foto.service';
 import { observasiApi } from '@/services/observasi.service';
+import { nextPage } from '@/services/master-cache';
 import type { CreateObservasiPayload, JenisObservasi, Observasi, TingkatObservasi } from '@/types/observasi';
-import { estateDate } from '@/utils/estateDate';
+import { estateDate, formatEstateDate } from '@/utils/estateDate';
 import { fotoUrls, localFotoUris, type FotoItem } from '@/utils/foto';
 import { parseSampleCount, sampleBjr, SENSUS_BJR_UNIT, sensusBjrError } from '@/utils/observasi';
+import { parseDecimal } from '@/utils/field-summary';
+import { isRetryable } from '@/services/sync-errors';
 
 const TYPES: { value: JenisObservasi; label: string; measure: string; unit: string }[] = [
   { value: 'HAMA', label: 'Hama', measure: 'Pokok terdampak', unit: 'pokok' },
@@ -40,7 +44,7 @@ const listKey = ['observasi', 'list'];
 
 export function ObservationList() {
   const router = useRouter();
-  const group = useLocalGroup();
+  const group = useModuleGroup('(mandor)', '(asisten)');
   const canWrite = useAuthStore((state) => state.hasPermission('mod_bkm_rawat', 'write'));
   const [kind, setKind] = useState('');
   const [severity, setSeverity] = useState('');
@@ -64,12 +68,12 @@ export function ObservationList() {
       {list.isLoading && <ActivityIndicator />}
       {list.isError && <Button title="Muat ulang" onPress={() => void list.refetch()} />}
       {rows.map((item) => <Pressable key={item.id} style={styles.card} onPress={() => router.push(`/${group}/observasi/${item.id}` as never)}>
-        <Text style={styles.title}>{labelFor(item.jenis)} · {new Date(item.tanggal).toLocaleDateString('id-ID')}</Text>
+        <Text style={styles.title}>{labelFor(item.jenis)} · {formatEstateDate(item.tanggal)}</Text>
         <Text style={styles.muted}>{item.nama_pengamat} · {item.nilai ?? '—'} {item.satuan ?? ''}{localId(item.id) ? ' · Menunggu sinkronisasi' : ''}</Text>
       </Pressable>)}
       {!list.isLoading && !rows.length && <Text>Belum ada observasi dalam 30 hari terakhir.</Text>}
       {page > 1 && <Button title="Halaman sebelumnya" variant="secondary" onPress={() => setPage((v) => v - 1)} />}
-      {(list.data?.pagination?.totalPages ?? 0) > page && <Button title="Halaman berikutnya" variant="secondary" onPress={() => setPage((v) => v + 1)} />}
+      {!!list.data && !!nextPage(list.data) && <Button title="Halaman berikutnya" variant="secondary" onPress={() => setPage((v) => v + 1)} />}
       {canWrite && <Button title="Tambah observasi" onPress={() => router.push(`/${group}/observasi/add` as never)} />}
     </ScrollView>
   </View>;
@@ -77,7 +81,7 @@ export function ObservationList() {
 
 export function ObservationForm() {
   const router = useRouter();
-  const group = useLocalGroup();
+  const group = useModuleGroup('(mandor)', '(asisten)');
   const { id } = useLocalSearchParams<{ id?: string }>();
   const editing = Boolean(id);
   const remote = useQuery({ queryKey: ['observasi', id], queryFn: () => observasiApi.getById(id!), enabled: editing });
@@ -107,7 +111,8 @@ export function ObservationForm() {
   const lands = useLahanList({ limit: 200 });
   const tphs = useTphList({ limit: 200 });
 
-  useEffect(() => { void gps.captureLocation(); }, []);
+  // The position is where the observation was made: an edit, often from the office, never moves it.
+  useEffect(() => { if (!editing) void gps.captureLocation(); }, [editing]);
   useEffect(() => { if (!editing && !groupId && groups.data?.data.length === 1) setGroupId(groups.data.data[0].id); }, [groups.data, editing, groupId]);
   useEffect(() => {
     if (!remote.data) return;
@@ -129,7 +134,9 @@ export function ObservationForm() {
   };
 
   const save = async () => {
-    const numeric = value.trim() ? Number(value) : undefined;
+    // Saving before the record loads would overwrite it with the form's defaults.
+    if (editing && !remote.data) return;
+    const numeric = value.trim() ? parseDecimal(value) : undefined;
     if (!groupId || !date || !observer.trim() || observer.trim().length > 255 || (numeric !== undefined && (!Number.isFinite(numeric) || numeric < 0)) || note.length > 2000 || unit.length > 50) {
       Alert.alert('Data belum valid', 'Isi kebun, tanggal, dan pengamat; periksa nilai, satuan, serta catatan.'); return;
     }
@@ -145,23 +152,36 @@ export function ObservationForm() {
       ...(census ? { jumlah_sampel: parseSampleCount(sampleCount) } : {}),
       ...(severityKinds.includes(kind) && severity ? { tingkat: severity } : {}),
       ...(note.trim() ? { catatan: note.trim() } : {}),
-      ...(gps.location ? { geometry: { type: 'Point', coordinates: [gps.location.longitude, gps.location.latitude] },
+      ...(!editing && gps.location ? { geometry: { type: 'Point', coordinates: [gps.location.longitude, gps.location.latitude] },
         gps_accuracy: gps.location.accuracy, captured_at: gps.location.capturedAt } : {}),
+    };
+    // Photos that went up before a connection dropped keep their URL; the rest wait beside the queue.
+    const queueIt = async () => {
+      input.foto = await keepFotosOffline(fotos.map((item) => uploaded.current.get(item.url) ?? item), key.current);
+      await addToQueue({ module: 'observasi', action: 'CREATE', endpoint: '/observasi',
+        payload: { ...input, local_photo_uris: localFotoUris(input.foto) } as unknown as Record<string, unknown> });
     };
     setSaving(true);
     try {
-      // Online every photo goes up now; offline they are copied beside the queue for the sync pass.
-      input.foto = online ? await uploadFotos(fotos, 'observasi', uploaded.current) : await keepFotosOffline(fotos, key.current);
       if (editing) {
         if (!online) throw new Error('Perubahan observasi membutuhkan koneksi internet.');
+        input.foto = await uploadFotos(fotos, 'observasi', uploaded.current);
         const { client_request_id: _replayKey, ...update } = input;
         await observasiApi.update(id!, { ...update,
           blok_id: blockId || null, lahan_id: landId || null, tph_id: tphId || null,
           nilai: numeric ?? null, satuan: unit.trim() || null, jumlah_sampel: census ? parseSampleCount(sampleCount) : null, catatan: note.trim() || null,
           tingkat: severityKinds.includes(kind) ? severity || null : null });
-      } else if (online) await observasiApi.create(input);
-      else await addToQueue({ module: 'observasi', action: 'CREATE', endpoint: '/observasi',
-        payload: { ...input, local_photo_uris: localFotoUris(input.foto) } as unknown as Record<string, unknown> });
+      } else if (!online) await queueIt();
+      else {
+        // The replay sends the same client_request_id, so a lost answer never makes two observations.
+        try {
+          input.foto = await uploadFotos(fotos, 'observasi', uploaded.current);
+          await observasiApi.create(input);
+        } catch (error) {
+          if (!isRetryable(error)) throw error;
+          await queueIt();
+        }
+      }
       await queryClient.invalidateQueries({ queryKey: listKey });
       router.replace(`/${group}/observasi` as never);
     } catch (error) { Alert.alert('Gagal menyimpan', errorText(error)); }
@@ -182,23 +202,23 @@ export function ObservationForm() {
       <FormDateField label="Tanggal" value={date} onChange={setDate} />
       <FormField label={type.measure} value={value} onChangeText={setValue} keyboardType="decimal-pad" />
       {kind === 'SENSUS_BJR' && <FormField label="Jumlah sampel (janjang ditimbang)" value={sampleCount} onChangeText={setSampleCount} keyboardType="number-pad" />}
-      {kind === 'SENSUS_BJR' && parseSampleCount(sampleCount) !== undefined && Number(value) > 0 &&
-        <Text style={styles.muted}>BJR sampel: {sampleBjr(Number(value), parseSampleCount(sampleCount)!)} kg per janjang</Text>}
+      {kind === 'SENSUS_BJR' && parseSampleCount(sampleCount) !== undefined && parseDecimal(value) > 0 &&
+        <Text style={styles.muted}>BJR sampel: {sampleBjr(parseDecimal(value), parseSampleCount(sampleCount)!)} kg per janjang</Text>}
       <FormField label="Satuan" value={kind === 'SENSUS_BJR' ? SENSUS_BJR_UNIT : unit} onChangeText={setUnit} editable={kind !== 'SENSUS_BJR'} />
       {severityKinds.includes(kind) && <View style={styles.row}>{(['RINGAN', 'SEDANG', 'BERAT'] as const).map((v) =>
         <Pressable key={v} onPress={() => setSeverity(severity === v ? '' : v)} style={[styles.chip, severity === v && styles.selected]}><Text>{v}</Text></Pressable>)}</View>}
       <FormField label="Nama pengamat" value={observer} onChangeText={setObserver} />
       <FormField label="Catatan" value={note} onChangeText={setNote} multiline />
-      <Text style={styles.muted}>{gps.location ? 'GPS tercatat' : 'GPS tidak tersedia; observasi tetap dapat disimpan.'}</Text>
+      <Text style={styles.muted}>{editing ? 'Lokasi GPS saat observasi dicatat tetap dipakai.' : gps.location ? 'GPS tercatat' : 'GPS tidak tersedia; observasi tetap dapat disimpan.'}</Text>
       <FormPhotoField label="Foto" value={fotos} onChange={setFotos} disabled={saving} />
-      <Button title="Simpan observasi" loading={saving} disabled={saving || (editing && !online)} onPress={() => void save()} />
+      <Button title="Simpan observasi" loading={saving} disabled={saving || (editing && (!online || !remote.data))} onPress={() => void save()} />
     </ScrollView>
   </View>;
 }
 
 export function ObservationDetail() {
   const router = useRouter();
-  const group = useLocalGroup();
+  const group = useModuleGroup('(mandor)', '(asisten)');
   const { id } = useLocalSearchParams<{ id: string }>();
   const queue = useSyncQueueStore((state) => state.queue);
   const remove = useSyncQueueStore((state) => state.removeFromQueue);
@@ -219,7 +239,7 @@ export function ObservationDetail() {
   ]);
   return <View style={styles.root}><PageHeader title="Detail Observasi" showBackButton onBack={() => router.back()} />
     <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{labelFor(row.jenis)} · {new Date(row.tanggal).toLocaleDateString('id-ID')}</Text>
+      <Text style={styles.title}>{labelFor(row.jenis)} · {formatEstateDate(row.tanggal)}</Text>
       <Text>Kebun: {row.kelompok_lahan?.nama ?? row.kelompok_lahan_id}</Text>
       {!!row.blok_id && <Text>Blok: {row.blok?.nama ?? row.blok_id}</Text>}
       {!!row.lahan_id && <Text>Lahan: {row.lahan?.nama ?? row.lahan_id}</Text>}
@@ -236,11 +256,6 @@ export function ObservationDetail() {
       {!localId(id) && <AuditTrail path={`/observasi/${id}/history`} />}
     </ScrollView>
   </View>;
-}
-
-function useLocalGroup() {
-  const segments = useSegments();
-  return segments[0] === '(admin)' ? '(admin)' : segments[0] === '(asisten)' ? '(asisten)' : '(mandor)';
 }
 
 const styles = StyleSheet.create({

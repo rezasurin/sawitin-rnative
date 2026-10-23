@@ -21,9 +21,10 @@ import { pullDelta } from '@/services/sync.service';
  * Failures are ignored: warming up offline simply does nothing, and every
  * screen still falls back to whatever is already stored.
  *
- * The page size matches what the field forms request, because the cache is
- * keyed by params. Browse-only screens that ask for a different size still
- * work online and are not warmed here.
+ * The params match what the field forms request, because the cache is keyed by
+ * them. Each list arrives whole (`everyPage`); the limit is only the page size.
+ * Browse-only screens that ask for a different size still work online and are
+ * not warmed here.
  */
 const FIELD_FORM_PAGE = { limit: 200 };
 

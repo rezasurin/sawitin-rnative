@@ -116,11 +116,13 @@ test('Panen picker excludes block-less sources and allow sparse parcels', () => 
   }
 });
 
-test('Rawat submits a sparse parcel online and queues it offline with the same hierarchy and pengawas', async () => {
+test('Rawat submits a sparse parcel online and queues it offline, or when the signal drops mid-save, with the same hierarchy and pengawas', async () => {
   const React = require('react');
   const { act, create } = require('react-test-renderer');
   global.IS_REACT_ACT_ENVIRONMENT = true;
-  for (const online of [true, false]) {
+  const syncErrors = load('services/sync-errors.ts', { axios: { isAxiosError: () => false } });
+  for (const mode of ['online', 'offline', 'dropped']) {
+    const online = mode !== 'offline';
     const sent = [];
     const queued = [];
     const { BKMRawatForm } = load('components/mandor/BKMRawatForm.tsx', {
@@ -134,12 +136,14 @@ test('Rawat submits a sparse parcel online and queues it offline with the same h
         useLahanList: () => ({ data: online ? { data: lands } : undefined }),
       },
       '@/hooks/useBkmRawat': {
-        useCreateBkmRawat: () => ({ mutate: (p) => sent.push(p) }),
+        // apiClient reports a request that got no answer as status 500.
+        useCreateBkmRawat: () => ({ mutateAsync: async (p) => { sent.push(p); if (mode === 'dropped') throw Object.assign(new Error('Network Error'), { status: 500 }); return { id: 'r' }; } }),
         useBkmRawatLookups: () => ({ data: { lands } }),
       },
       '@/stores/useNetworkStore': { useNetworkStore: (selector) => selector({ isOnline: online }) },
       '@/stores/useSyncQueueStore': { useSyncQueueStore: (selector) => selector({ addToQueue: async (p) => { queued.push(p); return { id: 'q' }; } }) },
       '@/stores/useAuthStore': { useAuthStore: (selector) => selector({ user: { id: 'me', username: 'me', member: { id: 'm', nama: 'Mandor Saya' } } }) },
+      '@/services/sync-errors': syncErrors,
     });
     let tree;
     await act(async () => { tree = create(React.createElement(BKMRawatForm, { onSuccess() {} })); });
@@ -159,7 +163,10 @@ test('Rawat submits a sparse parcel online and queues it offline with the same h
     }
     assert.equal(tree.root.findByType('Button').props.disabled, false);
     await act(async () => tree.root.findByType('Button').props.onPress());
-    const payload = online ? sent[0] : queued[0].payload.header;
+    const payload = mode === 'online' ? sent[0] : queued[0].payload.header;
+    // The fallback replays the key the lost request carried, so the server keeps one document.
+    if (mode === 'dropped') assert.equal(payload.client_request_id, sent[0].client_request_id);
+    assert.equal(queued.length, mode === 'online' ? 0 : 1);
     assert.equal(payload.lahan_id, 'valid');
     assert.equal(payload.blok_id, 'b');
     assert.equal(payload.kelompok_lahan_id, 'estate');

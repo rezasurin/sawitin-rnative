@@ -93,6 +93,7 @@ test('audit reads are online-only and cache only server events', async () => {
 test('audit UI renders loading, error, empty and the actual backend event contract', () => {
   let result = { isLoading: true };
   const { OperationalHistory } = load('components/bkm/OperationalHistory.tsx', {
+    './DocStatusBadge': { statusLabel: (status) => status ?? '-' },
     'react-native': { ActivityIndicator: 'ActivityIndicator', Text: 'Text', View: 'View', Button: 'Button' },
     '@tanstack/react-query': { useQuery: () => result },
     '@/services/operational.service': { readHistory: async () => [] },

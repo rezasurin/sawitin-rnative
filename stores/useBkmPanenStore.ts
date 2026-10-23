@@ -3,6 +3,7 @@ import {
   CreateBkmPanenPayload,
 } from "@/types/bkm-panen";
 import { create } from "zustand";
+import { gradingTotal } from "@/utils/grading";
 
 interface BkmPanenDetailDraft extends CreateBkmPanenDetailPayload {
   _tempId: string;
@@ -69,14 +70,7 @@ export const useBkmPanenStore = create<BkmPanenStore>((set) => ({
       details: state.details.map((d) => {
         if (d._tempId !== tempId) return d;
         const updated = { ...d, ...data };
-        // Auto-calculate jumlah_janjang from grading fields
-        updated.jumlah_janjang =
-          (updated.janjang_normal ?? 0) +
-          (updated.buah_mentah ?? 0) +
-          (updated.over_ripe ?? 0) +
-          (updated.tangkai_panjang ?? 0) +
-          (updated.buah_abnormal ?? 0) +
-          (updated.janjang_kosong ?? 0);
+        updated.jumlah_janjang = gradingTotal(updated);
         return updated;
       }),
     })),

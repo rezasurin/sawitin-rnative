@@ -6,6 +6,7 @@ import { QueryProvider } from "@/providers";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useSyncProcessor } from "@/hooks/useSyncProcessor";
 import { useMasterCacheWarmup } from "@/hooks/useMasterCacheWarmup";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -32,6 +33,7 @@ function RootLayoutNav() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const permissions = useAuthStore((s) => s.permissions);
 
+  useNetworkStatus();
   // Process offline sync queue when authenticated and online
   useSyncProcessor();
   useMasterCacheWarmup();

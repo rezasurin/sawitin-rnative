@@ -8,13 +8,17 @@ export type PendingStatus = 'PENDING' | 'MATCHED' | 'FAILED';
 export type TransactionType = 'IN' | 'OUT';
 export type LogActionType = 'CREATE' | 'UPDATE' | 'DELETE';
 
+/** A list as the backend's `applyQueryFilters` sends it. */
 export interface PaginatedResponse<T> {
   data: T[];
-  pagination: {
+  meta: {
     page: number;
     limit: number;
-    total: number;
-    totalPages: number;
+    /** Null when the request skipped the count (`totals=false`). */
+    total: number | null;
+    pages: number | null;
+    /** True when a further page exists, whether or not the count was taken. */
+    has_more?: boolean;
   };
 }
 

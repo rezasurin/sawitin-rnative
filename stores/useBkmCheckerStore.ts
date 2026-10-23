@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { gradingTotal } from '@/utils/grading';
 import { estateDate } from '@/utils/estateDate';
 import type { TripHeaderDraft, TripLineDraft } from '@/types/bkm-checker';
 
@@ -31,9 +32,6 @@ const initialHeader = (): TripHeaderDraft => ({
 let tempIdCounter = 0;
 const generateTempId = () => `temp_checker_${++tempIdCounter}`;
 
-/** The pieces of the janjang total, so the line always adds up to what was graded. */
-const total = (line: TripLineDraft) =>
-  line.janjang_normal + line.buah_mentah + line.over_ripe + line.tangkai_panjang + line.buah_abnormal + line.janjang_kosong;
 
 export const useBkmCheckerStore = create<BkmCheckerStore>((set) => ({
   header: initialHeader(),
@@ -42,14 +40,14 @@ export const useBkmCheckerStore = create<BkmCheckerStore>((set) => ({
   setHeader: (partial) => set((state) => ({ header: { ...state.header, ...partial } })),
 
   addDetail: (detail) =>
-    set((state) => ({ details: [...state.details, { ...detail, jumlah_janjang: total(detail), _tempId: generateTempId() }] })),
+    set((state) => ({ details: [...state.details, { ...detail, jumlah_janjang: gradingTotal(detail), _tempId: generateTempId() }] })),
 
   updateDetail: (tempId, data) =>
     set((state) => ({
       details: state.details.map((d) => {
         if (d._tempId !== tempId) return d;
         const updated = { ...d, ...data };
-        return { ...updated, jumlah_janjang: total(updated) };
+        return { ...updated, jumlah_janjang: gradingTotal(updated) };
       }),
     })),
 

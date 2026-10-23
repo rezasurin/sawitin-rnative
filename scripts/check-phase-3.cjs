@@ -31,6 +31,7 @@ async function screen({ online = true, id = 'rawat-1', details = [], workers = [
   const calls = { created: [], updated: [], queued: [], changedQueue: [] };
   const document = { id, status: 'DRAFT', detail_rawat: details, tanggal: '2026-09-24T00:00:00Z', nama_pengawas: 'Mandor' };
   const { default: Screen } = load('app/(mandor)/rawat/[id].tsx', {
+    '@/utils/estateDate': load('utils/estateDate.ts'),
     'react-native': { ActivityIndicator: 'ActivityIndicator', Alert: { alert() {} }, ScrollView: 'ScrollView', StyleSheet: { create: (styles) => styles }, Text: 'Text', TouchableOpacity: 'TouchableOpacity' },
     'expo-router': { useLocalSearchParams: () => ({ id }), router: { back() {} } },
     '@tanstack/react-query': { useQueryClient: () => ({ setQueryData() {} }), useQuery: () => ({ data: undefined }) },
@@ -45,6 +46,7 @@ async function screen({ online = true, id = 'rawat-1', details = [], workers = [
     '@/components/bkm/OperationalHistory': { OperationalHistory: 'OperationalHistory' },
     '@/constants/Colors': { BrandColors: {} },
     '@/utils/plantation': { memberLabel },
+    '@/utils/field-summary': load('utils/field-summary.ts'),
     '@/hooks/useOperationalPolicy': { useOperationalPolicy: () => ({ edit: true, addDetail: true, deleteDetail: false, submit: false }) },
     '@/hooks/usePekerja': { usePekerjaList: () => ({ data: workers === null ? undefined : { data: workers } }) },
     '@/hooks/useBkmRawat': {

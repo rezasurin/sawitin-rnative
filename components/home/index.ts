@@ -7,4 +7,3 @@ export { QuickActions } from "./QuickActions";
 export { StatusBadge } from "./StatusBadge";
 export { UserGreeting } from "./UserGreeting";
 export { DashboardScreen } from './DashboardScreen';
-export { ProfileScreen } from './ProfileScreen';

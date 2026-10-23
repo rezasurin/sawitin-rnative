@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useModuleGroup } from '@/hooks/useModuleGroup';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/core/Button';
 import { FormDateField, FormField, FormSelect } from '@/components/form';
@@ -15,16 +16,18 @@ import { useBkmRawatList, useBkmRawatLookups } from '@/hooks/useBkmRawat';
 import { useMeterTerakhir } from '@/hooks/useVehicleUsage';
 import { kendaraanApi, supirApi, pemakaianKendaraanApi as usageApi } from '@/services/vehicle-usage.service';
 import type { CreatePemakaianKendaraanPayload, PemakaianKendaraan } from '@/types/vehicle-usage';
-import { estateDate } from '@/utils/estateDate';
+import { estateDate, formatEstateDate } from '@/utils/estateDate';
 import { meterHint, nextMeterStart } from '@/utils/meter-prefill';
+import { parseDecimal } from '@/utils/field-summary';
+import { isRetryable } from '@/services/sync-errors';
+import { statusLabel } from '@/components/bkm/DocStatusBadge';
 
 const listKey = ['pemakaianKendaraan', 'list'];
 const errText = (error: unknown) => error instanceof Error ? error.message : 'Coba lagi.';
-function useGroup() { const first = useSegments()[0]; return first === '(admin)' ? '(admin)' : first === '(asisten)' ? '(asisten)' : '(mandor)'; }
 function isLocal(id: string) { return id.startsWith('local:'); }
 
 export function VehicleUsageList() {
-  const router = useRouter(); const group = useGroup();
+  const router = useRouter(); const group = useModuleGroup('(mandor)', '(asisten)');
   const canWrite = useAuthStore((s) => s.hasPermission('mod_bkm_rawat', 'write'));
   const queue = useSyncQueueStore((s) => s.queue);
   const list = useQuery({ queryKey: listKey, queryFn: () => usageApi.getAll({ limit: 50, sort: 'tanggal:desc' }) });
@@ -37,7 +40,7 @@ export function VehicleUsageList() {
       {list.isError && <Button title="Muat ulang" onPress={() => void list.refetch()} />}
       {rows.map((row) => <Pressable key={row.id} style={styles.card} onPress={() => router.push(`/${group}/pemakaian-kendaraan/${row.id}` as never)}>
         <Text style={styles.title}>{'kendaraan' in row && row.kendaraan ? row.kendaraan.nomor_kendaraan : row.kendaraan_id}</Text>
-        <Text>{new Date(row.tanggal).toLocaleDateString('id-ID')} · {row.status}{isLocal(row.id) ? ' · Offline' : ''}</Text>
+        <Text>{formatEstateDate(row.tanggal)} · {statusLabel(row.status)}{isLocal(row.id) ? ' · Offline' : ''}</Text>
         {row.jumlah_bbm != null && <Text>BBM: {row.jumlah_bbm} {('material' in row && row.material?.satuan) || ''}</Text>}
       </Pressable>)}
       {!list.isLoading && !rows.length && <Text>Belum ada pemakaian kendaraan.</Text>}
@@ -47,7 +50,7 @@ export function VehicleUsageList() {
 }
 
 export function VehicleUsageForm() {
-  const router = useRouter(); const group = useGroup();
+  const router = useRouter(); const group = useModuleGroup('(mandor)', '(asisten)');
   const { id } = useLocalSearchParams<{ id?: string }>();
   const editing = Boolean(id);
   const record = useQuery({ queryKey: ['pemakaianKendaraan', id], queryFn: () => usageApi.getById(id!), enabled: editing });
@@ -92,9 +95,9 @@ export function VehicleUsageForm() {
   }, [lastMeter.data, lastMeter.isFetching, editing, vehicleId]);
 
   const save = async (submit: boolean) => {
-    const start = meterStart.trim() ? Number(meterStart) : undefined;
-    const end = meterEnd.trim() ? Number(meterEnd) : undefined;
-    const fuel = fuelAmount.trim() ? Number(fuelAmount) : undefined;
+    const start = meterStart.trim() ? parseDecimal(meterStart) : undefined;
+    const end = meterEnd.trim() ? parseDecimal(meterEnd) : undefined;
+    const fuel = fuelAmount.trim() ? parseDecimal(fuelAmount) : undefined;
     if (!vehicleId || !date || (start !== undefined && (!Number.isFinite(start) || start < 0)) ||
       (end !== undefined && (!Number.isFinite(end) || end < 0)) ||
       (start !== undefined && end !== undefined && end < start) || Boolean(fuelId) !== (fuel !== undefined) ||
@@ -120,10 +123,18 @@ export function VehicleUsageForm() {
           satuan_meter: start !== undefined || end !== undefined ? meterUnit : null,
           material_id: fuelId || null, jumlah_bbm: fuel ?? null, keterangan: note.trim() || null,
           ...(submit ? { status: 'SUBMITTED' as const } : {}) });
-      } else if (online) {
-        const created = await usageApi.create(data);
-        if (submit && created.status === 'DRAFT') await usageApi.update(created.id, { status: 'SUBMITTED' });
-      } else await addToQueue({ module: 'pemakaian_kendaraan', action: 'CREATE', endpoint: '/pemakaianKendaraan', payload: { data, submit } });
+      } else {
+        const queueIt = () => addToQueue({ module: 'pemakaian_kendaraan', action: 'CREATE', endpoint: '/pemakaianKendaraan', payload: { data, submit } });
+        if (!online) await queueIt();
+        // The replay sends the same client_request_id, so a lost answer never makes a second record.
+        else try {
+          const created = await usageApi.create(data);
+          if (submit && created.status === 'DRAFT') await usageApi.update(created.id, { status: 'SUBMITTED' });
+        } catch (error) {
+          if (!isRetryable(error)) throw error;
+          await queueIt();
+        }
+      }
       await client.invalidateQueries({ queryKey: listKey });
       router.replace(`/${group}/pemakaian-kendaraan` as never);
     } catch (error) { Alert.alert('Gagal menyimpan', errText(error)); }
@@ -132,7 +143,7 @@ export function VehicleUsageForm() {
 
   const last = lastMeter.data?.meter_akhir;
   const hint = meterHint(lastMeter.data, meterStart);
-  const jump = last != null && meterEnd && Number(meterEnd) - Number(last) > (meterUnit === 'jam' ? 24 : 500);
+  const jump = last != null && meterEnd && parseDecimal(meterEnd) - Number(last) > (meterUnit === 'jam' ? 24 : 500);
   return <View style={styles.root}><PageHeader title={editing ? 'Ubah Pemakaian' : 'Catat Pemakaian'} showBackButton onBack={() => router.back()} />
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {!vehicleRows.length && <Text style={styles.warn}>Daftar kendaraan tidak tersedia. Hubungkan perangkat saat pertama kali mengisi cache.</Text>}
@@ -157,7 +168,7 @@ export function VehicleUsageForm() {
 }
 
 export function VehicleUsageDetail() {
-  const router = useRouter(); const group = useGroup();
+  const router = useRouter(); const group = useModuleGroup('(mandor)', '(asisten)');
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
   const online = useNetworkStore((s) => s.isOnline);
@@ -186,7 +197,7 @@ export function VehicleUsageDetail() {
   const approve = () => Alert.alert('Setujui pemakaian?', row.jumlah_bbm != null ? `${row.jumlah_bbm} ${row.material?.satuan ?? ''} ${row.material?.nama ?? 'BBM'} akan dikurangi dari stok.` : 'Tidak ada BBM yang dikurangi.', [
     { text: 'Batal' }, { text: 'Setujui', onPress: async () => {
       try { await usageApi.approve(id); await refresh(); await queryClient.invalidateQueries({ queryKey: ['material'] }); }
-      catch (error) { Alert.alert('Persetujuan gagal; dokumen tetap SUBMITTED', errText(error)); await refresh(); }
+      catch (error) { Alert.alert('Persetujuan gagal; dokumen tetap Diajukan', errText(error)); await refresh(); }
     } },
   ]);
   const reject = () => Alert.alert('Kembalikan untuk revisi?', 'Dokumen akan kembali ke pembuat untuk diperbaiki.', [
@@ -198,7 +209,7 @@ export function VehicleUsageDetail() {
   return <View style={styles.root}><PageHeader title="Detail Pemakaian" showBackButton onBack={() => router.back()} />
     <ScrollView contentContainerStyle={styles.content}>
       <Text style={styles.title}>{row.kendaraan?.nomor_kendaraan ?? row.kendaraan_id}</Text>
-      <Text>{new Date(row.tanggal).toLocaleDateString('id-ID')} · {row.status}</Text>
+      <Text>{formatEstateDate(row.tanggal)} · {statusLabel(row.status)}</Text>
       {!!row.supir_id && <Text>Supir: {row.supir?.nama ?? row.supir_id}</Text>}
       {!!row.pekerja_id && <Text>Operator: {row.pekerja_id}</Text>}
       {!!row.bkm_rawat_id && <Text>BKM Rawat: {row.bkm_rawat_id}</Text>}

@@ -1,5 +1,6 @@
 import { Text, View } from '@/components/Themed';
 import { OperationalActions } from '@/components/bkm/OperationalActions';
+import { Row } from '@/components/bkm/Row';
 import { OperationalDraftEditor } from '@/components/bkm/OperationalDraftEditor';
 import { OperationalHistory } from '@/components/bkm/OperationalHistory';
 import { PageHeader } from '@/components/home';
@@ -21,6 +22,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { bkmCheckerApi } from '@/services/bkm-checker.service';
 import { isTrip } from '@/utils/trip';
 import { useQuery } from '@tanstack/react-query';
+import { formatEstateDate, formatEstateDateTime } from '@/utils/estateDate';
+import { statusLabel } from '@/components/bkm/DocStatusBadge';
 
 export default function CheckerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -124,7 +127,7 @@ export default function CheckerDetailScreen() {
 
               <View style={styles.spbSummaryCard}>
                 <Row label="Blok / TPH" value={`${data.blok?.nama ?? data.blok_id} / ${data.tph?.nama ?? data.tph_id}`} />
-                <Row label="Tanggal" value={data.tanggal_laporan} />
+                <Row label="Tanggal" value={formatEstateDate(data.tanggal_laporan)} />
                 {data.details?.[0] && (
                   <>
                     <Row label="No. Truk" value={data.details[0].kendaraan?.nomor_kendaraan || data.details[0].nomor_truk || '-'} />
@@ -157,7 +160,7 @@ export default function CheckerDetailScreen() {
           {trip ? (
             <>
               <Row label="Nomor SPB" value={data.nomor_spb ?? '-'} />
-              <Row label="Berangkat" value={data.dispatched_at ?? data.tanggal_laporan} />
+              <Row label="Berangkat" value={data.dispatched_at ? formatEstateDateTime(data.dispatched_at) : formatEstateDate(data.tanggal_laporan)} />
               <Row label="Truk" value={data.nomor_truk || '-'} />
               <Row label="Sopir" value={data.nama_sopir || '-'} />
               <Row label="Tujuan" value={data.tujuan_kirim || '-'} />
@@ -166,13 +169,13 @@ export default function CheckerDetailScreen() {
             <>
               <Row label="Blok" value={data.blok?.nama ?? data.blok_id ?? '-'} />
               <Row label="TPH" value={data.tph?.nama ?? data.tph_id ?? '-'} />
-              <Row label="Tanggal" value={data.tanggal_laporan} />
+              <Row label="Tanggal" value={formatEstateDate(data.tanggal_laporan)} />
               <Row label="Truk dokumen" value={data.details?.find((row) => row.tipe_pengiriman !== 'RESTAN')?.kendaraan?.nomor_kendaraan
                 || data.details?.find((row) => row.tipe_pengiriman !== 'RESTAN')?.nomor_truk || '-'} />
               {data.bkm_panen_id && <Row label="BKM Panen" value={data.bkm_panen_id} />}
             </>
           )}
-          <Row label="Status" value={data.status} />
+          <Row label="Status" value={statusLabel(data.status)} />
           {data.keterangan && <Row label="Keterangan" value={data.keterangan} />}
         </View>
 
@@ -207,15 +210,6 @@ export default function CheckerDetailScreen() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BrandColors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -225,19 +219,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     padding: 16,
     marginBottom: 16,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  rowLabel: { fontSize: 14, color: BrandColors.textSecondary },
-  rowValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: BrandColors.textPrimary,
-    maxWidth: '60%',
-    textAlign: 'right',
   },
   sectionTitle: {
     fontSize: 16,

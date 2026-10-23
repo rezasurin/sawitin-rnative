@@ -12,10 +12,11 @@ import { useFleetChoices } from '@/hooks/useFleetChoices';
 import { useOrgConfig } from "@/hooks/useOrgConfig";
 import { readOperational } from "@/services/operational.service";
 import { stagingApi } from "@/services/staging.service";
+import { isRetryable } from "@/services/sync-errors";
 import { useNetworkStore } from "@/stores/useNetworkStore";
 import { useSyncQueueStore } from "@/stores/useSyncQueueStore";
 import { parseQrPayload } from "@/utils/qr";
-import { isWholeKg } from '@/utils/field-summary';
+import { isWholeKg, parseDecimal, UNREADABLE_NUMBER } from '@/utils/field-summary';
 import { spbConflictOf, spbConflictText } from '@/utils/trip';
 import type { BkmChecker, KraniTimbang } from "@/types";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
@@ -35,6 +36,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { formatEstateDate } from "@/utils/estateDate";
 
 export default function TimbanganScreen() {
   const policy = useOperationalPolicy('kraniTimbang');
@@ -138,19 +140,14 @@ export default function TimbanganScreen() {
     setManualDriver(!first.supir_id);
   }, [checker]);
 
-  // Helper to parse weight input cleanly (handles Indonesian dot thousand separator e.g. 5.000 -> 5000)
-  const parseWeight = (val: string): number => {
-    if (!val) return 0;
-    const cleaned = val.trim().replace(/\./g, '').replace(',', '.');
-    return parseFloat(cleaned) || 0;
-  };
-
   // Calculate Netto & validation in real-time
-  const isiVal = parseWeight(timbangIsi);
-  const kosongVal = parseWeight(timbangKosong);
+  const isiVal = parseDecimal(timbangIsi);
+  const kosongVal = parseDecimal(timbangKosong);
   const hasIsi = timbangIsi.trim() !== "";
   const hasKosong = timbangKosong.trim() !== "";
-  const isWeightInvalid = hasIsi && hasKosong && isiVal <= kosongVal;
+  const isiUnreadable = hasIsi && Number.isNaN(isiVal);
+  const kosongUnreadable = hasKosong && Number.isNaN(kosongVal);
+  const isWeightInvalid = isiUnreadable || kosongUnreadable || (hasIsi && hasKosong && isiVal <= kosongVal);
   const nettoVal = isWeightInvalid ? 0 : Math.max(0, isiVal - kosongVal);
 
   const totalJanjang = checker
@@ -207,7 +204,9 @@ export default function TimbanganScreen() {
       weighed_at: new Date().toISOString(),
     };
 
-    if (!useNetworkStore.getState().isOnline) {
+    // Offline, or the connection dropped mid-save. A replay of a weighing the server
+    // already took resolves as the same weights, so it is never recorded twice.
+    const queueIt = () => {
       const queue = useSyncQueueStore.getState();
       if (queue.queue.some((item) => item.module === 'krani_timbang' && item.payload?.qr_payload === qrPayload)) {
         Alert.alert('Sudah tersimpan', 'Timbangan untuk SPB ini sudah menunggu sinkronisasi.');
@@ -218,6 +217,10 @@ export default function TimbanganScreen() {
           `Netto ${nettoVal.toLocaleString('id-ID')} kg dikirim otomatis saat online. Jika ditolak server, periksa di menu Akun.`,
           [{ text: 'OK', onPress: () => router.dismissTo(`/${group}/timbangan`) }]))
         .catch((err: unknown) => Alert.alert('Gagal menyimpan', err instanceof Error ? err.message : 'Timbangan tidak tersimpan.'));
+    };
+
+    if (!useNetworkStore.getState().isOnline) {
+      queueIt();
       return;
     }
 
@@ -233,6 +236,10 @@ export default function TimbanganScreen() {
         ]);
       },
       onError: (err) => {
+        if (isRetryable(err)) {
+          queueIt();
+          return;
+        }
         // `410 QR_V3_RETIRED` and `409 SPB_ALREADY_WEIGHED` get their own wording.
         const conflict = spbConflictOf(err);
         Alert.alert(
@@ -378,7 +385,7 @@ export default function TimbanganScreen() {
                 onChangeText={setTimbangIsi}
                 placeholder="Masukkan berat isi kendaraan (misal: 6355)"
                 keyboardType="numeric"
-                error={isWeightInvalid ? "Timbang isi harus lebih besar daripada timbang kosong" : undefined}
+                error={isiUnreadable ? UNREADABLE_NUMBER : isWeightInvalid && !kosongUnreadable ? "Timbang isi harus lebih besar daripada timbang kosong" : undefined}
               />
 
               {/* Input 2: Tare Weight */}
@@ -388,6 +395,7 @@ export default function TimbanganScreen() {
                 onChangeText={setTimbangKosong}
                 placeholder="Masukkan berat kosong kendaraan (misal: 5200)"
                 keyboardType="numeric"
+                error={kosongUnreadable ? UNREADABLE_NUMBER : undefined}
               />
 
               {/* Output: Netto Weight */}
@@ -529,7 +537,7 @@ function DetailTimbanganView({
         </View>
         <View style={styles.row}>
           <Text style={styles.label}>Tanggal</Text>
-          <Text style={styles.value}>{detail.tanggal || "-"}</Text>
+          <Text style={styles.value}>{formatEstateDate(detail.tanggal)}</Text>
         </View>
         <View style={styles.row}>
           <Text style={styles.label}>Janjang / Brondol ditimbang (kg)</Text>

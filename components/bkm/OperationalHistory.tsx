@@ -5,6 +5,7 @@ import { readHistory } from '@/services/operational.service';
 import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
 import { useAuthStore } from '@/stores/useAuthStore';
 import type { OperationalModule } from '@/utils/operational-policy';
+import { statusLabel } from './DocStatusBadge';
 
 export function OperationalHistory({ module, id }: { module: OperationalModule; id: string }) {
   const policy = useOperationalPolicy(module);
@@ -23,7 +24,7 @@ export function OperationalHistory({ module, id }: { module: OperationalModule; 
       : history.isError ? <><Text>Riwayat gagal dimuat.</Text><Button title="Coba lagi" onPress={() => void history.refetch()} /></>
       : !history.data?.length ? <Text>Belum ada riwayat.</Text>
       : history.data.map((event, index) => <View key={event.id ?? index} style={{ gap: 4, borderBottomWidth: 1, borderBottomColor: '#ddd', paddingBottom: 10 }}>
-        <Text style={{ fontWeight: '600' }}>{event.action} · {event.status_from ?? '—'} → {event.status_to ?? '—'}</Text>
+        <Text style={{ fontWeight: '600' }}>{event.action} · {statusLabel(event.status_from)} → {statusLabel(event.status_to)}</Text>
         <Text>{event.created_by}</Text>
         {!!event.reason && <Text>{event.reason}</Text>}
         <Text>{event.created_at ? new Date(event.created_at).toLocaleString('id-ID') : '—'}</Text>

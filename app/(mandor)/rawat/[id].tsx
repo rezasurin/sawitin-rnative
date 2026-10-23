@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { memberLabel } from '@/utils/plantation';
+import { parseDecimal } from '@/utils/field-summary';
 import { OperationalActions } from '@/components/bkm/OperationalActions';
 import { OperationalHistory } from '@/components/bkm/OperationalHistory';
 import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
@@ -19,11 +20,9 @@ import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { materialApi } from '@/services/material.service';
 import type { BkmRawat, CreateDetailBkmRawatPayload, DetailBkmRawat, QueuedBkmRawatPayload } from '@/types/bkm-rawat';
+import { formatEstateDate } from '@/utils/estateDate';
 
 type MaterialRow = { material_id: string; jumlah: number; dosis?: number; satuan_dosis?: string };
-
-/** Accepts the Indonesian decimal comma ("4,5") as well as a point. */
-const decimal = (text: string) => Number(text.trim().replace(',', '.'));
 
 export default function RawatDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -144,8 +143,8 @@ export default function RawatDetailScreen() {
   const saveDetail = async () => {
     if (editing ? !policy.edit : !policy.addDetail) return;
     const count = Number(workerCount);
-    const output = result.trim() ? decimal(result) : undefined;
-    const treatedArea = area.trim() ? decimal(area) : undefined;
+    const output = result.trim() ? parseDecimal(result) : undefined;
+    const treatedArea = area.trim() ? parseDecimal(area) : undefined;
     const treeCount = trees.trim() ? Number(trees) : undefined;
     if (!typeId || !categoryId || !itemId || !workerName.trim() || !Number.isInteger(count) || count < 1 || (output !== undefined && (!Number.isFinite(output) || output < 0))) {
       Alert.alert('Data belum lengkap', 'Isi jenis pekerjaan, kategori, item, nama pekerja, dan jumlah pekerja yang valid.');
@@ -267,8 +266,8 @@ export default function RawatDetailScreen() {
   };
 
   const addMaterial = () => {
-    const quantity = decimal(materialQty);
-    const dose = materialDose.trim() ? decimal(materialDose) : undefined;
+    const quantity = parseDecimal(materialQty);
+    const dose = materialDose.trim() ? parseDecimal(materialDose) : undefined;
     if (!materialId || !Number.isFinite(quantity) || quantity <= 0 || (dose !== undefined && (!Number.isFinite(dose) || dose <= 0)) || materialDoseUnit.trim().length > 50) {
       Alert.alert('Barang belum lengkap', 'Pilih barang, isi jumlah lebih dari nol, dan periksa dosis serta satuannya.');
       return;
@@ -313,7 +312,7 @@ export default function RawatDetailScreen() {
         {(isLocal || !isOnline) && <View style={styles.offlineBanner}><Text style={styles.offlineText}>{isLocal ? 'Draft offline · perubahan tersimpan di perangkat' : 'Offline · perubahan akan dikirim saat tersambung'}</Text></View>}
         <View style={styles.card}>
           <View style={styles.row}><Text style={styles.title}>{data.blok?.nama ?? data.blok_id}</Text><DocStatusBadge status={data.status} /></View>
-          <Text style={styles.meta}>Tanggal: {new Date(data.tanggal).toLocaleDateString('id-ID')}</Text>
+          <Text style={styles.meta}>Tanggal: {formatEstateDate(data.tanggal)}</Text>
           <Text style={styles.meta}>Pengawas: {data.nama_pengawas}</Text>
           <Text style={styles.meta}>Lahan: {data.lahan?.nama ?? 'Tanpa lahan'}</Text>
           {data.rejection_note ? <Text style={styles.meta}>Catatan penolakan: {data.rejection_note}</Text> : null}

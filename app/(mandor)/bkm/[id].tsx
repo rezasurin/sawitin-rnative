@@ -8,6 +8,7 @@ import { DetailCard } from "@/components/bkm/DetailCard";
 import { DocStatusBadge } from "@/components/bkm/DocStatusBadge";
 import { MetricCard } from "@/components/bkm/MetricCard";
 import { BrandColors } from "@/constants/Colors";
+import { gradingTotal } from "@/utils/grading";
 import { useBkmPanenDetail } from "@/hooks/useBkmPanen";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -19,26 +20,18 @@ import {
   Text,
   TouchableOpacity,
 } from "react-native";
+import { formatEstateDate } from "@/utils/estateDate";
 
 export default function BkmDetailScreen() {
-  const group = useModuleGroup('(mandor)');
+  // Asisten re-exports this screen to review; editing stays on the Mandor and Administrator routes.
+  const group = useModuleGroup('(mandor)', '(asisten)');
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading, isError, refetch } = useBkmPanenDetail(id);
   const policy = useOperationalPolicy('bkmPanen', data?.status, data?.details?.length);
   const metrics = useMemo(() => {
     const details = data?.details ?? [];
-    const totalJanjang = details.reduce(
-      (sum, d) =>
-        sum +
-        (Number(d.janjang_normal) || 0) +
-        (Number(d.buah_mentah) || 0) +
-        (Number(d.over_ripe) || 0) +
-        (Number(d.tangkai_panjang) || 0) +
-        (Number(d.buah_abnormal) || 0) +
-        (Number(d.janjang_kosong) || 0),
-      0,
-    );
+    const totalJanjang = details.reduce((sum, d) => sum + gradingTotal(d), 0);
     const totalBrondol = details.reduce((sum, d) => sum + (Number(d.jumlah_brondol) || 0), 0);
     const hasBrondol = details.some((d) => d.jumlah_brondol != null);
     const tphCount = new Set(details.map((d) => d.tph_id)).size;
@@ -83,7 +76,7 @@ export default function BkmDetailScreen() {
             <Text style={styles.sectionTitle}>{data.blok?.nama ?? data.blok_id}</Text>
             <DocStatusBadge status={data.status} />
           </View>
-          <Text style={styles.sectionDate}>{data.tanggal_laporan}</Text>
+          <Text style={styles.sectionDate}>{formatEstateDate(data.tanggal_laporan)}</Text>
           {data.lahan?.nama && <Text style={styles.sectionMeta}>Lahan: {data.lahan.nama}</Text>}
           {data.grup_pekerja?.nama && <Text style={styles.sectionMeta}>Grup: {data.grup_pekerja.nama}</Text>}
           {data.keterangan && <Text style={styles.keterangan}>{data.keterangan}</Text>}
@@ -113,7 +106,7 @@ export default function BkmDetailScreen() {
           </View>
         )}
 
-        {policy.edit && (
+        {policy.edit && group !== '(asisten)' && (
           <View style={styles.actionButtons}>
             <TouchableOpacity
               style={[styles.actionButton, styles.editButtonSm]}

@@ -370,7 +370,7 @@ async function runItem(
       const { header, details, submit } = item.payload as unknown as QueuedBkmRawatPayload;
       const rawat = await rawatApi.create({
         ...header,
-        client_request_id: item.id,
+        client_request_id: header.client_request_id ?? item.id,
         details: details.map((detail, index) => ({
           ...detail,
           client_detail_id: detail.client_detail_id ?? `${item.id}:${index}`,

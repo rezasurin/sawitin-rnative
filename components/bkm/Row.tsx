@@ -3,11 +3,12 @@ import { BrandColors } from "@/constants/Colors";
 import React from "react";
 import { StyleSheet, Text } from "react-native";
 
-export function Row({ label, value }: { label: string; value: string }) {
+/** A label and its value on one line; an empty value shows a dash. */
+export function Row({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
     <View style={styles.row}>
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value}>{value}</Text>
+      <Text style={styles.value}>{value ?? "—"}</Text>
     </View>
   );
 }

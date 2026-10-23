@@ -7,6 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity } from "react-native";
 import { DocStatusBadge } from "./DocStatusBadge";
+import { formatEstateDate } from "@/utils/estateDate";
 
 export function CheckerCard({
   item,
@@ -40,7 +41,7 @@ export function CheckerCard({
           <DocStatusBadge status={item.status} />
         </View>
         <View style={styles.body}>
-          <Text style={styles.date}>{item.tanggal_laporan}</Text>
+          <Text style={styles.date}>{formatEstateDate(item.tanggal_laporan)}</Text>
           <Text style={styles.meta}>
             {trip ? `Truk: ${item.nomor_truk ?? '-'} · Sopir: ${item.nama_sopir ?? '-'}` : `TPH: ${item.tph?.nama ?? item.tph_id}`}
           </Text>
