@@ -4,7 +4,14 @@ import { BrandColors } from '@/constants/Colors';
 import { pekerjaApi, tphApi, uploadApi } from '@/services';
 import { memberLabel } from '@/utils/plantation';
 import { isWholeKg } from '@/utils/field-summary';
-import { GRADING_FIELDS, gradingTotal } from '@/utils/grading';
+import {
+  GRADING_FIELDS,
+  gradingTotal,
+  jenisPekerjaanLabel,
+  recordsBrondol,
+  recordsJanjang,
+  tphsWithSplitBrondol,
+} from '@/utils/grading';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,15 +46,23 @@ function GradingRow({ detail, onUpdate, onPhotoCapture, photoLoading, uploading,
   );
 
   const total = gradingTotal(detail);
+  const janjang = recordsJanjang(detail.jenis_pekerjaan);
+  const brondol = recordsBrondol(detail.jenis_pekerjaan);
 
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardTitle}>{pekerjaMap.get(detail.pekerja_id) ?? detail.pekerja_id}</Text>
-        <Text style={styles.cardSubtitle}>TPH: {tphMap.get(detail.tph_id) ?? detail.tph_id}</Text>
+        <Text style={styles.cardSubtitle}>
+          {jenisPekerjaanLabel(detail.jenis_pekerjaan)} · TPH: {tphMap.get(detail.tph_id) ?? detail.tph_id}
+        </Text>
       </View>
 
-      {GRADING_FIELDS.map((field) => (
+      {!janjang && !brondol && (
+        <Text style={styles.noQuantity}>Tidak mencatat janjang atau brondolan.</Text>
+      )}
+
+      {janjang && GRADING_FIELDS.map((field) => (
         <View key={field.key} style={styles.gradingRow}>
           <Text style={styles.gradingLabel}>{field.label}</Text>
           <View style={styles.stepperRow}>
@@ -80,12 +95,14 @@ function GradingRow({ detail, onUpdate, onPhotoCapture, photoLoading, uploading,
         </View>
       ))}
 
-      <View style={styles.totalRow}>
-        <Text style={styles.totalLabel}>Total Janjang</Text>
-        <Text style={styles.totalValue}>{total}</Text>
-      </View>
+      {janjang && (
+        <View style={styles.totalRow}>
+          <Text style={styles.totalLabel}>Total Janjang</Text>
+          <Text style={styles.totalValue}>{total}</Text>
+        </View>
+      )}
 
-      <View style={styles.brondolRow}>
+      {brondol && <View style={styles.brondolRow}>
         <Text style={styles.brondolLabel}>Brondol (kg)</Text>
         <TextInput
           style={styles.brondolInput}
@@ -98,7 +115,7 @@ function GradingRow({ detail, onUpdate, onPhotoCapture, photoLoading, uploading,
             else if (isWholeKg(val)) onUpdate({ jumlah_brondol: Number(val) });
           }}
         />
-      </View>
+      </View>}
 
       <TouchableOpacity
         style={styles.photoButton}
@@ -174,6 +191,7 @@ export function BKMPanenFormStep3({ onNext, onBack }: Props) {
   }, [tphData]);
 
   const totalAllJanjang = details.reduce((sum, d) => sum + d.jumlah_janjang, 0);
+  const splitBrondol = tphsWithSplitBrondol(details);
 
   const handlePhotoCapture = useCallback(async (tempId: string) => {
     setActivePhotoTempId(tempId);
@@ -211,6 +229,15 @@ export function BKMPanenFormStep3({ onNext, onBack }: Props) {
           Total Janjang: {totalAllJanjang}
         </Text>
       </View>
+
+      {splitBrondol.length > 0 && (
+        <View style={styles.warningCard}>
+          <Text style={styles.warningText}>
+            Brondolan di TPH {splitBrondol.map((id) => tphMap.get(id) ?? id).join(', ')} dicatat oleh pemanen dan
+            pembrondol. Pastikan tidak terhitung dua kali.
+          </Text>
+        </View>
+      )}
 
       <FlatList
         data={details}
@@ -268,6 +295,9 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   listContent: { padding: 16, paddingBottom: 100 },
+  warningCard: { backgroundColor: '#FFF3E0', borderColor: '#E65100', borderWidth: 1, borderRadius: 8, padding: 12, margin: 16, marginBottom: 0 },
+  warningText: { fontSize: 13, fontWeight: '600', color: BrandColors.textPrimary },
+  noQuantity: { fontSize: 14, color: BrandColors.textSecondary, marginBottom: 12 },
   card: {
     backgroundColor: BrandColors.cardBg,
     borderRadius: 4,

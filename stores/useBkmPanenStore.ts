@@ -3,7 +3,7 @@ import {
   CreateBkmPanenPayload,
 } from "@/types/bkm-panen";
 import { create } from "zustand";
-import { gradingTotal } from "@/utils/grading";
+import { GRADING_FIELDS, gradingTotal, recordsBrondol, recordsJanjang } from "@/utils/grading";
 
 interface BkmPanenDetailDraft extends CreateBkmPanenDetailPayload {
   _tempId: string;
@@ -70,6 +70,9 @@ export const useBkmPanenStore = create<BkmPanenStore>((set) => ({
       details: state.details.map((d) => {
         if (d._tempId !== tempId) return d;
         const updated = { ...d, ...data };
+        // A role that does not record a quantity must not carry one, or the server answers 400.
+        if (!recordsJanjang(updated.jenis_pekerjaan)) GRADING_FIELDS.forEach((f) => { updated[f.key] = 0; });
+        if (!recordsBrondol(updated.jenis_pekerjaan)) updated.jumlah_brondol = undefined;
         updated.jumlah_janjang = gradingTotal(updated);
         return updated;
       }),

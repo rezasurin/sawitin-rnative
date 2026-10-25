@@ -6,6 +6,7 @@ import React from "react";
 import { StyleSheet, Text } from "react-native";
 import { GradeItem } from "./GradeItem";
 import { memberLabel } from '@/utils/plantation';
+import { jenisPekerjaanLabel } from '@/utils/grading';
 
 export function DetailCard({ detail }: { detail: BkmPanenDetailType }) {
   return (
@@ -15,7 +16,7 @@ export function DetailCard({ detail }: { detail: BkmPanenDetailType }) {
         <Text style={styles.title}>{memberLabel(detail.pekerja?.member, detail.pekerja_id)}</Text>
       </View>
       <Text style={styles.meta}>
-        TPH: {detail.tph?.nama ?? detail.tph_id} &bull; {detail.jenis_pekerjaan}
+        TPH: {detail.tph?.nama ?? detail.tph_id} &bull; {jenisPekerjaanLabel(detail.jenis_pekerjaan)}
       </Text>
       <View style={styles.gradingGrid}>
         <GradeItem label="Normal" value={detail.janjang_normal} />

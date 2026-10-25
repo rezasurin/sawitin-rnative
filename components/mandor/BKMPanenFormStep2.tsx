@@ -3,11 +3,13 @@ import { useOperationalPolicy } from '@/hooks/useOperationalPolicy';
 import { FormSelect } from '@/components/form';
 import { Text, View } from '@/components/Themed';
 import { BrandColors } from '@/constants/Colors';
-import { pekerjaApi, tphApi, tipePekerjaanApi, lahanApi } from '@/services';
+import { pekerjaApi, tphApi, lahanApi } from '@/services';
 import { memberLabel, operationalTphs, tphLabel } from '@/utils/plantation';
 import { TphLocation } from './TphLocation';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
 import type { Pekerja } from '@/types/master-data';
+import type { JenisPekerjaanPanen } from '@/types/bkm-panen';
+import { JENIS_PEKERJAAN_PANEN, jenisPekerjaanLabel } from '@/utils/grading';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from '@/hooks/useLocation';
@@ -30,7 +32,7 @@ interface Props {
 interface DetailFormLocal {
   pekerja_id: string;
   tph_id: string;
-  jenis_pekerjaan: string;
+  jenis_pekerjaan: JenisPekerjaanPanen;
   lat: number | null;
   lng: number | null;
   gps_accuracy: number | null;
@@ -40,7 +42,8 @@ interface DetailFormLocal {
 const emptyDetailForm: DetailFormLocal = {
   pekerja_id: '',
   tph_id: '',
-  jenis_pekerjaan: '',
+  // Most lines on a BKM Panen are harvesters.
+  jenis_pekerjaan: 'PANEN',
   lat: null,
   lng: null,
   gps_accuracy: null,
@@ -71,11 +74,6 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
     queryFn: () => lahanApi.getAll({ limit: 200 }),
   });
 
-  const { data: tipePekerjaanData } = useQuery({
-    queryKey: ['tipePekerjaan', 'all'],
-    queryFn: () => tipePekerjaanApi.getAll({ limit: 200 }),
-  });
-
   const pekerjaById = useMemo(() => {
     const map = new Map<string, Pekerja>();
     (pekerjaData?.data ?? []).forEach((p) => map.set(p.id, p));
@@ -90,11 +88,6 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
   const tphOptions = operationalTphs(tphData?.data ?? [], lahanData?.data ?? [], header.blok_id, header.lahan_id).map((t) => ({
     label: tphLabel(t),
     value: t.id,
-  }));
-
-  const tipePekerjaanOptions = (tipePekerjaanData?.data ?? []).map((tp) => ({
-    label: tp.nama,
-    value: tp.id,
   }));
 
   const detailFormValid =
@@ -206,8 +199,8 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
       <FormSelect
         label="Jenis Pekerjaan"
         value={form.jenis_pekerjaan}
-        options={tipePekerjaanOptions}
-        onSelect={(val) => setForm((f) => ({ ...f, jenis_pekerjaan: val }))}
+        options={[...JENIS_PEKERJAAN_PANEN]}
+        onSelect={(val) => setForm((f) => ({ ...f, jenis_pekerjaan: val as JenisPekerjaanPanen }))}
         placeholder="Pilih Jenis Pekerjaan"
       />
 
@@ -277,7 +270,7 @@ export function BKMPanenFormStep2({ onNext, onBack }: Props) {
                       TPH: {tphData?.data?.find((t) => t.id === item.tph_id)?.nama ?? item.tph_id}
                     </Text>
               <Text style={styles.detailMeta}>
-                {tipePekerjaanData?.data?.find((tp) => tp.id === item.jenis_pekerjaan)?.nama ?? item.jenis_pekerjaan}
+                {jenisPekerjaanLabel(item.jenis_pekerjaan)}
               </Text>
               {item.lat != null && item.lng != null && (
                 <Text style={styles.detailMeta}>

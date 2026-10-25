@@ -8,7 +8,7 @@ import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { blokApi, lahanApi, grupPekerjaApi, pekerjaApi, tphApi } from '@/services';
 import { memberLabel } from '@/utils/plantation';
 import { tbmReasonMissing } from '@/utils/maturity';
-import { gradingTotal } from '@/utils/grading';
+import { gradingTotal, jenisPekerjaanLabel } from '@/utils/grading';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useSyncQueueStore } from '@/stores/useSyncQueueStore';
@@ -106,7 +106,8 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
       buah_abnormal: d.buah_abnormal,
       janjang_kosong: d.janjang_kosong,
       jumlah_janjang: d.jumlah_janjang,
-      jumlah_brondol: d.jumlah_brondol,
+      // null, not undefined, so an edit clears brondolan already on the server.
+      jumlah_brondol: d.jumlah_brondol ?? null,
       foto_url: d.foto_url ?? undefined,
       lat: d.lat ?? undefined,
       lng: d.lng ?? undefined,
@@ -214,7 +215,7 @@ export function BKMPanenFormStep4({ onBack, onSuccess }: Props) {
         {details.map((d) => (
           <View key={d._tempId} style={styles.detailCard}>
             <Text style={styles.detailCardTitle}>
-              {pekerjaMap.get(d.pekerja_id) ?? d.pekerja_id} — TPH: {tphMap.get(d.tph_id) ?? d.tph_id}
+              {pekerjaMap.get(d.pekerja_id) ?? d.pekerja_id} ({jenisPekerjaanLabel(d.jenis_pekerjaan)}) — TPH: {tphMap.get(d.tph_id) ?? d.tph_id}
             </Text>
             <Text style={styles.detailCardValue}>
               Normal: {d.janjang_normal} | Mentah: {d.buah_mentah} | Over:{' '}

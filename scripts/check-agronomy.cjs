@@ -234,3 +234,28 @@ test('editing an observation keeps the GPS point it was recorded at, and waits f
   assert.equal(captures, 0, 'an edit never asks for a new fix');
   await act(async () => tree.unmount());
 });
+
+test('BKM Panen role decides what a line records, and a role change clears what it cannot carry', () => {
+  const grading = load('utils/grading.ts');
+  const { useBkmPanenStore } = load('stores/useBkmPanenStore.ts', { '@/utils/grading': grading });
+  const store = useBkmPanenStore;
+  store.getState().addDetail({
+    bkm_panen_id: '', pekerja_id: 'p', tph_id: 'A', jenis_pekerjaan: 'PANEN', janjang_normal: 0, buah_mentah: 0,
+    over_ripe: 0, tangkai_panjang: 0, buah_abnormal: 0, janjang_kosong: 0, jumlah_janjang: 0,
+  });
+  const id = store.getState().details[0]._tempId;
+  store.getState().updateDetail(id, { janjang_normal: 8, jumlah_brondol: 5 });
+  assert.equal(store.getState().details[0].jumlah_janjang, 8);
+
+  store.getState().updateDetail(id, { jenis_pekerjaan: 'PEMBRONDOL' });
+  assert.equal(store.getState().details[0].jumlah_janjang, 0);
+  assert.equal(store.getState().details[0].jumlah_brondol, 5);
+
+  store.getState().updateDetail(id, { jenis_pekerjaan: 'PEMUAT' });
+  assert.equal(store.getState().details[0].jumlah_brondol, undefined);
+
+  const line = (tph_id, jenis_pekerjaan, jumlah_brondol) => ({ tph_id, jenis_pekerjaan, jumlah_brondol });
+  assert.deepEqual([...grading.tphsWithSplitBrondol([
+    line('A', 'PANEN', 3), line('A', 'PEMBRONDOL', 4), line('B', 'PANEN', 3), line('B', 'PEMBRONDOL', 0), line('C', 'PEMBRONDOL', 2),
+  ])], ['A']);
+});

@@ -40,12 +40,15 @@ export type UpdateBkmPanenPayload = Partial<CreateBkmPanenPayload> & {
   status?: DocumentStatus;
 };
 
+/** What the line records: PANEN grades and may weigh brondolan, PEMBRONDOL weighs brondolan only, the rest neither. */
+export type JenisPekerjaanPanen = 'PANEN' | 'PEMBRONDOL' | 'PEMUAT' | 'DRIVER' | 'LAINNYA';
+
 export interface BkmPanenDetail extends TimestampFields {
   id: string;
   bkm_panen_id: string;
   pekerja_id: string;
   tph_id: string;
-  jenis_pekerjaan: string;
+  jenis_pekerjaan: JenisPekerjaanPanen;
   janjang_normal: number;
   buah_mentah: number;
   over_ripe: number;
@@ -76,7 +79,7 @@ export interface CreateBkmPanenDetailPayload {
   bkm_panen_id: string;
   pekerja_id: string;
   tph_id: string;
-  jenis_pekerjaan: string;
+  jenis_pekerjaan: JenisPekerjaanPanen;
   janjang_normal: number;
   buah_mentah: number;
   over_ripe: number;
@@ -84,7 +87,8 @@ export interface CreateBkmPanenDetailPayload {
   buah_abnormal: number;
   janjang_kosong: number;
   jumlah_janjang: number;
-  jumlah_brondol?: number;
+  /** null clears a value already on the server. */
+  jumlah_brondol?: number | null;
   foto_url?: string;
   lat?: number;
   lng?: number;
