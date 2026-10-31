@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { QueueInspection } from '@/components/bkm/QueueInspection';
+import { ChangePasswordModal } from '@/components/home/ChangePasswordModal';
 import { recoveryItems } from '@/utils/queue-recovery';
 import { latestQueueDocument } from '@/services/queue-recovery';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -78,6 +79,7 @@ export function AccountScreen() {
   const failedItems = recoveryItems(useSyncQueueStore((state) => state.queue));
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [inspected, setInspected] = useState<SyncQueueItem | null>(null);
+  const [changingPassword, setChangingPassword] = useState(false);
   const isSyncing = isProcessing || syncPhase === 'pushing' || syncPhase === 'pulling';
 
   const handleSync = async () => {
@@ -129,6 +131,7 @@ export function AccountScreen() {
   return (
     <View style={styles.container}>
       {inspected && <QueueInspection item={inspected} onClose={() => setInspected(null)} />}
+      <ChangePasswordModal visible={changingPassword} onClose={() => setChangingPassword(false)} />
       <PageHeader title="Akun" />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
@@ -196,6 +199,11 @@ export function AccountScreen() {
           </Pressable>
         </View>
 
+        <Pressable accessibilityRole="button" style={styles.row} onPress={() => setChangingPassword(true)}>
+          <FontAwesome name="lock" size={22} color={BrandColors.primary} />
+          <Text style={styles.rowLabel}>Ubah kata sandi</Text>
+          <FontAwesome name="angle-right" size={22} color={BrandColors.textMuted} />
+        </Pressable>
         <Pressable accessibilityRole="button" style={styles.row}
           onPress={() => Alert.alert('Bantuan', 'Hubungi admin kebun untuk bantuan akun dan penggunaan aplikasi.')}>
           <FontAwesome name="question-circle" size={22} color={BrandColors.primary} />
