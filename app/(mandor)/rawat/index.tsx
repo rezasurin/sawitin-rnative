@@ -185,7 +185,7 @@ export default function RawatScreen() {
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={() => refetch()}
+            onRefresh={() => { refetch(); }}
             colors={[BrandColors.primary]}
           />
         }

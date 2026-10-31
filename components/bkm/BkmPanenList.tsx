@@ -161,7 +161,7 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint, initialSta
             <View style={styles.footerLoader}>
               <ActivityIndicator size="small" color={BrandColors.primary} />
             </View>
-          ) : null
+          ) : undefined
         }
         ListEmptyComponent={
           <ListEmptyState
@@ -177,7 +177,7 @@ export function BkmPanenList({ onCardPress, onCreatePress, emptyHint, initialSta
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={() => refetch()}
+            onRefresh={() => { refetch(); }}
             colors={[BrandColors.primary]}
           />
         }

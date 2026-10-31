@@ -8,5 +8,5 @@ interface TabBarIconProps {
 }
 
 export function TabBarIcon({ name, color }: TabBarIconProps) {
-  return <FontAwesome size={22} style={{ marginBottom: -2 }} name={name} color={color} />;
+  return <FontAwesome size={22} style={{ marginBottom: -2 }} name={name} color={color as string} />;
 }

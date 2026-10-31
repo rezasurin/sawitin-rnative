@@ -141,7 +141,7 @@ export default function MaterialScreen() {
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={() => refetch()}
+            onRefresh={() => { refetch(); }}
             colors={[BrandColors.primary]}
           />
         }

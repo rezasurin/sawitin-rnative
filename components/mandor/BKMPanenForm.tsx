@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { Stepper } from '../core/Stepper';
 import { BrandColors } from '@/constants/Colors';
@@ -8,6 +8,7 @@ import { BKMPanenFormStep3 } from './BKMPanenFormStep3';
 import { BKMPanenFormStep4 } from './BKMPanenFormStep4';
 import { useBkmPanenStore } from '@/stores/useBkmPanenStore';
 import { useNavigation } from 'expo-router';
+import { usePreventRemove } from 'expo-router/react-navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { bkmPanenKeys } from '@/services/queryKeys';
@@ -29,7 +30,8 @@ export function BKMPanenForm({ onSuccess }: Props) {
   const navigation = useNavigation();
   const queryClient = useQueryClient();
   const isOnline = useNetworkStore((s) => s.isOnline);
-  const isSaving = useRef(false);
+  const [saved, setSaved] = useState(false);
+  const [leaveAction, setLeaveAction] = useState<Parameters<typeof navigation.dispatch>[0] | null>(null);
 
   const isDirty =
     !!header.blok_id ||
@@ -37,12 +39,33 @@ export function BKMPanenForm({ onSuccess }: Props) {
     !!header.keterangan ||
     details.length > 0;
 
+  usePreventRemove(isDirty && !saved && !leaveAction, ({ data }) => {
+    Alert.alert('Batal Mengisi Form?', 'Perubahan yang belum disimpan akan hilang.', [
+      { text: 'Lanjutkan', style: 'cancel' },
+      {
+        text: 'Keluar',
+        style: 'destructive',
+        onPress: () => {
+          setStep(1);
+          reset();
+          if (isOnline) {
+            queryClient.invalidateQueries({ queryKey: bkmPanenKeys.lists() });
+          }
+          setLeaveAction(data.action);
+        },
+      },
+    ]);
+  });
+  useEffect(() => {
+    if (leaveAction) navigation.dispatch(leaveAction);
+    else if (saved) onSuccess();
+  }, [leaveAction, saved, navigation, onSuccess]);
+
   const handleSuccess = useCallback(() => {
-    isSaving.current = true;
     setStep(1);
     reset();
-    onSuccess();
-  }, [reset, onSuccess]);
+    setSaved(true);
+  }, [reset]);
 
   useEffect(() => {
     return () => {
@@ -50,38 +73,6 @@ export function BKMPanenForm({ onSuccess }: Props) {
       reset();
     };
   }, [reset]);
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      if (isSaving.current || !isDirty) {
-        return;
-      }
-
-      e.preventDefault();
-
-      Alert.alert(
-        'Batal Mengisi Form?',
-        'Perubahan yang belum disimpan akan hilang.',
-        [
-          { text: 'Lanjutkan', style: 'cancel', onPress: () => {} },
-          {
-            text: 'Keluar',
-            style: 'destructive',
-            onPress: () => {
-              setStep(1);
-              reset();
-              if (isOnline) {
-                queryClient.invalidateQueries({ queryKey: bkmPanenKeys.lists() });
-              }
-              navigation.dispatch(e.data.action);
-            },
-          },
-        ]
-      );
-    });
-
-    return unsubscribe;
-  }, [navigation, isDirty, reset, isOnline, queryClient]);
 
   return (
     <View style={styles.container}>

@@ -93,7 +93,7 @@ export default function CheckerListScreen() {
             <View style={styles.footerLoader}>
               <ActivityIndicator size="small" color={BrandColors.primary} />
             </View>
-          ) : null
+          ) : undefined
         }
         ListEmptyComponent={
           <ListEmptyState
@@ -109,7 +109,7 @@ export default function CheckerListScreen() {
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={() => refetch()}
+            onRefresh={() => { refetch(); }}
             colors={[BrandColors.primary]}
           />
         }
