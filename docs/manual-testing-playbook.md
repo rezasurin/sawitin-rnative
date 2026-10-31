@@ -56,16 +56,16 @@ npm run android # Untuk Android Emulator/Device
 
 ## 2. Matriks Akun Uji Coba
 
-Gunakan kredensial berikut untuk login sesuai dengan skenario peran. Password semua akun uji: `password123` (kecuali admin: `admin`).
+Gunakan kredensial berikut untuk login sesuai dengan skenario peran. Password semua akun uji: `bAngkit@100x` (kecuali admin: `admin`).
 
 | Peran (Role) | Username | Password | Lahan PIC (Blok) | Modul Utama yang Diuji |
 | :--- | :--- | :--- | :--- | :--- |
 | **Administrator** | `admin` | `admin` | Semua | Setup, fallback approve, pembersihan data |
-| **Mandor Panen** | `mandor1` | `password123` | Lahan Blok A (Blok A1) | BKM Panen, BKM Checker, BKM Rawat |
-| **Mandor Panen 2** | `mandor2` | `password123` | Lahan Blok B (Blok A2) | (opsional) |
-| **Asisten Afdeling** | `asisten1` | `password123` | Lahan Blok C (Blok B1) | Persetujuan (Approve/Reject) BKM Panen |
-| **Krani Timbang** | `krani1` | `password123` | – | Pemindai QR SPB, Form Jembatan Timbang |
-| **Pemanen** | `pemanen1` | `password123` | – | Beranda dan Akun; tidak ada alur Absensi saat ini |
+| **Mandor Panen** | `mandor1` | `bAngkit@100x` | Lahan Blok A (Blok A1) | BKM Panen, BKM Checker, BKM Rawat |
+| **Mandor Panen 2** | `mandor2` | `bAngkit@100x` | Lahan Blok B (Blok A2) | (opsional) |
+| **Asisten Afdeling** | `asisten1` | `bAngkit@100x` | Lahan Blok C (Blok B1) | Persetujuan (Approve/Reject) BKM Panen |
+| **Krani Timbang** | `krani1` | `bAngkit@100x` | – | Pemindai QR SPB, Form Jembatan Timbang |
+| **Pemanen** | `pemanen1` | `bAngkit@100x` | – | Beranda dan Akun; tidak ada alur Absensi saat ini |
 
 ### Master Data Tersedia (dari seed)
 | Entitas | Nilai |
@@ -82,7 +82,7 @@ Gunakan kredensial berikut untuk login sesuai dengan skenario peran. Password se
 
 *Tujuan: Memastikan alur pengisian log panen harian berjalan tanpa kendala, termasuk estimasi tonase BJR.*
 
-*   **Aktor Uji Coba**: Login sebagai Mandor Panen (`username: mandor1`, `password: password123`).
+*   **Aktor Uji Coba**: Login sebagai Mandor Panen (`username: mandor1`, `password: bAngkit@100x`).
 *   **Pilihan Data Valid (Happy Path)**:
     *   **Step 1**: Pilih Blok = `Blok A1`. Verifikasi dropdown Lahan hanya menampilkan `Lahan Blok A` (filter by blok bekerja). Pilih `Lahan Blok A`. Isikan Tanggal Laporan = hari ini, Keterangan = "Uji coba panen happy path".
     *   **Step 2**: Pilih Pekerja = `Budi Santoso` atau `Siti Aminah`. Pilih TPH = `TPH 01`. Pilih Jenis Pekerjaan = `Pemanen`. Klik **Tambah Detail**. (Opsional: ambil GPS.)
@@ -132,7 +132,7 @@ Pastikan sudah ada **BKM Panen berstatus `APPROVED`** yang dibuat di Modul 1 dan
 
 *Tujuan: Memindai QR SPB milik mandor di jembatan timbang, mencatat berat, dan membandingkan estimasi BJR dengan netto aktual.*
 
-*   **Aktor Uji Coba**: Login sebagai Krani Timbang (`username: krani1`, `password: password123`).
+*   **Aktor Uji Coba**: Login sebagai Krani Timbang (`username: krani1`, `password: bAngkit@100x`).
 *   **Pilihan Data Valid (Happy Path)**:
     *   Arahkan kamera scanner ke kode QR SPB yang berstatus `APPROVED` milik Mandor dari Modul 2.
     *   Setelah pemindaian sukses, isi formulir timbangan: Berat Isi = `8500` kg, Berat Kosong = `3200` kg.
@@ -149,7 +149,7 @@ Pastikan sudah ada **BKM Panen berstatus `APPROVED`** yang dibuat di Modul 1 dan
 
 *Tujuan: Menguji alur verifikasi berkas oleh Asisten Afdeling/Kebun. Pastikan role Asisten kini memiliki permission `approve`.*
 
-*   **Aktor Uji Coba**: Login sebagai Asisten Afdeling (`username: asisten1`, `password: password123`).
+*   **Aktor Uji Coba**: Login sebagai Asisten Afdeling (`username: asisten1`, `password: bAngkit@100x`).
 *   **Pilihan Data Valid (Happy Path)**:
     *   **Skenario Penolakan**: Cari dokumen BKM Panen `SUBMITTED`. Buka detail, ketuk **Minta Revisi** (Reject), isi catatan "Jumlah janjang di TPH 01 tidak akurat". Kirim revisi → status `REVISION_REQUESTED` (atau `DRAFT` sesuai status machine).
     *   **Skenario Persetujuan**: Pilih dokumen BKM Panen `SUBMITTED` lain. Ketuk **Setujui** (Approve), konfirmasi modal → status berubah real-time menjadi `APPROVED` dan tombol persetujuan menghilang.
@@ -168,7 +168,7 @@ Absensi tidak memiliki route mobile atau API backend. Tidak ada pengujian clock-
 
 *Tujuan: Memastikan log perawatan dapat diinput dengan kaskade kelompok → blok → lahan (sesuai data-model backend).*
 
-*   **Aktor Uji Coba**: Login sebagai Mandor Panen (`mandor1`, `password: password123`).
+*   **Aktor Uji Coba**: Login sebagai Mandor Panen (`mandor1`, `password: bAngkit@100x`).
 *   **Pilihan Data Valid (Happy Path)**:
     *   Ketuk tombol bulat `+` di pojok kanan bawah.
     *   **Kelompok Lahan** = `Kelompok Tani Maju` → dropdown **Blok** menampilkan blok pada kelompok tersebut (misal `Blok A1`). Pilih `Blok A1` → dropdown **Lahan (Opsional)** menampilkan `Lahan Blok A`.
