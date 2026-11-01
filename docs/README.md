@@ -22,7 +22,7 @@ The [Phase 7 mobile implementation record](phase-7-mobile-implementation.md) des
 
 ## Building the UAT APK
 
-Field phones get an Android APK through EAS internal distribution. `eas.json` profile `uat` points the app at `https://api.demo.bahaumlabs.com`. EAS builds don't read `.env.local`, so the API URL lives in that profile.
+Field phones get an Android APK through EAS internal distribution. `eas.json` profile `uat` points the app at `https://api-sawitin-demo.bahaumlabs.com`. EAS builds don't read `.env.local`, so the API URL lives in that profile.
 
 ```bash
 npx eas-cli login                                   # the project's Expo account

@@ -11,8 +11,11 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.demo.bahaumlabs.com"
+        "EXPO_PUBLIC_API_URL": "https://api-sawitin-demo.bahaumlabs.com"
       }
+    },
+    "production": {
+      "extends": "uat"
     }
   }
 }
