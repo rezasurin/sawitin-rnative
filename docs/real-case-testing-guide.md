@@ -62,12 +62,12 @@ Seeder lain juga membuat data contoh (panen, checker, rawat, timbangan) tanpa la
 
 | Peran | Username | Password | Kode user (tampil di riwayat) | Peran dalam uji |
 |---|---|---|---|---|
-| Mandor Panen | `mandor1` | `password123` | `MDR001` | Input panen, **SPB truk**, rawat; ajukan **Tutup Harian** |
-| Mandor Panen | `mandor2` | `password123` | `MDR002` | Mandor kedua (uji SPB dari dua ponsel, uji aksi basi) |
-| Asisten Afdeling | `asisten1` | `password123` | `AST001` | **Setujui / tolak Tutup Harian**; minta revisi BKM Panen dan SPB per dokumen |
-| Krani Timbang | `krani1` | `password123` | `KRN001` | Input **tiket PKS** per nomor SPB; timbang di jembatan timbang (hanya bila `jembatan_timbang` aktif) |
-| Manajer Kebun | `manajer1` | `password123` | `MNJ001` | Penyetuju kedua BKM Rawat (**lewat web**; lihat Skenario E) |
-| Pemanen | `pemanen1` | `password123` | `PMN001` | Hanya Beranda dan Akun |
+| Mandor Panen | `mandor1` | `bAngkit@100x` | `MDR001` | Input panen, **SPB truk**, rawat; ajukan **Tutup Harian** |
+| Mandor Panen | `mandor2` | `bAngkit@100x` | `MDR002` | Mandor kedua (uji SPB dari dua ponsel, uji aksi basi) |
+| Asisten Afdeling | `asisten1` | `bAngkit@100x` | `AST001` | **Setujui / tolak Tutup Harian**; minta revisi BKM Panen dan SPB per dokumen |
+| Krani Timbang | `krani1` | `bAngkit@100x` | `KRN001` | Input **tiket PKS** per nomor SPB; timbang di jembatan timbang (hanya bila `jembatan_timbang` aktif) |
+| Manajer Kebun | `manajer1` | `bAngkit@100x` | `MNJ001` | Penyetuju kedua BKM Rawat (**lewat web**; lihat Skenario E) |
+| Pemanen | `pemanen1` | `bAngkit@100x` | `PMN001` | Hanya Beranda dan Akun |
 | Admin | `admin` | `admin` | `admin` | BKM Rawat di mobile (Menu), fallback / cek data |
 
 **Tab yang terlihat per peran (sesuai `components/core/RoleTabs.tsx`):**
@@ -110,7 +110,7 @@ Contoh `curl` di bawah memakai `jq`. Endpoint login mengembalikan field `token` 
 ```bash
 API=http://localhost:3000
 TOKEN=$(curl -s -X POST $API/login -H "Content-Type: application/json" \
-  -d '{"username":"mandor1","password":"password123"}' | jq -r .token)
+  -d '{"username":"mandor1","password":"bAngkit@100x"}' | jq -r .token)
 ```
 
 **Login pertama per pengguna harus online.** Master data (blok, lahan, TPH, pekerja, tipe pekerjaan) di-cache per pengguna saat itu. Cache **dihapus saat Keluar**.
@@ -151,7 +151,7 @@ Setiap aksi meminta konfirmasi *"Lanjutkan tindakan ini?"*. Panel **Riwayat doku
 4. Buka Checker **B 9402 CD** (162 jjg, belum ditimbang). Kartu **Surat Pengantar Buah (SPB)** dengan QR harus muncul, bertuliskan *"Tunjukkan kode QR ini ke Krani Timbang di Mill Gate"* dan *"… · Total: 162 jjg"*, plus tombol **Bagikan Tiket SPB (Gambar)**. **Jangan timbang dulu.** Checker ini dipakai di Skenario G4.
 5. Cek timbangan seed lewat API. Daftar Timbangan di aplikasi hanya menampilkan timbangan **hari ini**, sedangkan timbangan seed bertanggal H-1:
    ```bash
-   TOKEN=$(curl -s -X POST $API/login -H "Content-Type: application/json" -d '{"username":"krani1","password":"password123"}' | jq -r .token)
+   TOKEN=$(curl -s -X POST $API/login -H "Content-Type: application/json" -d '{"username":"krani1","password":"bAngkit@100x"}' | jq -r .token)
    curl -s "$API/kraniTimbang?limit=20" -H "Authorization: $TOKEN" | jq '.data[] | select(.keterangan|test("SCENARIO-REAL")) | {nomor_kendaraan, netto, keterangan}'
    ```
    Harapan: `B 9401 AB`, `netto 2400`, keterangan *"SCENARIO-REAL: 157 jjg × BJR 15 kg ≈ 2355 kg (netto 2400 kg)"*.

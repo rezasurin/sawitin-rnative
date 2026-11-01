@@ -163,7 +163,7 @@ Expected: `tsc` exits 0, no type errors.
 
 - [ ] **Step 6: Smoke test the endpoint**
 
-With server + worker running (`yarn dev:server`), and a valid token (login as `asisten1` / `password123` from the manual-testing-playbook):
+With server + worker running (`yarn dev:server`), and a valid token (login as `asisten1` / `bAngkit@100x` from the manual-testing-playbook):
 
 ```bash
 curl -s http://localhost:3000/orgConfig -H "Authorization: Bearer <TOKEN>"
@@ -250,7 +250,7 @@ Expected: `tsc` exits 0.
 
 - [ ] **Step 4: Smoke test both branches**
 
-With server running and token for `mandor1` / `password123`:
+With server running and token for `mandor1` / `bAngkit@100x`:
 
 1. **Within tolerance** — create a checker linked to an approved panen where the checker's janjang total for that TPH equals the panen's; submit it:
 
