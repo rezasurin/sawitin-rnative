@@ -295,5 +295,7 @@ test('Home screens follow permissions, so a renamed role lands where its grants 
   // A user with two roles gets the wider one, not whichever role the API lists first.
   assert.equal(exports.getRouteGroup([...seeded['(pemanen)'], ...seeded['(mandor)']]), '(mandor)');
   assert.equal(exports.getRouteGroup([]), '(pemanen)');
+  // A Checker writes only mod_bkm_checker and still needs the Checker tab.
+  assert.equal(exports.getRouteGroup([grant('mod_bkm_panen', ''), grant('mod_bkm_checker', 'w')]), '(mandor)');
   assert.equal(exports.isAdministrator(seeded['(asisten)']), false);
 });
