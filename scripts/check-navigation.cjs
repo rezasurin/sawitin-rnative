@@ -60,7 +60,7 @@ for (const [group, labels] of Object.entries(expected)) {
     segments = [group];
     const element = moduleExports.RoleTabs({ group });
     const screens = React.Children.toArray(element.props.children);
-    const visible = screens.filter((screen) => screen.props.options.href !== null);
+    const visible = screens.filter((screen) => !screen.props.options.tabBarButton);
     assert.deepEqual(visible.map((screen) => screen.props.options.title), labels);
     const groupNode = routes.children.find((node) => node.route === group);
     assert.ok(groupNode, `Missing group ${group}`);
@@ -97,8 +97,14 @@ test('Tutup Harian routes: one Mandor screen, an Asisten list and detail, reacha
   assert.deepEqual(asisten.children.map((node) => node.route).sort(), ['[id]', 'index']);
   for (const group of ['(mandor)', '(asisten)']) {
     const hidden = React.Children.toArray(moduleExports.RoleTabs({ group }).props.children)
-      .filter((screen) => screen.props.options.href === null).map((screen) => screen.props.name);
+      .filter((screen) => !!screen.props.options.tabBarButton).map((screen) => screen.props.name);
     assert.ok(hidden.includes('tutup-harian'), `${group} keeps it off the tab bar`);
+  }
+  // Expo Router 58 bounces a focused `href: null` tab back to the first tab, so quick actions went nowhere.
+  for (const group of ['(mandor)', '(asisten)', '(admin)', '(krani)', '(pemanen)']) {
+    for (const screen of React.Children.toArray(moduleExports.RoleTabs({ group }).props.children)) {
+      assert.notEqual(screen.props.options.href, null, `${group}/${screen.props.name} must not use href: null`);
+    }
   }
   const quick = {};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(root, 'components/home/QuickActions.tsx'), 'utf8'), {
@@ -148,8 +154,8 @@ test('a Mandor with only BKM Rawat opens the Mandor tabs without the Panen and C
   const element = moduleExports.RoleTabs({ group: '(mandor)' });
   assert.equal(element.type, Tabs);
   const screens = React.Children.toArray(element.props.children);
-  assert.deepEqual(screens.filter((screen) => screen.props.options.href !== null).map((screen) => screen.props.options.title), ['Beranda', 'Akun']);
-  assert.ok(['bkm', 'checker'].every((name) => screens.some((screen) => screen.props.name === name && screen.props.options.href === null)));
+  assert.deepEqual(screens.filter((screen) => !screen.props.options.tabBarButton).map((screen) => screen.props.options.title), ['Beranda', 'Akun']);
+  assert.ok(['bkm', 'checker'].every((name) => screens.some((screen) => screen.props.name === name && !!screen.props.options.tabBarButton)));
   grants = null;
   permissions = [];
 });
