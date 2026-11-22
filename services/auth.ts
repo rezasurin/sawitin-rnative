@@ -27,6 +27,14 @@ export const authApi = {
   },
 
   /**
+   * Change the signed-in user's own password. Success ends every session,
+   * this one included, so the caller must sign out and in again.
+   */
+  changePassword: async (oldPassword: string, newPassword: string): Promise<void> => {
+    await apiClient.post('/login/password', { oldPassword, newPassword });
+  },
+
+  /**
    * Logout current user. Passing the refresh token ends only this device's
    * session; without it the server cannot tell which device is leaving and
    * ends every session the user has.
