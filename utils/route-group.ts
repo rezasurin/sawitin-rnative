@@ -18,7 +18,9 @@ export function getRouteGroup(permissions: GrantSet): RoleRouteGroup {
 
   if (isAdministrator(permissions)) return '(admin)';
   if (can('mod_bkm_panen', 'approve')) return '(asisten)';
-  if (can('mod_bkm_panen', 'write') || can('mod_bkm_rawat', 'write')) return '(mandor)';
+  // Checker screens live in (mandor), so a Checker who writes nothing else lands there too.
+  if (can('mod_bkm_panen', 'write') || can('mod_bkm_rawat', 'write') || can('mod_bkm_checker', 'write'))
+    return '(mandor)';
   if (can('mod_krani_timbang', 'write')) return '(krani)';
   return '(pemanen)';
 }

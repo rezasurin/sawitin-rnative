@@ -18,6 +18,9 @@ interface Destination {
   permission?: string;
 }
 
+/** Reachable by push, no button on the tab bar. */
+const HIDDEN_TAB = { tabBarButton: () => null };
+
 const HOME: Destination = { name: 'index', title: 'Beranda', icon: 'home' };
 const ACCOUNT: Destination = { name: 'profile', title: 'Akun', icon: 'user' };
 const PANEN: Destination = { name: 'bkm', title: 'BKM Panen', icon: 'book', nested: true, permission: 'mod_bkm_panen' };
@@ -90,7 +93,9 @@ export function RoleTabs({ group }: { group: RoleRouteGroup }) {
           },
         }) : undefined} />
       ))}
-      {hidden.map((name) => <Tabs.Screen key={name} name={name} options={{ href: null }} />)}
+      {/* Not `href: null`: since Expo Router 58 that marks the tab hidden, and a focused hidden
+          tab is replaced by the first visible one, so Beranda's quick actions bounced straight back. */}
+      {hidden.map((name) => <Tabs.Screen key={name} name={name} options={HIDDEN_TAB} />)}
     </Tabs>
   );
 }
